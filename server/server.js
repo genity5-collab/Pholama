@@ -5,6 +5,7 @@
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path');
 const https = require('https'), { spawn, execSync } = require('child_process');
 const agent = require('./agent');
+const sec = require('./security');
 
 const PORT = +process.env.PORT || 11435;
 const HOST = process.env.HOST || '127.0.0.1'; // set HOST=0.0.0.0 to chat from your phone on same WiFi
@@ -158,7 +159,7 @@ async function installLlama() {
 async function uninstallLlama() { stopInstall(); await stopLlama(); try { fs.rmSync(path.join(os.homedir(), '.pholama', 'bin'), { recursive: true, force: true }); } catch {} Object.assign(inst, { status: 'idle', error: null, step: '', done: 0, total: 0 }); }
 
 // ---------- http helpers ----------
-const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(obj)); };
+const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', ...(res.cors || {}) }); res.end(JSON.stringify(obj)); };
 const body = (req) => new Promise(r => { let d = ''; req.on('data', c => d += c); req.on('end', () => { try { r(JSON.parse(d || '{}')); } catch { r({}); } }); });
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
@@ -225,7 +226,7 @@ const NO_WEB = 'I can\'t browse the web or get live data with this model. I answ
 // Chat endpoint. Plain Ollama-style NDJSON. Extra event types: {tool:{...}} / {status:"..."} / {credits:{...}}.
 async function chat(req, res, b) {
   const model = b.model || '';
-  res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' });
+  res.writeHead(200, { 'Content-Type': 'application/x-ndjson', ...(res.cors || {}), 'Cache-Control': 'no-cache' });
   const line = (o) => res.write(JSON.stringify(o) + '\n');
   const t0 = Date.now(), log = (kind, text) => line({ log: { kind, text, t: +((Date.now() - t0) / 1000).toFixed(1) } });
   const ac = new AbortController(); res.on('close', () => ac.abort());
@@ -320,10 +321,59 @@ async function chat(req, res, b) {
   res.end();
 }
 
+// OpenAI-style wrapper around chat(): collects the NDJSON stream and answers in OpenAI format (streaming or not).
+async function openaiChat(req, res, b) {
+  const model = String(b.model || ''); if (!model) return json(res, 400, { error: { message: 'model is required' } });
+  const msgs = (Array.isArray(b.messages) ? b.messages : []).slice(-40).map(m => ({ role: ['system', 'user', 'assistant'].includes(m.role) ? m.role : 'user', content: typeof m.content === 'string' ? m.content.slice(0, 20000) : JSON.stringify(m.content || '').slice(0, 20000) }));
+  if (!msgs.length) return json(res, 400, { error: { message: 'messages is required' } });
+  const id = 'chatcmpl-' + Date.now().toString(36), created = Math.floor(Date.now() / 1000), stream = b.stream === true;
+  const opts = {}; if (+b.max_tokens > 0) opts.num_predict = Math.min(+b.max_tokens, 4096); if (typeof b.temperature === 'number') opts.temperature = b.temperature;
+  let text = '', usage = null, err = null, buf = '';
+  if (stream) res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', ...(res.cors || {}) });
+  const sse = (delta, fin) => res.write('data: ' + JSON.stringify({ id, object: 'chat.completion.chunk', created, model, choices: [{ index: 0, delta, finish_reason: fin || null }] }) + '\n\n');
+  if (stream) sse({ role: 'assistant' });
+  const sink = {   // a fake response object that chat() writes into
+    cors: res.cors, writeHead() {}, on: (ev, f) => res.on(ev, f), setHeader() {},
+    write(chunk) { buf += chunk; let i; while ((i = buf.indexOf('\n')) >= 0) { const ln = buf.slice(0, i); buf = buf.slice(i + 1); let o; try { o = JSON.parse(ln); } catch { continue; }
+      if (o.error) err = o.error; if (o.usage) usage = o.usage;
+      const c = o.message && o.message.content; if (c && !o.done) { text += c; if (stream) sse({ content: c }); } } return true; },
+    end() {} };
+  await chat(req, sink, { model, messages: msgs, agent: false, options: opts, effort: 'normal' });
+  if (err && !text) { if (stream) { res.write('data: ' + JSON.stringify({ error: { message: String(err) } }) + '\n\n'); return res.end(); } return json(res, 502, { error: { message: String(err) } }); }
+  if (stream) { sse({}, 'stop'); res.write('data: [DONE]\n\n'); return res.end(); }
+  const u = usage || { in: 0, out: 0, total: 0 };
+  return json(res, 200, { id, object: 'chat.completion', created, model, choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }], usage: { prompt_tokens: u.in, completion_tokens: u.out, total_tokens: u.total } });
+}
+
+async function listModels() {   // Ollama-compatible model list (ours + Ollama's)
+  const list = CATALOG.filter(m => fs.existsSync(path.join(MODELS_DIR, m.file))).map(m => ({ name: 'gguf:' + m.id, model: 'gguf:' + m.id, size: m.sizeGB * 2 ** 30 }));
+  if (await ollamaUp()) { try { const o = JSON.parse((await get(OLLAMA + '/api/tags')).body); for (const m of o.models || []) list.push({ ...m, name: 'ollama:' + m.name, model: 'ollama:' + m.name }); } catch {} }
+  return list;
+}
+
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname;
-  if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*' }); return res.end(); }
+  res.cors = sec.corsHeaders(req);
+  res.setHeader('X-Content-Type-Options', 'nosniff'); res.setHeader('Referrer-Policy', 'no-referrer');
+  if (req.method === 'OPTIONS') { res.writeHead(204, res.cors); return res.end(); }
+  if (sec.originBlocked(req)) return json(res, 403, { error: 'This website is not allowed to use this Pholama host.' });   // other sites can never drive your PC
   try {
+    if (p === '/api/auth') return json(res, 200, { required: !sec.isLoopback(req), local: sec.isLoopback(req), keys: sec.isLoopback(req) ? sec.keyCount() : undefined });   // public: lets the page know if it needs a key
+    if (p.startsWith('/api/') || p.startsWith('/v1/')) {
+      const a = sec.authorize(req);
+      if (!a.ok) return json(res, a.status, { error: a.error, hint: a.hint });
+      req.who = a.who;
+    }
+    // API keys are managed only from this PC, never remotely
+    if (p === '/api/keys') {
+      if (req.who !== 'local') return json(res, 403, { error: 'Keys can only be managed on the PC itself.' });
+      if (req.method === 'GET') return json(res, 200, { keys: sec.listKeys() });
+      if (req.method === 'POST') { try { return json(res, 200, sec.createKey((await body(req)).label)); } catch (e) { return json(res, 400, { error: e.message }); } }
+      if (req.method === 'DELETE') return json(res, 200, { ok: sec.revokeKey(u.searchParams.get('id')) });
+    }
+    // OpenAI-compatible API so other apps can use your local AI. Plain chat only: no tools, no credits, no GitHub.
+    if (p === '/v1/models') return json(res, 200, { object: 'list', data: (await listModels()).map(m => ({ id: m.name, object: 'model', owned_by: 'pholama' })) });
+    if (p === '/v1/chat/completions' && req.method === 'POST') return openaiChat(req, res, await body(req));
     if (p === '/api/caps') { const m = u.searchParams.get('model') || ''; const c = await modelCaps(m); return json(res, 200, { ...c, search: c.tools, mcp: c.tools, github: c.tools }); }
     if (p === '/api/github/approve' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ok: true, text: await agent.github.confirm(String(req.headers['x-github-token'] || ''), String(b.id || ''), b.approve === true) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); } }
     if (p === '/api/credits') return json(res, 200, { ...agent.credits(), allowed: agent.allowed() });
@@ -332,11 +382,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/mcp' && req.method === 'POST') return json(res, 200, { servers: agent.addMcp(await body(req)) });
     if (p === '/api/mcp' && req.method === 'DELETE') { agent.removeMcp(u.searchParams.get('name')); return json(res, 200, { ok: true }); }
     if (p === '/api/hardware') { const h = hardware(); return json(res, 200, { hardware: h, ollama: await ollamaUp(), llamaServer: !!findLlamaServer(), models: recommend(h) }); }
-    if (p === '/api/tags') { // Ollama-compatible model list (ours + Ollama's)
-      const list = CATALOG.filter(m => fs.existsSync(path.join(MODELS_DIR, m.file))).map(m => ({ name: 'gguf:' + m.id, model: 'gguf:' + m.id, size: m.sizeGB * 2 ** 30 }));
-      if (await ollamaUp()) { try { const o = JSON.parse((await get(OLLAMA + '/api/tags')).body); for (const m of o.models || []) list.push({ ...m, name: 'ollama:' + m.name, model: 'ollama:' + m.name }); } catch {} }
-      return json(res, 200, { models: list });
-    }
+    if (p === '/api/tags') return json(res, 200, { models: await listModels() });
     if (p === '/api/pull' && req.method === 'POST') { const b = await body(req); const m = CATALOG.find(x => x.id === b.id); if (!m) return json(res, 404, { error: 'unknown model' }); if (!dl[m.id] || dl[m.id].status !== 'downloading') download(m); return json(res, 200, { ok: true }); }
     if (p === '/api/install-llama' && req.method === 'POST') { installLlama(); return json(res, 200, { ok: true }); }
     if (p === '/api/install-llama/status') return json(res, 200, inst);

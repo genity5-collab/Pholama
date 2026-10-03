@@ -80,3 +80,21 @@ Local models that support tools can use GitHub for free (no cloud credits). Publ
 ## Agent Max brain
 
 Agent Max now thinks with Groq (model `qwen/qwen3.8-27b`, backup `openai/gpt-oss-120b`). It no longer uses Base44 integration credits. The key is stored as a server secret, never in the page. The 10/day and 30/month limits still apply.
+
+## Use your PC's AI from anywhere (API key)
+
+Your PC host can be reached from your phone or another app. Nothing is open to the internet until you choose to do it.
+
+1. **On the PC**, open Settings > Remote access > Create key. The full key (`phk_...`) is shown **once**. Copy it. Only a hash is stored on the PC (`~/.pholama/keys.json`).
+2. **Same WiFi:** start the host with `HOST=0.0.0.0`, then on the phone open Settings > Remote access and enter `http://<PC-IP>:11435` and the key.
+3. **From anywhere:** put a secure tunnel in front of the PC (for example Tailscale, or a Cloudflare Tunnel) and use its `https://` address. Tailscale is the safest: only your own devices can reach it.
+4. **Other apps** can use the OpenAI format: base URL `http://<address>:11435/v1`, API key = your `phk_` key, model names from `/v1/models`.
+
+Safety rules built in:
+- The PC itself needs no key. Everything else does.
+- Requests through a tunnel count as remote, so they always need a key.
+- Keys can be created and revoked only on the PC, never remotely.
+- 8 wrong keys from one address locks it out for 10 minutes.
+- Other websites cannot call your host from a browser. Only the Pholama site, this PC, and origins you list in `PHOLAMA_ORIGINS` can.
+- Remote callers get plain chat only: no web search, no GitHub, no MCP, and no local credits are spent.
+- Use HTTPS (a tunnel) over the internet. A key sent over plain `http://` on public networks can be read by others.

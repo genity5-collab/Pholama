@@ -4,6 +4,8 @@
 import { Account, cleanName } from './account.js';
 import { llamaLoader, LLAMA_CSS } from './loader.js';
 import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME } from './cloud.js';
+import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
+
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
 const chatEl = $('#chat'), inEl = $('#in'), sel = $('#model'), dlg = $('#dlg'), listEl = $('#list');
@@ -16,13 +18,39 @@ let catalog = null, server = null, tab = 'browser', engine = null, engineModel =
 let stopper = null, stopped = false, sessionId = 1;   // stopper() cancels whatever reply is running right now
 let effort = cleanEffort(localStorage.getItem('pholama.effort'));
 
+// Unified API fetch helper supporting remote PC connection
+async function api(path, opts = {}, bodyData) {
+  let init = {};
+  if (typeof opts === 'string') {
+    init = { method: opts };
+    if (bodyData !== undefined) init.body = typeof bodyData === 'object' ? JSON.stringify(bodyData) : bodyData;
+  } else {
+    init = { ...opts };
+  }
+  const base = remoteBase();
+  const relPath = path.startsWith('/') ? path : '/' + path;
+  const url = base ? base + relPath : path;
+  const headers = {
+    ...remoteHeaders(),
+    ...(init.headers || {}),
+  };
+  let body = init.body;
+  if (body && typeof body === 'object' && !(body instanceof FormData) && !(body instanceof URLSearchParams)) {
+    body = JSON.stringify(body);
+    if (!headers['Content-Type']) headers['Content-Type'] = 'application/json';
+  }
+  const r = await fetch(url, { ...init, headers, body });
+  if (r.status === 401) throw new Error('Key rejected');
+  return r;
+}
+
 // You need an account to chat with any model or to download one. This opens the sign-in box and says why.
 function needLogin(what) {
   if (what === 'download' ? mayDownload(Account.user()) : mayUse(Account.user())) return false;
   aMode = 'sign'; $('#a_msg').textContent = ''; paintAcct();
   $('#a_why').textContent = GATE_MESSAGE; $('#a_why').style.display = '';
   if (dlg.open) dlg.close();
-  $('#dlg3').showModal(); return true;
+  openSettings('account'); return true;
 }
 
 // One AI message = live log (actions/steps) + live thinking + answer. Everything updates while it streams.
@@ -71,7 +99,7 @@ const markReady = id => { const s = new Set(saved()); s.add(id); localStorage.se
 async function init() {
   hasGPU = await probeGPU();
   catalog = await (await fetch('models.json')).json();
-  try { const r = await fetch('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json(); } catch {}
+  try { const r = await api('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json(); } catch {}
   tab = server ? 'local' : 'browser';
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) navigator.serviceWorker.register('sw.js').catch(() => {});
   await refreshSelect();
@@ -89,12 +117,12 @@ async function refreshSelect() {
     const c = (catalog.cpu || []).find(x => 'cpu:' + x.id === id); if (c) sel.add(new Option('📱 ' + c.name, id));
   }
   if (server) try {
-    const t = await (await fetch('api/tags')).json();
+    const t = await (await api('api/tags')).json();
     for (const m of t.models) sel.add(new Option('💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
   } catch {}
   sel.add(new Option('☁ ' + MAX_NAME + ' (cloud, no download)', CLOUD_ID));
   const first = [...sel.options].findIndex(o => !o.disabled); if (first >= 0) sel.selectedIndex = first;
-  paintSwitches(); paintEffort();
+  paintSwitches(); paintEffort(); paintComposerPill();
 }
 
 async function ensureEngine(value) {
@@ -108,7 +136,6 @@ async function ensureEngine(value) {
   engine = await webllm.CreateMLCEngine(id, { initProgressCallback: p => note.textContent = p.text });
   engineModel = id; note.textContent = 'Model ready.'; markReady(id);
 }
-
 
 // CPU/WASM fallback (transformers.js) for browsers without WebGPU
 let cpuPipe = null, cpuModel = null;
@@ -132,30 +159,31 @@ async function cpuChat(messages, onToken, eff) {
   } catch { return { in: messages.reduce((a, m) => a + Math.ceil(m.content.length / 4), 0), out: Math.ceil(out.length / 4), estimated: true, seconds: +((performance.now() - t0) / 1000).toFixed(1) }; }
 }
 
-
-// ----- credits, tools, MCP (PC host only) -----
+// ----- credits, tools, MCP -----
 let cred = null;
 async function refreshCredits() {
-  if (!server) { $('#cr').style.display = 'none'; $('#opt').style.display = 'none'; return; }
-  try { cred = await (await fetch('api/credits')).json(); } catch { return; }
+  if (!server) { $('#cr').style.display = 'none'; paintComposerPill(); return; }
+  try { cred = await (await api('api/credits')).json(); } catch { return; }
   const c = $('#cr'); c.style.display = ''; c.textContent = cred.left; c.title = cred.left + ' of ' + cred.daily + ' daily credits left' + (cred.left === 0 ? '. Search, tools, MCP and thinking are off until tomorrow.' : '. Resets daily.');
   c.className = 'pill' + (cred.left === 0 ? ' zero' : cred.left < cred.daily * 0.2 ? ' low' : '');
-  const cb = $('#crBox'); cb.style.display = ''; cb.textContent = cred.left; cb.className = c.className; cb.title = cred.left + ' of ' + cred.daily + ' credits left today';
+  paintComposerPill();
+  paintUsage();
 }
 async function openOpts() {
-  const off = !server; $('#t_off').style.display = off ? '' : 'none'; $('#t_body').style.display = off ? 'none' : '';
+  const off = !server; $('#t_off').style.display = off ? '' : 'none';
   if (!off) {
     await refreshCredits();
     $('#t_cr').textContent = cred.left === 0 ? 'Out of credits. Search, tools, MCP and thinking are off until tomorrow. Plain chat still works.' : `${cred.left} of ${cred.daily} credits left today. Resets at midnight.`;
     const pr = cred.allowed.prefs; ghPaint(); for (const k of ['github', 'search', 'tools', 'mcp', 'thinking']) $('#p_' + k).checked = !!pr[k];
     await listMcpUI();
+  } else {
+    ghPaint();
   }
-  $('#dlg2').showModal();
 }
 async function listMcpUI() { try { await listMcpInner(); } finally { paintSwitches(); } }
 async function listMcpInner() {
   const box = $('#mcpList'); box.innerHTML = '';
-  let r; try { r = await (await fetch('api/mcp')).json(); } catch { return; }
+  let r; try { r = await (await api('api/mcp')).json(); } catch { return; }
   if (!r.servers.length) { box.innerHTML = '<div class="sys" style="text-align:left">No MCP servers yet.</div>'; return; }
   for (const sv of r.servers) {
     const tools = r.tools.filter(t => t.server === sv.name), err = tools.find(t => t.error);
@@ -163,24 +191,22 @@ async function listMcpInner() {
     d.innerHTML = '<div class="sp"><b></b><small></small></div><button>Remove</button>';
     d.querySelector('b').textContent = sv.name;
     d.querySelector('small').textContent = err ? 'Error: ' + err.error : tools.length + ' tools: ' + tools.map(t => t.name).join(', ').slice(0, 120);
-    d.querySelector('button').onclick = async () => { await fetch('api/mcp?name=' + encodeURIComponent(sv.name), { method: 'DELETE' }); listMcpUI(); };
+    d.querySelector('button').onclick = async () => { await api('api/mcp?name=' + encodeURIComponent(sv.name), { method: 'DELETE' }); listMcpUI(); };
     box.appendChild(d);
   }
 }
-for (const k of ['github', 'search', 'tools', 'mcp', 'thinking']) $('#p_' + k).onchange = e => fetch('api/prefs', { method: 'POST', body: JSON.stringify({ [k]: e.target.checked }) }).then(paintSwitches);
+for (const k of ['github', 'search', 'tools', 'mcp', 'thinking']) $('#p_' + k).onchange = e => api('api/prefs', { method: 'POST', body: JSON.stringify({ [k]: e.target.checked }) }).then(paintSwitches);
 $('#mAdd').onclick = async () => {
   const name = $('#mName').value.trim(), url = $('#mUrl').value.trim(), auth = $('#mAuth').value.trim();
   $('#mMsg').textContent = '';
   try {
-    const r = await fetch('api/mcp', { method: 'POST', body: JSON.stringify({ name, url, headers: auth ? { Authorization: auth } : {} }) });
+    const r = await api('api/mcp', { method: 'POST', body: JSON.stringify({ name, url, headers: auth ? { Authorization: auth } : {} }) });
     if (!r.ok) throw new Error((await r.json()).error || 'failed');
     $('#mName').value = $('#mUrl').value = $('#mAuth').value = ''; await listMcpUI();
   } catch (e) { $('#mMsg').textContent = e.message; }
 };
-$('#opt').onclick = openOpts; $('#close2').onclick = () => $('#dlg2').close();
 
 // ----- per-message switches: Search / Tools / MCP / Thinking -----
-// A chip exists only if the selected model can really do it. Capable models start with it ON; a tap is remembered.
 const ICON = {
   search: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   tools: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>',
@@ -197,9 +223,9 @@ async function paintSwitches() {
   const row = $('#swrow'); if (!row) return;
   swCaps = {};
   if (server && sel.value && (sel.value.startsWith('ollama:') || sel.value.startsWith('gguf:'))) {
-    try { const c = await (await fetch('api/caps?model=' + encodeURIComponent(sel.value))).json(); await refreshCredits();   // keeps the master toggles (Tools dialog) in sync
+    try { const c = await (await api('api/caps?model=' + encodeURIComponent(sel.value))).json(); await refreshCredits();
     const mp = (cred && cred.allowed && cred.allowed.prefs) || {};
-    let hasMcp = false; try { hasMcp = ((await (await fetch('api/mcp')).json()).servers || []).length > 0; } catch {}
+    let hasMcp = false; try { hasMcp = ((await (await api('api/mcp')).json()).servers || []).length > 0; } catch {}
     swCaps = { github: c.github && mp.github !== false, search: c.search && mp.search !== false, tools: c.tools && mp.tools !== false, mcp: c.mcp && mp.mcp !== false, _hasMcp: hasMcp, thinking: c.thinking && mp.thinking !== false, _src: c.source };
     } catch {}
   }
@@ -216,29 +242,30 @@ async function paintSwitches() {
   }
   row.style.display = row.children.length ? '' : 'none';
 }
-sel.addEventListener('change', () => { paintSwitches(); paintEffort(); });
+sel.addEventListener('change', () => { paintSwitches(); paintEffort(); paintComposerPill(); });
 
 // ----- think effort: Normal / Long / Max -----
-// On the cloud model it costs a little more of the daily allowance. On your own models it never costs anything.
 function paintEffort() {
-  const box = $('#effort'); box.innerHTML = '';
-  const cloud = sel.value === CLOUD_ID;
+  const box = $('#effort'); if (!box) return;
+  const isMax = sel.value === CLOUD_ID;
+  box.innerHTML = '';
   for (const k of effortKeys()) {
-    const b = document.createElement('button'); b.textContent = EFFORT[k].label; b.className = k === effort ? 'on' : '';
-    b.title = EFFORT[k].hint + (cloud ? ' (Every ' + MAX_NAME + ' message counts as 1.)' : ' (Free on your own models.)'); b.setAttribute('aria-pressed', k === effort);
-    b.onclick = () => { effort = k; localStorage.setItem('pholama.effort', k); paintEffort(); };
+    const b = document.createElement('button'); b.textContent = EFFORT[k].label; b.className = effort === k ? 'on' : '';
+    b.title = EFFORT[k].hint + (isMax ? ' (1 message)' : '');
+    b.onclick = () => { effort = k; localStorage.setItem('pholama.effort', effort); paintEffort(); };
     box.appendChild(b);
   }
 }
+
 // Agent Max can operate the page. The server only returns names from this fixed list; each one does what a tap would do.
 const UI_DO = {
   open_models: () => { if (!dlg.open) $('#mgr').click(); },
-  open_tools: () => { if (!$('#dlg2').open) $('#opt').click(); },
-  open_account: () => { if (!$('#dlg3').open) $('#acct').click(); },
-  close_dialogs: () => { for (const d of [dlg, $('#dlg2'), $('#dlg3')]) if (d.open) d.close(); refreshSelect(); },
+  open_tools: () => openSettings('tools'),
+  open_account: () => openSettings('account'),
+  close_dialogs: () => { for (const d of [dlg, $('#dlgSettings'), $('#dlgHist')]) if (d && d.open) d.close(); refreshSelect(); },
   new_session: () => newSession(),
   set_effort_normal: () => setEffortTo('normal'), set_effort_long: () => setEffortTo('long'), set_effort_max: () => setEffortTo('max'),
-  check_limits: () => { for (const d of [dlg, $('#dlg2'), $('#dlg3')]) if (d.open) d.close(); $('#cloudLeft').style.display = ''; $('#cloudLeft').scrollIntoView({ block: 'nearest' }); },
+  check_limits: () => { for (const d of [dlg, $('#dlgSettings'), $('#dlgHist')]) if (d && d.open) d.close(); $('#cloudLeft').style.display = ''; $('#cloudLeft').scrollIntoView({ block: 'nearest' }); },
 };
 function setEffortTo(k) { effort = cleanEffort(k); localStorage.setItem('pholama.effort', effort); paintEffort(); }
 function runUiActions(list) {
@@ -259,24 +286,21 @@ function setBusy(on) {
   b.innerHTML = on ? STOP_ICON : SEND_ICON; b.title = on ? 'Stop' : 'Send'; b.setAttribute('aria-label', on ? 'Stop' : 'Send'); b.classList.toggle('stop', on);
   $('#newSess').disabled = false;
 }
-// Stop whatever is running. Safe to call any time, any number of times.
-function stopGen() {
-  if (!busy) return; stopped = true;
-  try { if (stopper) stopper(); } catch {}
-}
+function stopGen() { if (busy && stopper) { stopped = true; try { stopper(); } catch {} } }
+
+// ----- chat sending -----
 async function send() {
-  if (busy) return stopGen();                               // the same button is Send when idle and Stop while a reply runs
+  if (busy) { stopGen(); return; }
   const text = inEl.value.trim(); if (!text) return;
+  if (!sel.value) return alert('Open Models and download a model first.');
   if (needLogin('use')) return;
-  if (!sel.value) { add('sys', 'Pick a model first (open Models to download one).'); return; }
-  const token = Account.token && Account.token();
-  setBusy(true); stopped = false; stopper = null; inEl.value = '';
-  hideHero(); history.push({ role: 'user', content: text }); addUser(text);
-  const msg = makeMsg(); let acc = ''; let pendingUi = null;
-  const sessionAtStart = sessionId;                          // if the user starts a New session meanwhile, this reply must not land in it
+  const isCloud = sel.value === CLOUD_ID, token = Account.token();
+  if (isCloud && !token) return needLogin('use');
+  inEl.value = ''; inEl.style.height = 'auto'; setBusy(true); stopped = false;
+  hideHero(); addUser(text); history.push({ role: 'user', content: text });
+  saveCurrentSession();
+  const msg = makeMsg(); let acc = '', pendingUi = null; const sessionAtStart = sessionId;
   try {
-    const isCloud = sel.value === CLOUD_ID;
-    if (!isCloud && !sel.value.startsWith('ollama:') && !sel.value.startsWith('gguf:')) msg.log('step', 'Loading the model on this device...', 0);
     const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');
     if (local) { const ri = rememberIntent(text); if (ri && memOn) msg.log('result', await saveMemory(ri), 0); }
     if (!isCloud) await ensureEngine(sel.value);
@@ -291,6 +315,13 @@ async function send() {
       msg.log('result', `${MAX_NAME} used ${(r.tools || []).length} tool(s). Today: ${r.day_used}/${r.day_cap}. Month: ${r.month_used}/${r.month_cap}.`, +((performance.now() - t0) / 1000));
       msg.usage({ in: history.reduce((n, m) => n + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: +((performance.now() - t0) / 1000).toFixed(1) });
       paintCloudLeft(r);
+      if (r && r.day_used != null) {
+        try {
+          localStorage.setItem('pholama.maxUsage', JSON.stringify({ day_used: r.day_used, day_cap: r.day_cap, month_used: r.month_used, month_cap: r.month_cap }));
+        } catch {}
+        paintUsage();
+        paintComposerPill();
+      }
     } else if (sel.value.startsWith('cpu:')) {
       msg.log('step', 'Running on your phone CPU. This can be slow.', 0);
       msg.usage(await cpuChat(send_, t => { acc += t; msg.text(acc); }, effort));
@@ -303,7 +334,7 @@ async function send() {
       msg.usage(wu ? { in: wu.prompt_tokens, out: wu.completion_tokens, estimated: false, seconds: sec } : { in: send_.reduce((a, m) => a + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: sec });
     } else {
       const ac = new AbortController(); stopper = () => ac.abort();
-      const r = await fetch('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model: sel.value, messages: history, agent: true, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [] }) });
+      const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model: sel.value, messages: history, agent: true, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [] }) });
       const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
       for (;;) {
         const { done, value } = await rd.read(); if (done) break;
@@ -328,6 +359,7 @@ async function send() {
       if (clean) history.push({ role: 'assistant', content: clean }); else history.pop();
       msg.log('step', clean ? 'Stopped. Kept what was written so far.' : 'Stopped before any answer.'); msg.finish(true);
     } else { history.push({ role: 'assistant', content: clean }); msg.finish(true); }
+    saveCurrentSession();
     if (pendingUi && sessionAtStart === sessionId && !stopped) runUiActions(pendingUi);   // after the reply is saved, so new_session cannot eat it
   } catch (e) {
     if (sessionAtStart !== sessionId) return;
@@ -335,6 +367,7 @@ async function send() {
       const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
       if (clean) history.push({ role: 'assistant', content: clean }); else history.pop();
       msg.log('step', clean ? 'Stopped. Kept what was written so far.' : 'Stopped before any answer.'); msg.finish(true);
+      saveCurrentSession();
     } else {
       history.pop();
       if (e && e.code === 'login') { msg.fail(e.message); needLogin('use'); }
@@ -349,7 +382,6 @@ async function send() {
 let memOn = false, memories = [];
 async function afterAuth() {
   const u = Account.user();
-  $('#acct').textContent = u ? Account.name() || 'Account' : 'Log in';
   memOn = false; memories = [];
   if (u) { try { memOn = await Account.memoryOn(); if (memOn) memories = (await Account.list()).map(m => m.content); } catch {} }
 }
@@ -381,8 +413,6 @@ async function paintMemList() {
     box.appendChild(d);
   }
 }
-$('#acct').onclick = () => { $('#a_msg').textContent = ''; paintAcct(); $('#dlg3').showModal(); };
-$('#close3').onclick = () => $('#dlg3').close();
 $('#a_tLogin').onclick = () => { aMode = 'login'; $('#a_msg').textContent = ''; paintAcct(); };
 $('#a_tSign').onclick = () => { aMode = 'sign'; $('#a_msg').textContent = ''; paintAcct(); };
 async function submitAcct() {
@@ -406,7 +436,7 @@ $('#a_outBtn').onclick = async () => { Account.logout(); await afterAuth(); pain
 
 // Saves a fact for the signed-in user. Returns a short status for the chat log.
 async function saveMemory(text) {
-  if (!Account.user()) return 'Not saved: log in first (Account button).';
+  if (!Account.user()) return 'Not saved: log in first (Account tab in Settings).';
   if (!memOn) return 'Not saved: memory is off.';
   try { await Account.remember(text); memories.unshift(text); return 'Saved to memory: ' + text; } catch (e) { return 'Could not save: ' + e.message; }
 }
@@ -432,72 +462,44 @@ function render() {
     let lastTier = 0;
     for (const m of [...list].sort((a, b) => a.tier - b.tier)) {
       if (m.tier !== lastTier) { lastTier = m.tier; const h = document.createElement('h4'); h.textContent = (catalog.tiers || {})[m.tier] || "Models"; h.style.cssText = 'margin:12px 0 2px;font-size:13px;color:#aab1c3'; listEl.appendChild(h); }
-      // pick the id to use on this device: f32 fallback when f16 is missing
       let useId = m.id, blocked = '';
       if (gpu && m.needsF16 && !hasF16) { if (m.fallback) useId = m.fallback; else blocked = 'Needs a GPU feature this phone lacks'; }
       const key = gpu ? useId : 'cpu:' + m.id; let ready = saved().includes(key);
       const fits = m.tier <= maxTier, caps = (m.caps || []).map(c => (catalog.capLabels || {})[c] || c);
       const r = row(m.name, `${m.size} · ${m.note}`, blocked ? 'Not supported' : ready ? 'Ready' : 'Download');
       const chips = document.createElement('div'); chips.className = 'chips2';
-      for (const c of [...caps, fits ? 'Fits your phone' : 'May be too big']) { const ch = document.createElement('span'); ch.className = 'chip'; ch.textContent = c; if (c === 'Fits your phone') ch.style.color = 'var(--ok)'; else if (c === 'May be too big') ch.style.color = 'var(--warn)'; chips.appendChild(ch); }
-      r.sub.parentNode.insertBefore(chips, r.bar);
-      if (blocked) r.sub.textContent = blocked;
-      const del = document.createElement('button'); del.textContent = 'Delete'; del.className = 'danger'; r.actions.appendChild(del);
-      let cancelled = false;
-      const idle = (label, hasFiles) => { r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = false; r.btn.onclick = start; del.style.display = hasFiles ? '' : 'none'; };
-      const setReady = () => { ready = true; idle('Ready', true); r.btn.disabled = true; r.loader.done(); r.sub.textContent = 'Ready to chat. Works offline.'; };
+      const cRAM = document.createElement('span'); cRAM.className = 'chip'; cRAM.textContent = fits ? 'Fits your phone' : 'May be slow'; chips.appendChild(cRAM);
+      for (const cap of caps) { const c = document.createElement('span'); c.className = 'chip'; c.textContent = cap; chips.appendChild(c); }
+      r.sub.appendChild(chips);
+      if (blocked) { r.btn.disabled = true; continue; }
+
+      const del = mini('Delete', async () => {
+        if (!confirm(`Delete ${m.name} from this browser?`)) return;
+        del.disabled = true;
+        if (gpu) await deleteFromDevice(useId);
+        unmarkReady(key); await refreshSelect(); render();
+      });
+      r.actions.appendChild(del); del.style.display = ready ? '' : 'none';
+
+      const idle = (label, isReady) => { r.loader.set(isReady ? 1 : 0); r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = false; r.btn.onclick = start; del.style.display = isReady ? '' : 'none'; };
       const start = async () => {
         if (needLogin('download')) return;
-        cancelled = false; r.bar.style.display = ''; r.setProgress(0); del.style.display = 'none'; r.sub.textContent = 'Starting...';
-        r.btn.textContent = 'Stop'; r.btn.disabled = false;
-        r.btn.onclick = async () => { cancelled = true; r.btn.disabled = true; r.sub.textContent = 'Stopping after the current file...'; };
+        r.btn.disabled = true;
         try {
           if (gpu) await ensureEngineWithBar(useId, r);
-          else await ensureCpu(m.id, p => { if (!cancelled) { r.setProgress(p.progress / 100); r.sub.textContent = (p.file || 'downloading').slice(-40); } });
-          if (cancelled) { idle('Resume', true); r.loader.set(0); r.sub.textContent = 'Stopped. Tap Resume to continue. Files already downloaded are kept.'; return; }
-          setReady(); await refreshSelect(); sel.value = gpu ? 'web:' + useId : key; r.sub.textContent = 'Ready to chat. Close this window.';
-        } catch (e) { idle('Retry', true); r.loader.set(0); r.sub.textContent = 'Error: ' + e.message.slice(0, 160) + '. Tap Retry: it continues from the files already saved.'; }
+          else await ensureCpu(m.id, p => r.setProgress(p));
+          idle('Ready', true); await refreshSelect();
+        } catch (e) { idle('Retry', false); r.sub.textContent = 'Error: ' + e.message; }
       };
-      del.onclick = async () => {
-        if (!confirm(`Delete ${m.name} from this device?`)) return;
-        del.disabled = true; if (gpu) await deleteFromDevice(useId); unmarkReady(key); if (engineModel === useId) { try { await engine.unload(); } catch {} engine = null; engineModel = null; }
-        ready = false; del.disabled = false; r.loader.set(0); idle('Download', false); r.sub.textContent = `${m.size} · ${m.note}`; await refreshSelect();
-      };
-      if (blocked) { r.btn.disabled = true; r.btn.textContent = 'Not supported'; del.style.display = 'none'; }
-      else if (ready) setReady();
-      else { idle('Download', false); if (gpu) cachedOnDevice(useId).then(has => { if (has && !ready) { markReady(key); refreshSelect(); setReady(); } }); }
+
+      if (ready) idle('Ready', true); else idle('Download', false);
+      if (gpu) cachedOnDevice(useId).then(isCached => { if (isCached && !ready) { markReady(useId); idle('Ready', true); } });
     }
   } else {
-    const h = server.hardware;
-    $('#hw').textContent = `${h.ramGB} GB RAM${h.gpu ? ' · ' + h.gpu : ''}${server.ollama ? ' · Ollama detected' : ''}${server.llamaServer ? ' · llama.cpp found' : ''}`;
-    const mb = n => (n / 1e6).toFixed(n > 1e8 ? 0 : 1), pct = (d, t) => t ? Math.min(100, Math.round(d / t * 100)) : 0;
-    const api = (u, method = 'POST', b) => fetch(u, { method, body: b ? JSON.stringify(b) : undefined }).then(r => r.json()).catch(() => ({}));
-    const mini = (label, fn) => { const b = document.createElement('button'); b.textContent = label; b.style.marginLeft = '6px'; b.onclick = fn; return b; };
-
-    // ----- engine (llama.cpp) -----
-    if (!server.ollama) {
-      const have = !!server.llamaServer;
-      const r = row(have ? 'Engine installed' : 'Engine not installed', have ? 'llama.cpp runs models on this PC.' : 'Needs llama.cpp to run models on this PC (20 MB to 250 MB). Or install Ollama instead.', have ? 'Remove' : 'Install');
-      const actions = r.btn.parentNode;
-      const paint = s => {
-        const busy = s.status === 'installing';
-        r.bar.style.display = busy ? '' : 'none';
-        if (busy) { r.setProgress(s.total ? s.done / s.total : null); r.sub.textContent = `${s.step}  ${mb(s.done)}${s.total ? ' / ' + mb(s.total) : ''} MB${s.speed ? '  ·  ' + (s.speed / 1e6).toFixed(1) + ' MB/s' : ''}`; r.btn.textContent = 'Stop'; r.btn.disabled = false; r.btn.onclick = () => api('api/install-llama/stop'); }
-        else if (s.status === 'error') { r.sub.textContent = 'Error: ' + s.error + '  (tap Install to retry)'; r.btn.textContent = 'Install'; r.btn.disabled = false; r.btn.onclick = startInstall; }
-        else if (s.status === 'stopped') { r.loader.set(0); r.sub.textContent = 'Stopped. Nothing was installed.'; r.btn.textContent = 'Install'; r.btn.disabled = false; r.btn.onclick = startInstall; }
-      };
-      const startInstall = async () => { if (needLogin('download')) return; r.btn.disabled = true; await api('api/install-llama'); watch(); };
-      const watch = () => { clearInterval(window.__instT); window.__instT = setInterval(async () => {
-        if (!dlg.open) return clearInterval(window.__instT);
-        const s = await (await fetch('api/install-llama/status')).json(); paint(s);
-        if (s.status === 'done') { clearInterval(window.__instT); server = await (await fetch('api/hardware')).json(); render(); }
-      }, 700); };
-      if (have) { r.btn.onclick = async () => { if (!confirm('Remove the llama.cpp engine? Your downloaded models stay.')) return; r.btn.disabled = true; await api('api/install-llama', 'DELETE'); server = await (await fetch('api/hardware')).json(); render(); }; }
-      else { r.btn.onclick = startInstall; fetch('api/install-llama/status').then(x => x.json()).then(s => { paint(s); if (s.status === 'installing') watch(); }); }
-    }
-
-    // ----- models -----
-    for (const m of server.models) {
+    const ram = server.ramGB || 0;
+    $('#hw').textContent = `${server.os || 'PC'} · ${server.cpu || 'CPU'}${server.gpu ? ' · ' + server.gpu : ''} · ${ram ? ram + ' GB RAM' : ''}`;
+    for (const m of catalog.pc || []) {
+      const mb = n => (n / 1024 / 1024).toFixed(0);
       const r = row(m.name, `${m.sizeGB} GB · ${m.fits ? 'fits your PC' : 'may be too big for your RAM'} · ${(m.caps || []).map(c => (catalog.capLabels || {})[c] || c).join(', ')}`, 'Download');
       const del = mini('Delete', async () => { if (!confirm(`Delete ${m.name} from this PC?`)) return; del.disabled = true; await api('api/model?id=' + encodeURIComponent(m.id), 'DELETE'); await refreshModels(); });
       r.btn.parentNode.appendChild(del); del.style.display = 'none';
@@ -512,14 +514,22 @@ function render() {
       };
       const watchModel = () => { clearInterval(r.t); r.t = setInterval(async () => {
         if (!dlg.open) return clearInterval(r.t);
-        const all = await (await fetch('api/pull/status')).json(); const d = all[m.id]; paint(d);
+        const all = await (await api('api/pull/status')).json(); const d = all[m.id]; paint(d);
         if (d && d.status === 'done') { clearInterval(r.t); await refreshModels(); }
       }, 700); };
       paint(m.progress); if (m.progress && m.progress.status === 'downloading') watchModel();
     }
   }
 }
-async function refreshModels() { server = await (await fetch('api/hardware')).json(); await refreshSelect(); render(); }
+function mini(txt, fn) { const b = document.createElement('button'); b.textContent = txt; b.className = 'ghost'; b.style.cssText = 'padding:4px 8px;font-size:12.5px;color:var(--mut)'; b.onclick = fn; return b; }
+async function refreshModels() {
+  try {
+    const r = await api('api/hardware');
+    if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json();
+    else server = null;
+  } catch { server = null; }
+  await refreshSelect(); render();
+}
 function row(title, sub, btn) {
   const d = document.createElement('div'); d.className = 'row';
   d.innerHTML = '<div class="ic"></div><div class="sp"><b></b><small></small><div class="bar" style="display:none"><i></i></div></div><div class="act"><button></button></div>';
@@ -527,7 +537,6 @@ function row(title, sub, btn) {
   const b = d.querySelector('.act button'); b.textContent = btn; listEl.appendChild(d);
   const L = llamaLoader(34); d.querySelector('.ic').appendChild(L.el); L.set(0);
   const bar = d.querySelector('.bar'), fillEl = d.querySelector('.bar i');
-  // one call updates both the thin bar and the llama. frac is 0..1, or null when the total size is unknown.
   const setProgress = frac => { fillEl.style.width = frac == null ? '35%' : Math.round(frac * 100) + '%'; L.set(frac); };
   return { btn: b, sub: s, bar, loader: L, setProgress, actions: d.querySelector('.act') };
 }
@@ -548,15 +557,306 @@ $('#close').onclick = () => { dlg.close(); refreshSelect(); };
 $('#tBrowser').onclick = () => { tab = 'browser'; render(); };
 $('#tLocal').onclick = () => { tab = 'local'; render(); };
 $('#send').onclick = send;
-// New session: stop any running reply, forget this chat, show the welcome screen again. Models and settings stay.
+
+// New session: stop any running reply, save current chat, clear, show welcome screen again.
 function newSession() {
-  stopGen(); sessionId++; stopper = null; stopped = false; history = []; setBusy(false);
+  stopGen(); sessionId++; stopper = null; stopped = false;
+  saveCurrentSession();
+  currentSessionId = 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+  history = []; setBusy(false);
   chatEl.innerHTML = ''; chatEl.appendChild(heroEl); inEl.value = ''; paintCloudLeft(null); inEl.focus();
 }
 $('#newSess').onclick = () => { if (history.length && !confirm('Start a new session? This clears the current chat.')) return; newSession(); };
 inEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !/Mobi|Android/i.test(navigator.userAgent)) { e.preventDefault(); send(); } });
-init().then(refreshCredits);
 
+// ----- Settings dialog & tabs -----
+function openSettings(tabName = 'usage') {
+  const tabs = ['usage', 'tools', 'account', 'remote', 'safety'];
+  if (!tabs.includes(tabName)) tabName = 'usage';
+  for (const t of tabs) {
+    const btn = $('#s_tab_' + t);
+    const sec = $('#s_sec_' + t);
+    if (btn) btn.classList.toggle('on', t === tabName);
+    if (sec) sec.style.display = t === tabName ? '' : 'none';
+  }
+  if (tabName === 'usage') paintUsage();
+  if (tabName === 'tools') openOpts();
+  if (tabName === 'account') { $('#a_msg').textContent = ''; paintAcct(); }
+  if (tabName === 'remote') paintRemoteUI();
+  $('#dlgSettings').showModal();
+}
+
+for (const t of ['usage', 'tools', 'account', 'remote', 'safety']) {
+  const btn = $('#s_tab_' + t);
+  if (btn) btn.onclick = () => openSettings(t);
+}
+$('#settingsBtn').onclick = () => openSettings('usage');
+$('#closeSettings').onclick = () => $('#dlgSettings').close();
+$('#opt').onclick = () => openSettings('tools');
+$('#acct').onclick = () => openSettings('account');
+$('#cr').onclick = () => openSettings('usage');
+
+function paintUsage() {
+  let uData = null;
+  try { uData = JSON.parse(localStorage.getItem('pholama.maxUsage') || 'null'); } catch {}
+  const textEl = $('#u_cloud_text');
+  const barsEl = $('#u_cloud_bars');
+  if (!uData || uData.day_used == null) {
+    if (textEl) textEl.textContent = 'Send a message to Agent Max to see your usage';
+    if (barsEl) barsEl.style.display = 'none';
+  } else {
+    const dUsed = uData.day_used ?? 0, dCap = uData.day_cap ?? 10;
+    const mUsed = uData.month_used ?? 0, mCap = uData.month_cap ?? 30;
+    if (textEl) textEl.textContent = `Today ${dUsed} of ${dCap}, this month ${mUsed} of ${mCap}`;
+    if (barsEl) {
+      barsEl.style.display = '';
+      const dayPct = Math.min(100, Math.round((dUsed / Math.max(1, dCap)) * 100));
+      const monthPct = Math.min(100, Math.round((mUsed / Math.max(1, mCap)) * 100));
+      $('#u_day_num').textContent = `${dUsed} / ${dCap}`;
+      $('#u_day_fill').style.width = dayPct + '%';
+      $('#u_month_num').textContent = `${mUsed} / ${mCap}`;
+      $('#u_month_fill').style.width = monthPct + '%';
+    }
+  }
+
+  const locBox = $('#u_local_box');
+  if (locBox) {
+    if (server && cred) {
+      locBox.style.display = '';
+      $('#u_cred_text').textContent = `${cred.left} of ${cred.daily} credits left today`;
+      const credPct = Math.min(100, Math.round((cred.left / Math.max(1, cred.daily)) * 100));
+      $('#u_cred_fill').style.width = credPct + '%';
+    } else {
+      locBox.style.display = 'none';
+    }
+  }
+}
+
+function paintComposerPill() {
+  const cb = $('#crBox');
+  if (!cb) return;
+  cb.onclick = () => openSettings('usage');
+  const isCloud = sel.value === CLOUD_ID;
+  if (isCloud) {
+    let uData = null;
+    try { uData = JSON.parse(localStorage.getItem('pholama.maxUsage') || 'null'); } catch {}
+    const dUsed = uData ? (uData.day_used ?? 0) : 0;
+    const dCap = uData ? (uData.day_cap ?? 10) : 10;
+    cb.textContent = `Max ${dUsed}/${dCap} today`;
+    cb.className = 'pill' + (dUsed >= dCap ? ' zero' : dUsed >= dCap * 0.8 ? ' low' : '');
+    cb.title = `Agent Max usage: ${dUsed} of ${dCap} used today. Tap to see usage in Settings.`;
+    cb.style.display = '';
+  } else if (server && cred) {
+    cb.textContent = cred.left;
+    cb.className = 'pill' + (cred.left === 0 ? ' zero' : cred.left < cred.daily * 0.2 ? ' low' : '');
+    cb.title = `${cred.left} of ${cred.daily} credits left today. Tap to see usage in Settings.`;
+    cb.style.display = '';
+  } else {
+    cb.style.display = 'none';
+  }
+}
+
+// ----- Remote access section -----
+function paintRemoteUI() {
+  const savedUrl = localStorage.getItem('pholama.remote.url') || '';
+  const savedKey = localStorage.getItem('pholama.remote.key') || '';
+  $('#remoteUrl').value = savedUrl;
+  $('#remoteKey').value = savedKey;
+  const base = remoteBase();
+  if (base) {
+    $('#remoteHostLabel').textContent = 'Remote: ' + base;
+  } else {
+    $('#remoteHostLabel').textContent = '';
+  }
+  $('#remoteMsg').textContent = '';
+}
+
+$('#remoteShowKey').onclick = () => {
+  const el = $('#remoteKey');
+  const show = el.type === 'password';
+  el.type = show ? 'text' : 'password';
+  $('#remoteShowKey').textContent = show ? 'Hide' : 'Show';
+};
+
+$('#remoteSave').onclick = async () => {
+  const url = $('#remoteUrl').value.trim();
+  const key = $('#remoteKey').value.trim();
+  localStorage.setItem('pholama.remote.url', url);
+  localStorage.setItem('pholama.remote.key', key);
+  $('#remoteMsg').textContent = 'Testing connection...';
+  const res = await remoteTest();
+  if (res.ok) {
+    $('#remoteMsg').className = 'sys ok-t';
+    $('#remoteMsg').textContent = 'Connected: ' + res.msg;
+    paintRemoteUI();
+    await refreshModels();
+  } else {
+    $('#remoteMsg').className = 'sys err-t';
+    $('#remoteMsg').textContent = res.msg;
+  }
+};
+
+$('#remoteTestBtn').onclick = async () => {
+  const url = $('#remoteUrl').value.trim();
+  const key = $('#remoteKey').value.trim();
+  localStorage.setItem('pholama.remote.url', url);
+  localStorage.setItem('pholama.remote.key', key);
+  $('#remoteMsg').textContent = 'Testing connection...';
+  const res = await remoteTest();
+  $('#remoteMsg').className = res.ok ? 'sys ok-t' : 'sys err-t';
+  $('#remoteMsg').textContent = res.msg;
+};
+
+$('#remoteDisconnect').onclick = async () => {
+  localStorage.removeItem('pholama.remote.url');
+  localStorage.removeItem('pholama.remote.key');
+  $('#remoteUrl').value = '';
+  $('#remoteKey').value = '';
+  $('#remoteMsg').className = 'sys';
+  $('#remoteMsg').textContent = 'Disconnected.';
+  $('#remoteHostLabel').textContent = '';
+  server = null;
+  await refreshModels();
+};
+
+// ----- Safety section -----
+$('#clearDataBtn').onclick = () => {
+  if (!confirm('Clear all data on this device? This will remove sessions, settings, remote keys, memories and tokens saved in this browser.')) return;
+  for (const k of Object.keys(localStorage)) {
+    if (k.startsWith('pholama')) localStorage.removeItem(k);
+  }
+  localStorage.removeItem('pholama_gh_token');
+  location.reload();
+};
+
+// ----- Sessions (History) -----
+let currentSessionId = 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
+
+function getStoredSessions() {
+  try {
+    const raw = localStorage.getItem('pholama.sessions');
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveStoredSessions(list) {
+  try {
+    localStorage.setItem('pholama.sessions', JSON.stringify(list.slice(0, 50)));
+  } catch (e) {
+    console.warn('Failed to save sessions:', e);
+  }
+}
+
+function saveCurrentSession() {
+  if (!history || !history.length) return;
+  try {
+    let sessions = getStoredSessions();
+    const firstUser = history.find(m => m.role === 'user');
+    const title = firstUser ? firstUser.content.trim().slice(0, 40) : 'Chat';
+    const selText = sel.options[sel.selectedIndex]?.text || sel.value || '';
+    const modelName = selText.replace(/^[📱💻☁]\s*/, '');
+
+    const trimmedMsgs = history.slice(-60);
+    const sessionObj = {
+      id: currentSessionId,
+      title: title || 'Chat',
+      model: modelName,
+      ts: Date.now(),
+      messages: trimmedMsgs,
+    };
+
+    const idx = sessions.findIndex(s => s.id === currentSessionId);
+    if (idx >= 0) {
+      sessions[idx] = sessionObj;
+    } else {
+      sessions.unshift(sessionObj);
+    }
+    saveStoredSessions(sessions);
+  } catch (e) {
+    console.warn('saveCurrentSession error', e);
+  }
+}
+
+function relTime(ts) {
+  const sec = Math.floor((Date.now() - ts) / 1000);
+  if (sec < 60) return 'Just now';
+  const min = Math.floor(sec / 60);
+  if (min < 60) return min + 'm ago';
+  const hr = Math.floor(min / 60);
+  if (hr < 24) return hr + 'h ago';
+  const days = Math.floor(hr / 24);
+  return days + 'd ago';
+}
+
+function paintHistoryList() {
+  const box = $('#histList');
+  if (!box) return;
+  box.innerHTML = '';
+  const sessions = getStoredSessions();
+  if (!sessions.length) {
+    box.innerHTML = '<div class="sys" style="text-align:left">No saved chat sessions.</div>';
+    return;
+  }
+  for (const s of sessions) {
+    const d = document.createElement('div');
+    d.className = 'hist-item';
+    d.innerHTML = `
+      <div class="hist-info">
+        <div class="hist-title"></div>
+        <div class="hist-meta"></div>
+      </div>
+      <button class="hist-del danger" title="Delete chat" aria-label="Delete chat">&times;</button>
+    `;
+    d.querySelector('.hist-title').textContent = s.title || 'Untitled chat';
+    d.querySelector('.hist-meta').textContent = `${s.model || 'Model'} \u00b7 ${relTime(s.ts)}`;
+
+    d.querySelector('.hist-info').onclick = () => {
+      if (s.id === currentSessionId) {
+        $('#dlgHist').close();
+        return;
+      }
+      if (history.length) {
+        if (!confirm('Load this chat? Current chat is saved.')) return;
+      }
+      saveCurrentSession();
+      currentSessionId = s.id;
+      history = [...(s.messages || [])];
+      chatEl.innerHTML = '';
+      hideHero();
+      for (const m of history) {
+        if (m.role === 'user') {
+          addUser(m.content);
+        } else if (m.role === 'assistant') {
+          const msg = makeMsg();
+          msg.text(m.content);
+          msg.finish(true);
+        }
+      }
+      $('#dlgHist').close();
+    };
+
+    d.querySelector('.hist-del').onclick = (e) => {
+      e.stopPropagation();
+      const filtered = getStoredSessions().filter(x => x.id !== s.id);
+      saveStoredSessions(filtered);
+      paintHistoryList();
+    };
+
+    box.appendChild(d);
+  }
+}
+
+$('#histBtn').onclick = () => { paintHistoryList(); $('#dlgHist').showModal(); };
+$('#closeHist').onclick = () => $('#dlgHist').close();
+$('#clearHistBtn').onclick = () => {
+  if (!confirm('Delete all history?')) return;
+  saveStoredSessions([]);
+  paintHistoryList();
+};
+
+init().then(refreshCredits);
 
 // ----- GitHub: the token lives only in this browser; writes need a click on Allow -----
 const GHK = 'pholama_gh_token';
@@ -570,7 +870,40 @@ function ghAsk(msg, a) {
   const t = document.createElement('div'); t.textContent = 'Allow this on GitHub? ' + a.summary;
   const ok = document.createElement('button'), no = document.createElement('button'); ok.textContent = 'Allow'; no.textContent = 'Deny'; ok.className = 'p'; ok.style.marginRight = '6px';
   const done = txt => { box.textContent = txt; };
-  const go = async yes => { ok.disabled = no.disabled = true; try { const r = await (await fetch('api/github/approve', { method: 'POST', headers: ghHeaders(), body: JSON.stringify({ id: a.id, approve: yes }) })).json(); done((r.ok ? '' : 'Failed: ') + r.text); } catch (e) { done('Failed: ' + e.message); } };
+  const go = async yes => { ok.disabled = no.disabled = true; try { const r = await (await api('api/github/approve', { method: 'POST', headers: ghHeaders(), body: JSON.stringify({ id: a.id, approve: yes }) })).json(); done((r.ok ? '' : 'Failed: ') + r.text); } catch (e) { done('Failed: ' + e.message); } };
   ok.onclick = () => go(true); no.onclick = () => go(false);
   box.append(t, ok, no); msg.el.appendChild(box); chatEl.scrollTop = 1e9;
 }
+
+// ---------- API keys (only on the PC itself) ----------
+async function loadKeys() {
+  const box = $('#keysBox'); if (!box) return;
+  let auth = null; try { auth = await (await api('api/auth')).json(); } catch {}
+  const isLocal = !!(auth && auth.local);
+  box.style.display = isLocal ? '' : 'none';
+  $('#keysOnlyPc').style.display = (auth && !isLocal) ? '' : 'none';
+  if (!isLocal) return;
+  let keys = []; try { keys = (await (await api('api/keys')).json()).keys || []; } catch {}
+  const list = $('#keyList'); list.textContent = '';
+  if (!keys.length) { list.innerHTML = '<div class="sys" style="text-align:left">No keys yet.</div>'; return; }
+  for (const k of keys) {
+    const row = document.createElement('div'); row.style.cssText = 'display:flex;gap:8px;align-items:center;padding:6px 0;border-top:1px solid var(--line)';
+    const t = document.createElement('div'); t.style.cssText = 'flex:1;min-width:0;text-align:left';
+    const nm = document.createElement('b'); nm.textContent = k.label;
+    const sub = document.createElement('div'); sub.className = 'sys'; sub.style.textAlign = 'left';
+    sub.textContent = k.hint + ' · ' + (k.lastUsed ? 'used ' + new Date(k.lastUsed).toLocaleString() : 'never used');
+    t.append(nm, sub);
+    const b = document.createElement('button'); b.className = 'danger'; b.textContent = 'Revoke';
+    b.onclick = async () => { if (!confirm('Revoke "' + k.label + '"? Any device using it stops working immediately.')) return; await api('api/keys?id=' + encodeURIComponent(k.id), { method: 'DELETE' }); $('#keyNew').style.display = 'none'; loadKeys(); };
+    row.append(t, b); list.append(row);
+  }
+}
+$('#keyMake') && ($('#keyMake').onclick = async () => {
+  const r = await api('api/keys', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ label: $('#keyLabel').value.trim() || 'key' }) });
+  const j = await r.json().catch(() => ({})); const n = $('#keyNew'); n.style.display = '';
+  if (!r.ok || !j.key) { n.textContent = j.error || 'Could not create a key.'; return; }
+  n.textContent = ''; const p = document.createElement('div'); p.textContent = 'Copy this key now. It is shown only once:'; const c = document.createElement('code'); c.textContent = j.key;
+  const cp = document.createElement('button'); cp.textContent = 'Copy'; cp.style.marginTop = '6px'; cp.onclick = () => { navigator.clipboard && navigator.clipboard.writeText(j.key); cp.textContent = 'Copied'; };
+  n.append(p, c, document.createElement('br'), cp); $('#keyLabel').value = ''; loadKeys();
+});
+$('#s_tab_remote') && $('#s_tab_remote').addEventListener('click', loadKeys);
