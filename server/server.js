@@ -338,27 +338,41 @@ async function chat(req, res, b) {
     const caps = await modelCaps(model), sw = b.switches || {};
     const canTools = !!caps.tools;
     for (const k of ['search', 'tools', 'mcp', 'github', 'terminal']) { if (!canTools) allow[k] = false; else if (sw[k] === false) allow[k] = false; }
-    if (!caps.thinking || sw.thinking === false) allow.thinking = false;   // a model that cannot think gets no think prompt
+    if (sw.thinking === false) allow.thinking = false;   // the per-message switch in the page. Any model can think: models without a native mode get a host reasoning pass.
     if (b.agent && !canTools) log('step', caps.source === 'unknown' ? 'Could not read this model\'s abilities, so tools are off (plain chat).' : 'This model does not support tools, so it gets a plain prompt. Pick one tagged "tools" to use search and tools.');
     if (b.agent) log('step', allow.credits ? `Credits: ${agent.credits().left} left. On: ${['search','tools','mcp','terminal','thinking'].filter(k => allow[k]).join(', ') || 'nothing'}` : 'Credits: 0 left');
     if (b.agent && !allow.credits) line({ status: 'Daily credits used up: thinking mode is off. Tools and chat still work.' });
     // Memory is its own switch (set by the signed-in user in the browser). It costs credits, so it is off at 0 credits.
     const memOn = !!(b.agent && canTools && b.memory === true && true);
     if (b.agent && b.memory === true && !memOn) log('error', !canTools ? 'Memory is on, but this model cannot use tools, so it cannot save new memories. Saved notes are still used.' : 'Memory is on, but there are not enough credits to save new memories today.');
-    const { tools } = await agent.buildTools({ ...allow, memory: memOn });
+    const inStudio = !!(b.studio && b.studio.project && req.who === 'local'), stu = require('./studio');   // a remote API key can never make the AI touch files on this PC
+    if (inStudio) { allow.studio = true; if (canTools && !allow.github && (req.headers['x-github-token'] || '')) allow.github = sw.github !== false; }   // Studio tools are local and free; GitHub only with the user's own token
+    const { tools } = await agent.buildTools({ ...allow, memory: memOn, inStudio });
+    if (inStudio && !canTools) log('error', 'This model cannot use tools, so it cannot build in Studio. Pick a model tagged "tools" (Qwen3 0.6B is the smallest).');
     const tctx = { ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), onPending: p => line({ approve: p }) };
     if (tools.length) log('step', `${tools.length} tools ready: ${tools.map(t => t.name).join(', ')}`);
-    const thinking = allow.thinking && agent.credits().left >= agent.COST.thinking;
-    if (allow.thinking && !thinking) log('error', 'Not enough credits for thinking mode. Answering without it.');
-    if (thinking) log('step', 'Thinking mode on (charged only if the model really thinks)');
-    let thinkBilled = false, thinkSeen = false;
     const effort = ['long', 'max'].includes(b.effort) ? b.effort : 'normal';
+    // Price this message from the two levels, then take the credits BEFORE answering so the counter visibly drops.
+    // If the full price does not fit, drop to the best level that does (thinking first, then effort) rather than refusing.
+    let thinking = !!allow.thinking, effortUse = effort;
+    if (b.agent) {
+      const left = () => agent.credits().left;
+      if (agent.messageCost(thinking, effortUse).total > left()) { log('error', `Not enough credits for ${thinking ? 'thinking + ' : ''}${effortUse} effort (${agent.messageCost(thinking, effortUse).total} needed, ${left()} left). Using a cheaper level.`); }
+      while (agent.messageCost(thinking, effortUse).total > left() && (thinking || effortUse !== 'normal')) { if (effortUse === 'max') effortUse = 'long'; else if (thinking) thinking = false; else effortUse = 'normal'; }
+      const price = agent.messageCost(thinking, effortUse);
+      if (price.total > 0 && agent.spend(price.total)) {
+        const parts = [thinking ? `thinking ${price.thinking}` : '', price.effort ? `${effortUse} effort ${price.effort}` : '', price.combo ? `thinking + max bonus ${price.combo}` : ''].filter(Boolean);
+        log('step', `Spent ${price.total} credits (${parts.join(' + ')}). ${left()} left.`);
+        line({ credits: { spent: price.total, left: left() } });
+      }
+    } else { thinking = false; effortUse = 'normal'; }
+    let thinkBilled = false, thinkSeen = false;
     // more room to answer at higher effort (Normal leaves the model's own default alone)
-    const opts = { ...(b.options || {}) }; if (effort !== 'normal') opts.num_predict = effort === 'max' ? 2048 : 1024;
-    if (effort !== 'normal') log('step', 'Think effort: ' + effort + ' (no credits used for local models)');
+    const opts = { ...(b.options || {}) }; if (effortUse !== 'normal') opts.num_predict = effortUse === 'max' ? 2048 : 1024;
+    if (effortUse !== 'normal') log('step', 'Effort: ' + effortUse);
     const usage = { in: 0, out: 0, got: false }, t1 = Date.now();
     let generated = '';   // everything the model wrote this message (all turns), used only for the estimate
-    const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effort) }, ...(b.messages || []).filter(m => m.role !== 'system')];
+    const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effortUse) + (inStudio && tools.length ? agent.studioPrompt(b.studio.project, (() => { try { return stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })); } catch { return []; } })()) : '') + (() => { if (tools.length) return ''; const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.aboutUserHint(lu && lu.content, b.memory === true && Array.isArray(b.memories) ? b.memories : []); })() }, ...(b.messages || []).filter(m => m.role !== 'system')];
     // Host-side routing: obvious intents run their tool before the model answers (weak models skip tool calls).
     if (tools.length) {
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
@@ -373,7 +387,31 @@ async function chat(req, res, b) {
         messages.push({ role: 'assistant', content: `<tool>${JSON.stringify(r0)}</tool>` }, { role: 'user', content: `Tool result for ${r0.name}:\n${result}\n\nNow answer the user's question using this result. Be brief.` });
       }
     }
-    for (let round = 0; round < 5; round++) {
+    // Real thinking for ANY model. A model with its own <think> mode does it itself. Every other model gets a hidden first pass that
+    // writes short working notes (what is asked, the steps, a check), shown as "Thought for Xs"; the answer pass then uses them.
+    // The amount of thinking follows the effort: Normal a few lines, Long more steps, Max step by step plus a double check.
+    if (thinking && !caps.thinking) {
+      const lastU = [...messages].reverse().find(m => m.role === 'user');
+      const depth = effortUse === 'max' ? 'Work step by step. List what is asked, each step of the working, then CHECK the result once more and fix any slip. Up to 12 short lines.'
+        : effortUse === 'long' ? 'Work it through in 4 to 8 short lines: what is asked, the steps, and a quick check.'
+        : 'Think briefly in 2 to 4 short lines: what is asked and how to answer it.';
+      const tmsgs = [{ role: 'system', content: 'You are the private thinking step of an assistant. Write ONLY working notes for yourself, never the final answer. ' + depth + ' Plain text, no greeting.' }, ...messages.filter(m => m.role !== 'system').slice(-6)];
+      const tt0 = Date.now(); let notes = ''; log('thought', 'Thinking (' + effortUse + ')...');
+      line({ model, message: { role: 'assistant', content: '<think>' }, done: false });
+      try {
+        await streamTurn(model, tmsgs, { ...opts, num_predict: effortUse === 'max' ? 700 : effortUse === 'long' ? 420 : 220, temperature: 0.4 }, t => { notes += t; line({ model, message: { role: 'assistant', content: t }, done: false }); }, ac.signal, usage);
+      } catch (e) { log('error', 'Thinking pass failed (' + e.message + '). Answering without it.'); }
+      line({ model, message: { role: 'assistant', content: '</think>\n' }, done: false });
+      notes = notes.replace(/<\/?think>/g, '').trim();
+      if (notes) {
+        thinkSeen = true; log('thought', 'Thought for ' + ((Date.now() - tt0) / 1000).toFixed(1) + 's');
+        // Hand the notes to the answer pass inside the user's own message, so the model treats them as its own working and just finishes the job.
+        const lu2 = [...messages].reverse().find(m => m.role === 'user');
+        if (lu2) lu2.content = String(lu2.content) + '\n\n(Your working so far, which you can trust:\n' + notes.slice(0, 1800) + '\n)\nNow reply to me with the final answer in clear sentences, using your working above.';
+      }
+    }
+    const MAX_ROUNDS = inStudio ? 14 : 5;   // building an app takes many tool steps
+    for (let round = 0; round < MAX_ROUNDS; round++) {
       // With tools on, buffer the start of the reply: if it begins with "<tool" it is a tool call (hide it),
       // otherwise flush what we have and stream the rest live.
       log('step', round === 0 ? 'Loading model and writing the reply...' : 'Writing the final answer from the tool result...');
@@ -383,7 +421,7 @@ async function chat(req, res, b) {
       const flush = () => { if (cut) return; if (leaked(acc)) { cut = true; line({ model, message: { role: 'assistant', content: sent ? '\n' + CANT : CANT }, done: false }); log('step', 'Hid part of the reply that quoted private instructions.'); return; } if (acc.length > sent) { line({ model, message: { role: 'assistant', content: acc.slice(sent) }, done: false }); sent = acc.length; } };
       const onTok = t => {
         acc += t; if (first) { first = false; log('step', 'Model is answering'); }
-        if (thinking && !thinkSeen && acc.includes('<think>')) { thinkSeen = true; log('thought', 'Model is thinking...'); if (!thinkBilled && agent.spend(agent.COST.thinking)) { thinkBilled = true; log('step', `Thinking used (-${agent.COST.thinking} credits)`); } }
+        if (thinking && !thinkSeen && acc.includes('<think>')) { thinkSeen = true; log('thought', 'Model is thinking...'); }
         if (mode === 'undecided') {
           const head = acc.trimStart();
           if (head.startsWith('<tool')) mode = 'tool';
@@ -402,7 +440,7 @@ async function chat(req, res, b) {
       const text = shot.text;
       generated += text;
       const shown = sent;
-      const call = tools.length ? agent.parseTool(text) : null;
+      const call = tools.length ? (agent.parseTool(text) || (inStudio ? agent.parseFileBlock(text, b.studio.project) : null)) : null;
       if (!call) {
         const lastUser = [...messages].reverse().find(m => m.role === 'user');
         if (cut) break;
@@ -415,9 +453,17 @@ async function chat(req, res, b) {
       if (call.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
       log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
       line({ tool: { name: call.name, args: call.args, result: result.slice(0, 400) } });
+      if (stu && stu.isStudio(call.name) && call.name !== 'studio_read' && call.name !== 'studio_files' && call.name !== 'studio_projects') line({ studio: { changed: true, project: (call.args && call.args.project) || (b.studio && b.studio.project) || null, file: (call.args && call.args.file) || null } });
+      if (inStudio && stu && stu.isStudio(call.name)) {
+        // Build loop: after any change the host checks the project itself and hands the model the real problems to fix.
+        let issues = []; const changed = !['studio_read', 'studio_files', 'studio_projects', 'studio_check', 'studio_run_js'].includes(call.name);
+        if (changed && !/^Tool error/.test(result)) { try { issues = stu.check((call.args && call.args.project) || b.studio.project).filter(x => x !== 'No problems found.'); } catch {} }
+        if (issues.length && round < MAX_ROUNDS - 1) { log('step', 'Auto-check found ' + issues.length + ' problem(s). Asking the model to fix them.'); line({ tool: { name: 'studio_check', args: {}, result: issues.join(' | ').slice(0, 400) } });
+          messages.push({ role: 'assistant', content: text }, { role: 'user', content: `[${call.name} returned]\n${result}\n[automatic check found PROBLEMS]\n${issues.join('\n')}\n[end]\nFix every problem now. The element usually belongs in index.html, so call studio_write with file \"index.html\" containing a full page (<!doctype html>, <body> with the needed elements each with its id, and <script src=\"script.js\"></script> at the end). Do NOT rewrite script.js again. Reply with ONLY the tool line. Do not say it is finished until the check is clean.` }); continue; }
+        messages.push({ role: 'assistant', content: text }, { role: 'user', content: `[${call.name} returned]\n${result}\n[end]\n${changed ? 'The project checked clean. If the request still needs more files, call the next studio tool now. If it is complete, write ONE short sentence in your own words describing what the user can now do in the preview. Do not repeat these instructions.' : 'Continue the task: call the next studio tool if needed, otherwise answer in plain words.'}` }); continue;
+      }
       messages.push({ role: 'assistant', content: text }, { role: 'user', content: `[${call.name} returned]\n${result}\n[end]\nAnswer my question above in plain words using this. Do not mention the tool, this message, or these brackets.` });
     }
-    if (thinking && !thinkSeen) log('step', 'This model did not think, so thinking was not charged. Try a bigger model.');
     if (!usage.got) {   // backend gave no numbers: estimate (about 4 characters per token) and say so
       const chars = s => Math.ceil(String(s || '').length / 4);
       usage.in = messages.reduce((n, m) => n + chars(m.content), 0); usage.out = chars(generated);
@@ -511,7 +557,21 @@ const server = http.createServer(async (req, res) => {
     // OpenAI-compatible API so other apps can use your local AI. Plain chat only: no tools, no credits, no GitHub.
     if (p === '/v1/models') return json(res, 200, { object: 'list', data: (await listModels()).map(m => ({ id: m.name, object: 'model', owned_by: 'pholama' })) });
     if (p === '/v1/chat/completions' && req.method === 'POST') return openaiChat(req, res, await body(req));
-    if (p === '/api/caps') { const m = u.searchParams.get('model') || ''; const c = await modelCaps(m); return json(res, 200, { ...c, search: c.tools, mcp: c.tools, github: c.tools }); }
+    if (p === '/api/caps') { const m = u.searchParams.get('model') || ''; const c = await modelCaps(m); return json(res, 200, { ...c, nativeThinking: !!c.thinking, thinking: true, search: c.tools, mcp: c.tools, github: c.tools }); }   // thinking works on every model now: models without a native mode get the host reasoning pass
+    if (p.startsWith('/api/studio/')) {
+      const stu = require('./studio'); const seg = p.split('/').slice(3).map(decodeURIComponent);
+      try {
+        if (seg[0] === 'projects' && req.method === 'GET' && !seg[1]) return json(res, 200, { projects: stu.listProjects() });
+        if (seg[0] === 'projects' && req.method === 'POST' && !seg[1]) { const b = await body(req); return json(res, 200, stu.createProject(b.name, b.template)); }
+        if (seg[0] === 'projects' && seg[1] && !seg[2] && req.method === 'GET') return json(res, 200, { name: stu.projName(seg[1]), files: stu.snapshot(seg[1]) });
+        if (seg[0] === 'projects' && seg[1] && !seg[2] && req.method === 'DELETE') return json(res, 200, { ok: true, text: stu.deleteProject(seg[1]) });
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'file' && req.method === 'PUT') { const b = await body(req); return json(res, 200, stu.writeFile(seg[1], b.file, b.content)); }
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'file' && req.method === 'DELETE') { const b = await body(req); return json(res, 200, { ok: true, text: stu.deleteFile(seg[1], b.file) }); }
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'check' && req.method === 'GET') return json(res, 200, { issues: stu.check(seg[1]) });
+        if (seg[0] === 'run' && req.method === 'POST') { const b = await body(req); return json(res, 200, stu.runJs(b.code)); }
+        return json(res, 404, { error: 'unknown studio route' });
+      } catch (e) { return json(res, 400, { error: e.message }); }
+    }
     if (p === '/api/github/approve' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ok: true, text: await agent.github.confirm(String(req.headers['x-github-token'] || ''), String(b.id || ''), b.approve === true) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); } }
     // ---- commands the AI proposes: run only after the user clicks Allow, only from this PC's own page ----
     if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/bonus') {

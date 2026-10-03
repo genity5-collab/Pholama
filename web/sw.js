@@ -1,6 +1,6 @@
 // Network-first with cache fallback (offline). Versioned so old caches are purged on update.
-const C = 'pholama-v20';
-const F = ['./', 'index.html', 'app.js', 'editlog.js', 'thinking.js', 'fallback.js', 'style.css', 'account.js', 'cloud.js', 'remote.js', 'loader.js', 'config.js', 'models.json', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
+const C = 'pholama-v22';
+const F = ['./', 'index.html', 'app.js', 'studio.js', 'editlog.js', 'thinking.js', 'fallback.js', 'style.css', 'account.js', 'cloud.js', 'remote.js', 'loader.js', 'config.js', 'models.json', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png'];
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(F.map(u => new Request(u, { cache: 'reload' }))))); });
 self.addEventListener('activate', e => e.waitUntil(
   caches.keys().then(ks => Promise.all(ks.filter(k => k !== C).map(k => caches.delete(k)))).then(() => self.clients.claim())));

@@ -809,9 +809,38 @@ function paintFallback() {
     ? `When Agent Max reaches its limit or cannot be reached, your own model (${m.model.replace(/^(gguf|ollama):/, '')}) answers instead. Free, no credits, and you will see a badge on those answers.`
     : 'When Agent Max reaches its limit, your PC can answer instead. Download a model in Models to turn this on. It is automatic and free.';
 }
+// ---------- Studio (only on the PC itself: it edits files on this computer) ----------
+let studio = null, studioLoading = false;
+function showView(name) {
+  const st = name === 'studio';
+  document.body.classList.toggle('studio-on', st); $('#studio').hidden = !st;
+  $('#vChat').classList.toggle('on', !st); $('#vStudio').classList.toggle('on', st);
+  $('#vChat').setAttribute('aria-selected', String(!st)); $('#vStudio').setAttribute('aria-selected', String(st));
+  try { localStorage.setItem('pholama_view', name); } catch {}
+}
+async function openStudio() {
+  showView('studio');
+  if (studio || studioLoading) { if (studio) studio.open(); return; }
+  studioLoading = true;
+  try {
+    const { createStudio } = await import('./studio.js');
+    studio = createStudio({ api, $, ghHeaders, mount: $('#studio'), getModel: () => (sel.value || '').replace(/^$/, '') });
+    await studio.open();
+  } catch (e) { $('#studio').textContent = 'Studio could not load: ' + (e && e.message || e); console.warn(e); }
+  finally { studioLoading = false; }
+}
+function studioTab(onPc) {
+  const b = $('#vStudio'); if (!b) return;
+  b.style.display = onPc ? '' : 'none';
+  if (!onPc && document.body.classList.contains('studio-on')) showView('chat');
+}
+$('#vChat').onclick = () => showView('chat');
+$('#vStudio').onclick = () => openStudio();
+
 // The welcome screen on the user's own PC: real facts about this machine, nothing invented.
 function paintPcWelcome() {
   const onPc = !!server && !remoteBase(); const badge = $('#pcBadge'); if (badge) badge.style.display = onPc ? '' : 'none';
+  studioTab(onPc);
   const box = $('#pcStatus'); if (!box) return; if (!onPc) { box.style.display = 'none'; return; }
   const hw = server.hardware || {}, n = pcModelNames().filter(v => !/^(web|cpu|cloud):/.test(v)).length;
   const chip = (label, value) => { const c = document.createElement('div'); c.className = 'pcchip'; const a = document.createElement('small'); a.textContent = label; const b = document.createElement('b'); b.textContent = value; c.append(a, b); return c; };

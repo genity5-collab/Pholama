@@ -14,29 +14,64 @@ const ARCHIVE = process.env.PHOLAMA_UPDATE_ARCHIVE || `https://github.com/${REPO
 const KEEP = new Set(['.git', 'node_modules', 'bin']);
 const localVersion = () => { try { return JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8')).version || '0'; } catch { return '0'; } };
 
-function getText(url, hops = 0) {
+// ---- downloading: built to survive slow or blocked routes (IPv6 trouble, VPNs, some ISPs) ----
+// Each attempt forces IPv4 (family: 4) because a dead IPv6 route is the usual cause of "timed out".
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+function getOnce(url, { timeout, dest } = {}, hops = 0) {
   return new Promise((resolve, reject) => {
-    lib(url).get(url, { headers: { 'User-Agent': 'pholama' } }, r => {
-      if ([301, 302, 307, 308].includes(r.statusCode) && hops < 5) { r.resume(); return resolve(getText(new URL(r.headers.location, url).href, hops + 1)); }
+    const req = lib(url).get(url, { headers: { 'User-Agent': 'pholama' }, family: 4 }, r => {
+      if ([301, 302, 307, 308].includes(r.statusCode) && hops < 5) { r.resume(); return resolve(getOnce(new URL(r.headers.location, url).href, { timeout, dest }, hops + 1)); }
       if (r.statusCode !== 200) { r.resume(); return reject(new Error('HTTP ' + r.statusCode)); }
-      let d = ''; r.on('data', c => d += c); r.on('end', () => resolve(d));
-    }).on('error', reject).setTimeout(15000, function () { this.destroy(new Error('timed out')); });
+      if (dest) { const f = fs.createWriteStream(dest); r.pipe(f); f.on('finish', () => f.close(() => resolve(dest))); f.on('error', reject); r.on('error', reject); }
+      else { let d = ''; r.setEncoding('utf8'); r.on('data', c => d += c); r.on('end', () => resolve(d)); r.on('error', reject); }
+    });
+    req.on('error', reject); req.setTimeout(timeout, () => req.destroy(new Error('timed out')));
   });
 }
-function getFile(url, dest, hops = 0) {
-  return new Promise((resolve, reject) => {
-    lib(url).get(url, { headers: { 'User-Agent': 'pholama' } }, r => {
-      if ([301, 302, 307, 308].includes(r.statusCode) && hops < 5) { r.resume(); return resolve(getFile(new URL(r.headers.location, url).href, dest, hops + 1)); }
-      if (r.statusCode !== 200) { r.resume(); return reject(new Error('HTTP ' + r.statusCode)); }
-      const f = fs.createWriteStream(dest); r.pipe(f); f.on('finish', () => f.close(resolve)); f.on('error', reject); r.on('error', reject);
-    }).on('error', reject).setTimeout(60000, function () { this.destroy(new Error('timed out')); });
-  });
+// The same download using the computer's own tool. curl.exe ships with Windows 10+, PowerShell with every Windows.
+function viaSystem(url, dest, limit = 45) {
+  const { execFileSync } = require('child_process');
+  const tries = process.platform === 'win32'
+    ? [['curl.exe', ['-fsSL', '--connect-timeout', '10', '-m', String(limit), '-A', 'pholama', '-o', dest, url]], ['powershell', ['-NoProfile', '-Command', `[Net.ServicePointManager]::SecurityProtocol=[Net.SecurityProtocolType]::Tls12; Invoke-WebRequest -UseBasicParsing -UserAgent pholama -TimeoutSec ${limit} -Uri '${url}' -OutFile '${dest}'`]]]
+    : [['curl', ['-fsSL', '--connect-timeout', '10', '-m', String(limit), '-A', 'pholama', '-o', dest, url]], ['wget', ['-q', '-T', String(Math.min(limit, 30)), '-U', 'pholama', '-O', dest, url]]];
+  let last;
+  for (const [cmd, args] of tries) { try { execFileSync(cmd, args, { stdio: 'ignore', windowsHide: true, timeout: (limit + 10) * 1000 }); if (fs.existsSync(dest) && fs.statSync(dest).size > 0) return dest; } catch (e) { last = e; } }
+  throw new Error('no system download tool worked' + (last ? ' (' + String(last.message).split('\n')[0].slice(0, 60) + ')' : ''));
 }
+// Try every address in order. A route that HANGS is given up on quickly (it will not recover), while a route that
+// fails fast (connection reset, HTTP 5xx) is retried. Each address then gets one go with the computer's own tool.
+// `budget` caps the whole thing so "check for update" can never freeze.
+async function fetchAny(urls, { dest, timeout = 12000, budget = 90000, sysLimit = 45 } = {}) {
+  const errs = [], end = Date.now() + budget, left = () => end - Date.now();
+  for (const url of urls) {
+    if (left() <= 0) break;
+    const host = new URL(url).host;
+    let definite = false;   // the server answered and said no (404 etc): no other download tool will change that
+    for (let a = 0; a < 3 && left() > 0; a++) {
+      try { return await getOnce(url, { timeout: Math.min(timeout, left()), dest }); }
+      catch (e) {
+        errs.push(host + ': ' + e.message);
+        if (/HTTP 4\d\d/.test(e.message)) { definite = true; break; }
+        if (/timed out/.test(e.message)) break;   // not worth retrying: a 404 stays a 404 and a hang stays a hang
+        await sleep(600 * (a + 1));
+      }
+    }
+    if (!definite && left() > 5000) {
+      try { const t = dest || path.join(os.tmpdir(), 'pholama-dl-' + process.pid + '.txt'); viaSystem(url, t, Math.min(sysLimit, Math.floor(left() / 1000))); if (dest) return dest; const txt = fs.readFileSync(t, 'utf8'); try { fs.unlinkSync(t); } catch {} return txt; }
+      catch (e) { errs.push(host + ' (system tool): ' + e.message); }
+    }
+  }
+  const why = [...new Set(errs)].slice(-3).join('; ');
+  throw new Error(/timed out|ENOTFOUND|ECONN|EAI_AGAIN|ETIMEDOUT|ENETUNREACH|system tool/.test(why) ? 'cannot reach GitHub from this PC. Check your internet, turn off any VPN or proxy, or allow Pholama/Node through your firewall. Details: ' + why : why);
+}
+const textUrls = () => [RAW + '/package.json', `https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}/package.json`];
+const archiveUrls = () => [ARCHIVE, `https://codeload.github.com/${REPO}/tar.gz/refs/heads/${BRANCH}`];
+const getText = url => fetchAny([url]);
 const cmp = (a, b) => { const x = String(a).split('.').map(Number), y = String(b).split('.').map(Number); for (let i = 0; i < 3; i++) { if ((x[i] || 0) !== (y[i] || 0)) return (x[i] || 0) > (y[i] || 0) ? 1 : -1; } return 0; };
 
 // Returns { current, latest, newer } or throws when GitHub cannot be reached.
 async function check() {
-  const pkg = JSON.parse(await getText(RAW + '/package.json'));
+  const pkg = JSON.parse(await fetchAny(process.env.PHOLAMA_UPDATE_BASE ? [RAW + '/package.json'] : textUrls()));
   const current = localVersion();
   return { current, latest: pkg.version || '0', newer: cmp(pkg.version || '0', current) > 0 };
 }
@@ -54,13 +89,13 @@ async function update({ log = console.log, color = {}, force = false } = {}) {
   const g = color.green || (x => x), r = color.red || (x => x), d = color.dim || (x => x);
   log('Checking for a newer Pholama...');
   let info;
-  try { info = await check(); } catch (e) { log(r('Could not reach GitHub (' + e.message + '). Your current version keeps working.')); return { ok: false }; }
+  try { info = await check(); } catch (e) { log(r('Could not update: ' + e.message + '. Your current version keeps working.')); return { ok: false }; }
   if (!info.newer && !force) { log(g('You are up to date. ') + d('Version ' + info.current)); return { ok: true, updated: false }; }
   log(`Updating ${info.current} -> ${info.latest} ...`);
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pholama-up-'));
   try {
     const tgz = path.join(tmp, 'p.tgz');
-    await getFile(ARCHIVE, tgz);
+    await fetchAny(process.env.PHOLAMA_UPDATE_ARCHIVE ? [ARCHIVE] : archiveUrls(), { dest: tgz, timeout: 60000 });
     execSync(`tar -xzf "${tgz}" -C "${tmp}"`, { stdio: 'ignore', windowsHide: true });
     const dir = fs.readdirSync(tmp).map(n => path.join(tmp, n)).find(p => fs.statSync(p).isDirectory());
     if (!dir || !fs.existsSync(path.join(dir, 'server', 'server.js')) || !fs.existsSync(path.join(dir, 'models.pc.json'))) throw new Error('The downloaded update looked incomplete, so nothing was changed.');

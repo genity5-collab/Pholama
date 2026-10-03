@@ -2,11 +2,11 @@
 const FN = 'https://lyra-09dfabbf.base44.app/functions/pholamaCloud';
 
 // Think effort: how long and careful the answer is. On Agent Max every message counts as 1 whatever the effort.
-// On your own models nothing is ever charged.
+// On your own models it uses integration credits: Long +10, Max +25 (plus +25 when Thinking is on too). Agent Max stays 1 message.
 export const EFFORT = {
-  normal: { label: 'Normal', hint: 'Quick, short answers.' },
-  long:   { label: 'Long',   hint: 'Fuller, more careful answers.' },
-  max:    { label: 'Max',    hint: 'Deepest reasoning and the most thorough answers.' },
+  normal: { label: 'Normal', hint: 'Quick, short answers. Free.' },
+  long:   { label: 'Long',   hint: 'Fuller, more careful answers. +10 credits on your own models.' },
+  max:    { label: 'Max',    hint: 'Deepest reasoning. +25 credits, and +25 more if Thinking is on too.' },
 };
 export const MAX_NAME = 'Agent Max', MAX_DAY = 10, MAX_MONTH = 30;
 export const effortKeys = () => Object.keys(EFFORT);

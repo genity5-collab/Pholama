@@ -63,6 +63,26 @@ const WRITE = {
     check: a => { slug(a.repo); if (!(+a.number > 0)) throw new Error('issue number required'); if (!String(a.body || '').trim()) throw new Error('body required'); },
     summary: a => `Comment on ${a.repo}#${a.number}: "${clip(a.body, 80)}"`,
     run: (t, a) => gh(t, `/repos/${slug(a.repo)}/issues/${+a.number}/comments`, { method: 'POST', body: { body: String(a.body).slice(0, 6000) } }).then(j => 'Commented: ' + j.html_url) },
+  github_create_repo: {
+    desc: 'Create a NEW repository on the user\'s GitHub account (asks the user to approve first). args: {"name":string,"description":string,"private":boolean}',
+    check: a => { if (!/^[A-Za-z0-9_.-]{1,100}$/.test(String(a.name || ''))) throw new Error('repo name may use letters, numbers, dash, underscore, dot'); },
+    summary: a => `Create the ${a.private ? 'private' : 'public'} repository "${a.name}" on your GitHub`,
+    run: (t, a) => gh(t, '/user/repos', { method: 'POST', body: { name: a.name, description: clip(a.description, 300), private: a.private === true, auto_init: true } }).then(j => 'Created ' + j.full_name + ' ' + j.html_url) },
+  github_publish_project: {
+    desc: 'Upload ALL files of a Studio project to a repo in ONE commit (asks the user to approve first). args: {"repo":"owner/name","files":[{"path":string,"content":string}],"message":string}',
+    check: a => { slug(a.repo); if (!Array.isArray(a.files) || !a.files.length || a.files.length > 80) throw new Error('1 to 80 files required'); for (const f of a.files) { if (!/^[^\0]{1,200}$/.test(String(f.path || '')) || /(^|\/)\.\.?(\/|$)/.test(f.path) || String(f.path).startsWith('/')) throw new Error('bad path ' + clip(f.path, 40)); if (f.content == null) throw new Error('content required for ' + f.path); } },
+    summary: a => `Publish ${a.files.length} file${a.files.length === 1 ? '' : 's'} to ${a.repo} in one commit: "${clip(a.message || 'Publish from Pholama Studio', 60)}"`,
+    run: async (t, a) => {
+      const repo = slug(a.repo), info = await gh(t, '/repos/' + repo), br = info.default_branch || 'main';
+      let baseSha = null, baseTree = null;
+      try { const ref = await gh(t, `/repos/${repo}/git/ref/heads/${br}`); baseSha = ref.object.sha; baseTree = (await gh(t, `/repos/${repo}/git/commits/${baseSha}`)).tree.sha; } catch (e) { if (!/Not found/.test(e.message)) throw e; }   // empty repo: no branch yet
+      const tree = [];
+      for (const f of a.files) { const b = await gh(t, `/repos/${repo}/git/blobs`, { method: 'POST', body: { content: Buffer.from(String(f.content)).toString('base64'), encoding: 'base64' } }); tree.push({ path: f.path, mode: '100644', type: 'blob', sha: b.sha }); }
+      const nt = await gh(t, `/repos/${repo}/git/trees`, { method: 'POST', body: baseTree ? { base_tree: baseTree, tree } : { tree } });
+      const c = await gh(t, `/repos/${repo}/git/commits`, { method: 'POST', body: { message: clip(a.message || 'Publish from Pholama Studio', 200), tree: nt.sha, parents: baseSha ? [baseSha] : [] } });
+      if (baseSha) await gh(t, `/repos/${repo}/git/refs/heads/${br}`, { method: 'PATCH', body: { sha: c.sha } }); else await gh(t, `/repos/${repo}/git/refs`, { method: 'POST', body: { ref: 'refs/heads/' + br, sha: c.sha } });
+      return `Published ${a.files.length} files to ${repo} (commit ${c.sha.slice(0, 7)}) ${info.html_url}`;
+    } },
   github_write_file: {
     desc: 'Create or update a file in a repo (asks the user to approve first). args: {"repo":"owner/name","path":string,"content":string,"message":string}',
     check: a => { slug(a.repo); if (!/^[^\0]{1,200}$/.test(String(a.path || '')) || /(^|\/)\.\.(\/|$)/.test(a.path)) throw new Error('bad path'); if (a.content == null) throw new Error('content required'); },
