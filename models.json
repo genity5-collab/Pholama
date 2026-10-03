@@ -3,38 +3,184 @@
     {
       "id": "SmolLM2-360M-Instruct-q4f16_1-MLC",
       "name": "SmolLM2 360M",
-      "size": "~0.3 GB",
-      "note": "Fastest, any phone"
+      "size": "~0.4 GB",
+      "tier": 1,
+      "caps": [
+        "chat",
+        "fast"
+      ],
+      "note": "Smallest and fastest. Simple chat and short answers.",
+      "fallback": "SmolLM2-360M-Instruct-q4f32_1-MLC",
+      "needsF16": true
     },
     {
       "id": "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
       "name": "Qwen2.5 0.5B",
-      "size": "~0.4 GB",
-      "note": "Tiny and quick"
+      "size": "~0.9 GB",
+      "tier": 1,
+      "caps": [
+        "chat",
+        "multilingual"
+      ],
+      "note": "Tiny but handles many languages."
     },
     {
-      "id": "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
-      "name": "Qwen2.5 1.5B",
-      "size": "~1 GB",
-      "note": "Good balance"
+      "id": "gemma3-1b-it-q4f16_1-MLC",
+      "name": "Gemma 3 1B",
+      "size": "~0.7 GB",
+      "tier": 1,
+      "caps": [
+        "chat",
+        "writing"
+      ],
+      "note": "Google's small model. Nice clear writing."
     },
     {
       "id": "Llama-3.2-1B-Instruct-q4f16_1-MLC",
       "name": "Llama 3.2 1B",
       "size": "~0.9 GB",
-      "note": "Good balance"
+      "tier": 1,
+      "caps": [
+        "chat",
+        "summaries"
+      ],
+      "note": "Good all-rounder for any phone.",
+      "fallback": "Llama-3.2-1B-Instruct-q4f32_1-MLC"
     },
     {
-      "id": "gemma-2-2b-it-q4f16_1-MLC",
+      "id": "Qwen2.5-Coder-0.5B-Instruct-q4f16_1-MLC",
+      "name": "Qwen2.5 Coder 0.5B",
+      "size": "~0.9 GB",
+      "tier": 1,
+      "caps": [
+        "code"
+      ],
+      "note": "Tiny helper for code snippets."
+    },
+    {
+      "id": "Qwen3-0.6B-q4f16_1-MLC",
+      "name": "Qwen3 0.6B (thinks)",
+      "size": "~1.4 GB",
+      "tier": 2,
+      "caps": [
+        "chat",
+        "thinking",
+        "multilingual"
+      ],
+      "note": "Shows its thinking before answering.",
+      "fallback": "Qwen3-0.6B-q4f32_1-MLC"
+    },
+    {
+      "id": "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+      "name": "Qwen2.5 1.5B",
+      "size": "~1.6 GB",
+      "tier": 2,
+      "caps": [
+        "chat",
+        "multilingual",
+        "tools"
+      ],
+      "note": "Best small model for following instructions.",
+      "fallback": "Qwen2.5-1.5B-Instruct-q4f32_1-MLC"
+    },
+    {
+      "id": "Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC",
+      "name": "Qwen2.5 Math 1.5B",
+      "size": "~1.6 GB",
+      "tier": 2,
+      "caps": [
+        "math"
+      ],
+      "note": "Made for math problems."
+    },
+    {
+      "id": "SmolLM2-1.7B-Instruct-q4f16_1-MLC",
+      "name": "SmolLM2 1.7B",
+      "size": "~1.8 GB",
+      "tier": 2,
+      "caps": [
+        "chat",
+        "writing"
+      ],
+      "note": "Bigger SmolLM2. Needs a phone GPU with f16.",
+      "needsF16": true
+    },
+    {
+      "id": "Qwen3-1.7B-q4f16_1-MLC",
+      "name": "Qwen3 1.7B (thinks)",
+      "size": "~2.0 GB",
+      "tier": 3,
+      "caps": [
+        "chat",
+        "thinking",
+        "multilingual",
+        "tools"
+      ],
+      "note": "Thinks step by step. Best mid-size pick."
+    },
+    {
+      "id": "gemma-2-2b-it-q4f16_1-MLC-1k",
       "name": "Gemma 2 2B",
       "size": "~1.6 GB",
-      "note": "Better quality, needs 6GB+ RAM phone"
+      "tier": 3,
+      "caps": [
+        "chat",
+        "writing"
+      ],
+      "note": "Higher quality writing. 6 GB+ RAM phone.",
+      "fallback": "gemma-2-2b-it-q4f32_1-MLC-1k",
+      "needsF16": true
     },
     {
       "id": "Llama-3.2-3B-Instruct-q4f16_1-MLC",
       "name": "Llama 3.2 3B",
       "size": "~2.3 GB",
-      "note": "High-end phones only"
+      "tier": 4,
+      "caps": [
+        "chat",
+        "summaries",
+        "tools"
+      ],
+      "note": "Strong quality. Flagship phones."
+    },
+    {
+      "id": "Qwen2.5-3B-Instruct-q4f16_1-MLC",
+      "name": "Qwen2.5 3B",
+      "size": "~2.5 GB",
+      "tier": 4,
+      "caps": [
+        "chat",
+        "multilingual",
+        "tools",
+        "code"
+      ],
+      "note": "Strong all-rounder. Flagship phones."
+    },
+    {
+      "id": "Phi-3.5-mini-instruct-q4f16_1-MLC-1k",
+      "name": "Phi 3.5 mini",
+      "size": "~2.5 GB",
+      "tier": 4,
+      "caps": [
+        "chat",
+        "reasoning",
+        "code"
+      ],
+      "note": "Good at reasoning. Flagship phones."
+    },
+    {
+      "id": "Qwen3-4B-q4f16_1-MLC",
+      "name": "Qwen3 4B (thinks)",
+      "size": "~3.4 GB",
+      "tier": 4,
+      "caps": [
+        "chat",
+        "thinking",
+        "reasoning",
+        "tools",
+        "code"
+      ],
+      "note": "Smartest phone model here. 8 GB+ RAM only."
     }
   ],
   "local": [
@@ -44,7 +190,11 @@
       "minRamGB": 2,
       "sizeGB": 0.4,
       "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
-      "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+      "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+      "caps": [
+        "chat",
+        "fast"
+      ]
     },
     {
       "id": "llama3.2-1b",
@@ -52,7 +202,11 @@
       "minRamGB": 4,
       "sizeGB": 0.8,
       "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
-      "file": "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+      "file": "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+      "caps": [
+        "chat",
+        "summaries"
+      ]
     },
     {
       "id": "qwen2.5-1.5b",
@@ -60,7 +214,12 @@
       "minRamGB": 4,
       "sizeGB": 1.1,
       "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
-      "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+      "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "caps": [
+        "chat",
+        "multilingual",
+        "tools"
+      ]
     },
     {
       "id": "llama3.2-3b",
@@ -68,7 +227,12 @@
       "minRamGB": 8,
       "sizeGB": 2.0,
       "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
-      "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+      "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+      "caps": [
+        "chat",
+        "summaries",
+        "tools"
+      ]
     },
     {
       "id": "qwen2.5-7b",
@@ -76,7 +240,14 @@
       "minRamGB": 12,
       "sizeGB": 4.7,
       "url": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf",
-      "file": "qwen2.5-7b-instruct-q4_k_m.gguf"
+      "file": "qwen2.5-7b-instruct-q4_k_m.gguf",
+      "caps": [
+        "chat",
+        "multilingual",
+        "tools",
+        "code",
+        "reasoning"
+      ]
     },
     {
       "id": "llama3.1-8b",
@@ -84,7 +255,13 @@
       "minRamGB": 12,
       "sizeGB": 4.9,
       "url": "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
-      "file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+      "file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+      "caps": [
+        "chat",
+        "tools",
+        "code",
+        "reasoning"
+      ]
     },
     {
       "id": "qwen2.5-14b",
@@ -92,21 +269,102 @@
       "minRamGB": 24,
       "sizeGB": 9.0,
       "url": "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-14b-instruct-q4_k_m.gguf",
-      "file": "qwen2.5-14b-instruct-q4_k_m.gguf"
+      "file": "qwen2.5-14b-instruct-q4_k_m.gguf",
+      "caps": [
+        "chat",
+        "multilingual",
+        "tools",
+        "code",
+        "reasoning"
+      ]
     }
   ],
   "cpu": [
     {
-      "id": "onnx-community/Qwen2.5-0.5B-Instruct",
-      "name": "Qwen2.5 0.5B (CPU)",
-      "size": "~0.5 GB",
-      "note": "Works without WebGPU, slower"
+      "id": "HuggingFaceTB/SmolLM2-135M-Instruct",
+      "name": "SmolLM2 135M (CPU)",
+      "size": "~0.15 GB",
+      "tier": 1,
+      "caps": [
+        "chat",
+        "fast"
+      ],
+      "note": "Tiniest. For very old phones. Answers are basic."
     },
     {
       "id": "HuggingFaceTB/SmolLM2-360M-Instruct",
       "name": "SmolLM2 360M (CPU)",
       "size": "~0.4 GB",
-      "note": "Works without WebGPU, slower"
+      "tier": 1,
+      "caps": [
+        "chat",
+        "fast"
+      ],
+      "note": "Best first pick without a GPU. Slower than GPU."
+    },
+    {
+      "id": "onnx-community/Qwen2.5-0.5B-Instruct",
+      "name": "Qwen2.5 0.5B (CPU)",
+      "size": "~0.5 GB",
+      "tier": 1,
+      "caps": [
+        "chat",
+        "multilingual"
+      ],
+      "note": "Many languages. Slower than GPU."
+    },
+    {
+      "id": "onnx-community/Qwen3-0.6B-ONNX",
+      "name": "Qwen3 0.6B (CPU, thinks)",
+      "size": "~0.6 GB",
+      "tier": 2,
+      "caps": [
+        "chat",
+        "thinking",
+        "multilingual"
+      ],
+      "note": "Shows its thinking. Slow on CPU."
+    },
+    {
+      "id": "onnx-community/Qwen2.5-1.5B-Instruct",
+      "name": "Qwen2.5 1.5B (CPU)",
+      "size": "~1.2 GB",
+      "tier": 2,
+      "caps": [
+        "chat",
+        "multilingual",
+        "tools"
+      ],
+      "note": "Smarter but slow. 4 GB+ RAM."
+    },
+    {
+      "id": "onnx-community/Llama-3.2-1B-Instruct",
+      "name": "Llama 3.2 1B (CPU)",
+      "size": "~1.0 GB",
+      "tier": 2,
+      "caps": [
+        "chat",
+        "summaries"
+      ],
+      "note": "Good quality but slow. 4 GB+ RAM."
     }
-  ]
+  ],
+  "tiers": {
+    "1": "Any phone",
+    "2": "Most phones (4 GB+ RAM)",
+    "3": "Good phones (6 GB+ RAM)",
+    "4": "Flagship phones (8 GB+ RAM)"
+  },
+  "capLabels": {
+    "chat": "Chat",
+    "fast": "Fast",
+    "multilingual": "Many languages",
+    "writing": "Writing",
+    "summaries": "Summaries",
+    "code": "Code",
+    "math": "Math",
+    "thinking": "Thinks",
+    "reasoning": "Reasoning",
+    "tools": "Tool use"
+  }
 }

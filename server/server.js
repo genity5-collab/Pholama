@@ -154,20 +154,29 @@ async function chat(req, res, b) {
   const model = b.model || '';
   res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' });
   const line = (o) => res.write(JSON.stringify(o) + '\n');
+  const t0 = Date.now(), log = (kind, text) => line({ log: { kind, text, t: +((Date.now() - t0) / 1000).toFixed(1) } });
   const ac = new AbortController(); res.on('close', () => ac.abort());
   try {
+    log('step', 'Got your message. Model: ' + model.replace(/^(gguf|ollama):/, ''));
     const allow = b.agent ? agent.allowed() : { search: false, tools: false, mcp: false, thinking: false };
+    if (b.agent) log('step', allow.credits ? `Credits: ${agent.credits().left} left. On: ${['search','tools','mcp','thinking'].filter(k => allow[k]).join(', ') || 'nothing'}` : 'Credits: 0 left');
     if (b.agent && !allow.credits) line({ status: 'Daily credits used up: search, tools, MCP and thinking are off. Plain local chat still works.' });
     const { tools } = await agent.buildTools(allow);
-    const thinking = allow.thinking && agent.spend(agent.COST.thinking);
+    if (tools.length) log('step', `${tools.length} tools ready: ${tools.map(t => t.name).join(', ')}`);
+    const thinking = allow.thinking && agent.credits().left >= agent.COST.thinking;
+    if (allow.thinking && !thinking) log('error', 'Not enough credits for thinking mode. Answering without it.');
+    if (thinking) log('step', 'Thinking mode on (charged only if the model really thinks)');
+    let thinkBilled = false, thinkSeen = false;
     const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking) }, ...(b.messages || []).filter(m => m.role !== 'system')];
     // Host-side routing: obvious intents run their tool before the model answers (weak models skip tool calls).
     if (tools.length) {
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
       const r0 = lastUser && agent.routeIntent(lastUser.content, tools);
       if (r0) {
-        line({ status: 'Using ' + r0.name + '...' });
+        log('action', `Request looks like a job for ${r0.name}. Running it first.`);
+        log('action', `${r0.name} ${JSON.stringify(r0.args)}`);
         let result; try { result = String(await agent.runTool(tools, r0.name, r0.args)); } catch (e) { result = 'Tool error: ' + e.message; }
+        log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
         line({ tool: { name: r0.name, args: r0.args, result: result.slice(0, 400) } });
         messages.push({ role: 'assistant', content: `<tool>${JSON.stringify(r0)}</tool>` }, { role: 'user', content: `Tool result for ${r0.name}:\n${result}\n\nNow answer the user's question using this result. Be brief.` });
       }
@@ -175,10 +184,12 @@ async function chat(req, res, b) {
     for (let round = 0; round < 5; round++) {
       // With tools on, buffer the start of the reply: if it begins with "<tool" it is a tool call (hide it),
       // otherwise flush what we have and stream the rest live.
-      let acc = '', mode = tools.length ? 'undecided' : 'stream', sent = 0;
+      log('step', round === 0 ? 'Loading model and writing the reply...' : 'Writing the final answer from the tool result...');
+      let acc = '', mode = tools.length ? 'undecided' : 'stream', sent = 0, first = true;
       const flush = () => { if (acc.length > sent) { line({ model, message: { role: 'assistant', content: acc.slice(sent) }, done: false }); sent = acc.length; } };
       const text = await streamTurn(model, messages, b.options, t => {
-        acc += t;
+        acc += t; if (first) { first = false; log('step', 'Model is answering'); }
+        if (thinking && !thinkSeen && acc.includes('<think>')) { thinkSeen = true; log('thought', 'Model is thinking...'); if (!thinkBilled && agent.spend(agent.COST.thinking)) { thinkBilled = true; log('step', `Thinking used (-${agent.COST.thinking} credits)`); } }
         if (mode === 'undecided') {
           const head = acc.trimStart();
           if (head.startsWith('<tool')) mode = 'tool';
@@ -189,11 +200,14 @@ async function chat(req, res, b) {
       const shown = sent;
       const call = tools.length ? agent.parseTool(text) : null;
       if (!call) { if (shown < text.length) line({ model, message: { role: 'assistant', content: text.slice(shown) }, done: false }); break; }
-      line({ status: 'Using ' + call.name + '...' });
+      log('action', `Model asked for ${call.name} ${JSON.stringify(call.args)}`);
       let result; try { result = String(await agent.runTool(tools, call.name, call.args)); } catch (e) { result = 'Tool error: ' + e.message; }
+      log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
       line({ tool: { name: call.name, args: call.args, result: result.slice(0, 400) } });
       messages.push({ role: 'assistant', content: text }, { role: 'user', content: `Tool result for ${call.name}:\n${result}\n\nNow answer the user using this result. Do not call another tool unless you must.` });
     }
+    if (thinking && !thinkSeen) log('step', 'This model did not think, so thinking was not charged. Try a bigger model.');
+    log('step', `Done. ${agent.credits().left} credits left.`);
     line({ credits: agent.credits() });
     line({ model, message: { role: 'assistant', content: '' }, done: true });
   } catch (e) { line({ error: e.message, done: true }); }

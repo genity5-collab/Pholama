@@ -25,7 +25,18 @@ dialog::backdrop{background:#000a}
 .tool{max-width:760px;margin:0 auto 10px;padding:7px 11px;border-left:3px solid #5b7cff;background:#141720;border-radius:8px;font-size:13px;color:#aab1c3;white-space:pre-wrap;word-break:break-word}
 .tool b{color:#e6e8ee}.sw{display:flex;align-items:center;gap:8px;padding:7px 0}.sw input{width:18px;height:18px}
 .sw span{flex:1}.sw small{color:#8a90a0;display:block}input[type=text]{width:100%;font:inherit;color:inherit;background:#1a1d25;border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px;margin:4px 0}
-h4{margin:14px 0 4px}.tabs{display:flex;gap:6px;margin-bottom:8px}.tabs button.on{background:#5b7cff;border-color:#5b7cff}
+h4{margin:14px 0 4px}
+.live{margin:0 0 8px;border:1px solid #2a2f3a;border-radius:10px;background:#12151c;overflow:hidden;font-size:12.5px}
+.live summary{cursor:pointer;padding:6px 10px;color:#aab1c3;list-style:none;display:flex;gap:8px;align-items:center}
+.live summary::-webkit-details-marker{display:none}
+.live .dot{width:8px;height:8px;border-radius:50%;background:#5b7cff;animation:pulse 1s infinite}.live.done .dot{animation:none;background:#4caf7a}.live.err .dot{animation:none;background:#e5584f}
+@keyframes pulse{50%{opacity:.25}}
+.live .lines{max-height:150px;overflow:auto;padding:4px 10px 8px;font-family:ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
+.lines div{padding:1px 0;color:#8a90a0}.lines .t{color:#5f6675;margin-right:6px}
+.lines .action{color:#8fb0ff}.lines .result{color:#7fd3a1}.lines .error{color:#ff8a80}.lines .thought{color:#c9a7ff;font-style:italic}
+.think{color:#b9a3e6;font-size:13px;border-left:3px solid #6b4fb3;padding-left:9px;margin:0 0 8px;max-height:140px;overflow:auto;white-space:pre-wrap}
+.think b{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8d75c9;margin-bottom:2px}
+.ans:empty{display:none}.tabs{display:flex;gap:6px;margin-bottom:8px}.tabs button.on{background:#5b7cff;border-color:#5b7cff}
 </style></head><body>
 <header><b>Pholama</b><span class="sp"></span><span class="pill" id="cr" title="Daily credits"></span>
 <select id="model"></select><button id="mgr">Models</button><button id="opt" title="Tools and credits">Tools</button></header>

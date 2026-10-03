@@ -4,15 +4,40 @@
 const $ = s => document.querySelector(s);
 const chatEl = $('#chat'), inEl = $('#in'), sel = $('#model'), dlg = $('#dlg'), listEl = $('#list');
 let hasGPU = false;
-async function probeGPU() { try { return !!(navigator.gpu && await navigator.gpu.requestAdapter()); } catch { return false; } }
+let hasF16 = false;
+async function probeGPU() { try { const a = navigator.gpu && await navigator.gpu.requestAdapter(); hasF16 = !!(a && a.features && a.features.has('shader-f16')); return !!a; } catch { return false; } }
+const deviceRam = () => navigator.deviceMemory || 0; // Chrome reports 0.25-8 (rounded). 0 = unknown.
 let catalog = null, server = null, tab = 'browser', engine = null, engineModel = null, history = [], busy = false;
 
-function showAnswer(el, raw) {
-  const m = /<think>([\s\S]*?)(<\/think>|$)/.exec(raw);
-  if (!m) { el.textContent = raw; return; }
-  const answer = raw.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
-  el.textContent = ''; const t = document.createElement('div'); t.style.cssText = 'color:#8a90a0;font-size:13px;border-left:3px solid #2a2f3a;padding-left:8px;margin-bottom:6px;max-height:90px;overflow:auto';
-  t.textContent = 'Thinking: ' + m[1].trim(); el.appendChild(t); el.appendChild(document.createTextNode(answer));
+// One AI message = live log (actions/steps) + live thinking + answer. Everything updates while it streams.
+function makeMsg() {
+  const el = document.createElement('div'); el.className = 'm a';
+  const live = document.createElement('details'); live.className = 'live'; live.open = true; live.style.display = 'none';
+  live.innerHTML = '<summary><span class="dot"></span><span class="sum">Working...</span></summary><div class="lines"></div>';
+  const think = document.createElement('div'); think.className = 'think'; think.style.display = 'none'; think.innerHTML = '<b>Thinking</b><span></span>';
+  const ans = document.createElement('div'); ans.className = 'ans';
+  el.append(live, think, ans); chatEl.appendChild(el); chatEl.scrollTop = 1e9;
+  const lines = live.querySelector('.lines'), sum = live.querySelector('.sum'); let n = 0;
+  return {
+    el,
+    log(kind, text, t) {
+      live.style.display = ''; n++;
+      const d = document.createElement('div'); d.className = kind;
+      d.innerHTML = '<span class="t"></span><span class="x"></span>'; d.querySelector('.t').textContent = t != null ? t.toFixed(1) + 's' : '';
+      d.querySelector('.x').textContent = (kind === 'action' ? '> ' : kind === 'result' ? '= ' : kind === 'error' ? '! ' : '') + text;
+      lines.appendChild(d); lines.scrollTop = 1e9; sum.textContent = text.slice(0, 70); chatEl.scrollTop = 1e9;
+      if (kind === 'error') live.classList.add('err');
+    },
+    text(raw) {           // raw model text: split <think> from the answer, live
+      const m = /<think>([\s\S]*?)(<\/think>|$)/.exec(raw);
+      if (m) { think.style.display = ''; think.querySelector('span').textContent = m[1].trim(); think.scrollTop = 1e9; }
+      ans.textContent = m ? raw.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim() : raw;
+      if (m && m[2]) think.querySelector('b').textContent = 'Thought process';
+      chatEl.scrollTop = 1e9;
+    },
+    finish(ok = true) { live.classList.add(ok ? 'done' : 'err'); if (ok) { live.open = false; sum.textContent = `${n} step${n === 1 ? '' : 's'} (tap to see what happened)`; } },
+    fail(msg) { ans.textContent = 'Error: ' + msg; this.finish(false); },
+  };
 }
 const add = (cls, txt) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; chatEl.appendChild(d); chatEl.scrollTop = 1e9; return d; };
 const saved = () => JSON.parse(localStorage.getItem('pholama.ready') || '[]');
@@ -24,7 +49,7 @@ async function init() {
   try { const r = await fetch('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json(); } catch {}
   tab = server ? 'local' : 'browser';
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) navigator.serviceWorker.register('sw.js').catch(() => {});
-  refreshSelect();
+  await refreshSelect();
   add('sys', server ? 'Connected to your PC. Pick a model, or open Models to download one.' : 'Running in browser mode. Open Models to download a small model to this device.');
   if (![...sel.options].some(o => !o.disabled)) dlg.showModal(), render();
 }
@@ -32,7 +57,7 @@ async function init() {
 async function refreshSelect() {
   sel.innerHTML = '';
   for (const id of saved()) {
-    const m = catalog.browser.find(x => x.id === id); if (m) sel.add(new Option('📱 ' + m.name, 'web:' + id));
+    const m = catalog.browser.find(x => x.id === id || x.fallback === id); if (m) sel.add(new Option('📱 ' + m.name, 'web:' + id));
     const c = (catalog.cpu || []).find(x => 'cpu:' + x.id === id); if (c) sel.add(new Option('📱 ' + c.name, id));
   }
   if (server) try {
@@ -68,7 +93,7 @@ async function ensureCpu(id, onProgress) {
 async function cpuChat(messages, onToken) {
   const tf = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
   const streamer = new tf.TextStreamer(cpuPipe.tokenizer, { skip_prompt: true, skip_special_tokens: true, callback_function: onToken });
-  await cpuPipe(messages, { max_new_tokens: 512, do_sample: true, temperature: 0.7, streamer });
+  await cpuPipe(messages, { max_new_tokens: /Qwen3/i.test(cpuModel || '') ? 1024 : 512, do_sample: true, temperature: 0.7, streamer });
 }
 
 
@@ -80,11 +105,6 @@ async function refreshCredits() {
   const c = $('#cr'); c.style.display = ''; c.textContent = cred.left + ' / ' + cred.daily + ' credits';
   c.className = 'pill' + (cred.left === 0 ? ' zero' : cred.left < cred.daily * 0.2 ? ' low' : '');
   c.title = cred.left === 0 ? 'Out of credits: search, tools, MCP and thinking are off until tomorrow' : 'Resets daily';
-}
-function addTool(t) {
-  const d = add('tool', ''); d.innerHTML = '<b></b> <span></span><div></div>';
-  d.querySelector('b').textContent = t.name; d.querySelector('span').textContent = JSON.stringify(t.args || {});
-  d.querySelector('div').textContent = String(t.result || '').slice(0, 220);
 }
 async function openOpts() {
   const off = !server; $('#t_off').style.display = off ? '' : 'none'; $('#t_body').style.display = off ? 'none' : '';
@@ -126,14 +146,17 @@ async function send() {
   const text = inEl.value.trim(); if (!text || busy || !sel.value) { if (!sel.value) add('sys', 'Pick a model first (open Models to download one).'); return; }
   busy = true; $('#send').disabled = true; inEl.value = '';
   history.push({ role: 'user', content: text }); add('m u', text);
-  const out = add('m a', '...'); let acc = '';
+  const msg = makeMsg(); let acc = '';
   try {
+    if (!sel.value.startsWith('ollama:') && !sel.value.startsWith('gguf:')) msg.log('step', 'Loading the model on this device...', 0);
     await ensureEngine(sel.value);
     if (sel.value.startsWith('cpu:')) {
-      await cpuChat(history, t => { acc += t; out.textContent = acc; chatEl.scrollTop = 1e9; });
+      msg.log('step', 'Running on your phone CPU. This can be slow.', 0);
+      await cpuChat(history, t => { acc += t; msg.text(acc); });
     } else if (sel.value.startsWith('web:')) {
+      msg.log('step', 'Running on your phone GPU.', 0);
       const s = await engine.chat.completions.create({ messages: history, stream: true });
-      for await (const c of s) { acc += c.choices[0]?.delta?.content || ''; out.textContent = acc; chatEl.scrollTop = 1e9; }
+      for await (const c of s) { acc += c.choices[0]?.delta?.content || ''; msg.text(acc); }
     } else {
       const r = await fetch('api/chat', { method: 'POST', body: JSON.stringify({ model: sel.value, messages: history, agent: true }) });
       const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
@@ -143,15 +166,17 @@ async function send() {
         while ((i = buf.indexOf('\n')) >= 0) {
           const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!l) continue;
           const j = JSON.parse(l); if (j.error) throw new Error(j.error);
-          if (j.status) { out.textContent = acc || j.status; continue; }
-          if (j.tool) { addTool(j.tool); chatEl.appendChild(out); continue; }
+          if (j.log) { msg.log(j.log.kind, j.log.text, j.log.t); continue; }
+          if (j.status) { msg.log('step', j.status); continue; }
+          if (j.tool) continue;
           if (j.credits) { refreshCredits(); continue; }
-          acc += j.message?.content || ''; showAnswer(out, acc); chatEl.scrollTop = 1e9;
+          acc += j.message?.content || ''; msg.text(acc);
         }
       }
     }
     history.push({ role: 'assistant', content: acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim() });
-  } catch (e) { out.textContent = 'Error: ' + e.message; history.pop(); }
+    msg.finish(true);
+  } catch (e) { msg.fail(e.message); history.pop(); }
   busy = false; $('#send').disabled = false; inEl.focus();
 }
 
@@ -161,17 +186,32 @@ function render() {
   $('#tBrowser').classList.toggle('on', tab === 'browser'); $('#tLocal').classList.toggle('on', tab === 'local');
   listEl.innerHTML = '';
   if (tab === 'browser') {
-    $('#hw').textContent = hasGPU ? 'Models run inside this browser on your GPU and are cached after the first download.' : 'No WebGPU here, so small models run on the CPU (slower). Chrome on Android 121+ gives full speed.';
-    const gpu = hasGPU;
-    for (const m of (gpu ? catalog.browser : catalog.cpu || [])) {
-      const key = gpu ? m.id : 'cpu:' + m.id, ready = saved().includes(key), r = row(m.name, `${m.size} · ${m.note}`, ready ? 'Ready' : 'Download');
-      r.btn.disabled = ready;
+    const ram = deviceRam(), gpu = hasGPU;
+    $('#hw').textContent = gpu
+      ? `GPU found${hasF16 ? ' (fast mode)' : ' (compatibility mode)'}${ram ? ' · about ' + ram + '+ GB RAM' : ''}. Models run on this device and stay cached after the first download.`
+      : 'No usable WebGPU here, so only small CPU models run (slower). Chrome on Android 121+ gives full speed.';
+    const list = gpu ? catalog.browser : (catalog.cpu || []);
+    const maxTier = !ram ? 2 : ram >= 8 ? 4 : ram >= 6 ? 3 : ram >= 4 ? 2 : 1; // unknown RAM: assume a typical phone
+    let lastTier = 0;
+    for (const m of [...list].sort((a, b) => a.tier - b.tier)) {
+      if (m.tier !== lastTier) { lastTier = m.tier; const h = document.createElement('h4'); h.textContent = catalog.tiers[m.tier]; h.style.cssText = 'margin:12px 0 2px;font-size:13px;color:#aab1c3'; listEl.appendChild(h); }
+      // pick the id to use on this device: f32 fallback when f16 is missing
+      let useId = m.id, blocked = '';
+      if (gpu && m.needsF16 && !hasF16) { if (m.fallback) useId = m.fallback; else blocked = 'Needs a GPU feature this phone lacks'; }
+      const key = gpu ? useId : 'cpu:' + m.id, ready = saved().includes(key);
+      const fits = m.tier <= maxTier, caps = (m.caps || []).map(c => catalog.capLabels[c] || c);
+      const r = row(m.name, `${m.size} · ${m.note}`, blocked ? 'Not supported' : ready ? 'Ready' : 'Download');
+      const chips = document.createElement('div'); chips.style.cssText = 'margin-top:4px;display:flex;flex-wrap:wrap;gap:4px';
+      for (const c of [...caps, fits ? 'Fits your phone' : 'May be too big']) { const ch = document.createElement('span'); ch.textContent = c; ch.style.cssText = 'font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid #2a2f3a;color:' + (c === 'Fits your phone' ? '#7fd3a1' : c === 'May be too big' ? '#d9a441' : '#aab1c3'); chips.appendChild(ch); }
+      r.sub.parentNode.insertBefore(chips, r.bar);
+      r.btn.disabled = ready || !!blocked;
+      if (blocked) r.sub.textContent = blocked;
       r.btn.onclick = async () => {
         r.btn.disabled = true; r.btn.textContent = '...'; r.bar.style.display = '';
         try {
-          if (gpu) await ensureEngineWithBar(m.id, r);
+          if (gpu) await ensureEngineWithBar(useId, r);
           else await ensureCpu(m.id, p => { r.fill.style.width = Math.round(p.progress) + '%'; r.sub.textContent = (p.file || 'downloading').slice(-40); });
-          r.btn.textContent = 'Ready'; await refreshSelect(); sel.value = gpu ? 'web:' + m.id : key; r.sub.textContent = 'Ready to chat. Close this window.';
+          r.btn.textContent = 'Ready'; await refreshSelect(); sel.value = gpu ? 'web:' + useId : key; r.sub.textContent = 'Ready to chat. Close this window.';
         } catch (e) { r.sub.textContent = 'Error: ' + e.message.slice(0, 160); r.btn.disabled = false; r.btn.textContent = 'Retry'; }
       };
     }
@@ -188,7 +228,7 @@ function render() {
       };
     }
     for (const m of server.models) {
-      const r = row(m.name, `${m.sizeGB} GB · ${m.fits ? 'fits your PC' : 'may be too big for your RAM'}`, m.downloaded ? 'Downloaded' : 'Download');
+      const r = row(m.name, `${m.sizeGB} GB · ${m.fits ? 'fits your PC' : 'may be too big for your RAM'} · ${(m.caps || []).map(c => catalog.capLabels[c] || c).join(', ')}`, m.downloaded ? 'Downloaded' : 'Download');
       r.btn.disabled = m.downloaded;
       r.btn.onclick = async () => { r.btn.disabled = true; await fetch('api/pull', { method: 'POST', body: JSON.stringify({ id: m.id }) }); poll(m, r); };
     }
