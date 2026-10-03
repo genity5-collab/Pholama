@@ -16,7 +16,7 @@ async function init() {
   catalog = await (await fetch('models.json')).json();
   try { const r = await fetch('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json(); } catch {}
   tab = server ? 'local' : 'browser';
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) navigator.serviceWorker.register('sw.js').catch(() => {}); navigator.serviceWorker.addEventListener('controllerchange', () => { if (!sessionStorage.getItem('swr')) { sessionStorage.setItem('swr', '1'); location.reload(); } });
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) navigator.serviceWorker.register('sw.js').catch(() => {});
   refreshSelect();
   add('sys', server ? 'Connected to your PC. Pick a model, or open Models to download one.' : 'Running in browser mode. Open Models to download a small model to this device.');
   if (!sel.options.length) dlg.showModal(), render();
