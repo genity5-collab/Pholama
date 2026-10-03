@@ -23,6 +23,15 @@ mkdir -p "$HOME/.local/bin"
 printf '#!/usr/bin/env bash\nexec node "%s/server/cli.js" "$@"\n' "$DIR" > "$HOME/.local/bin/pholama"; chmod +x "$HOME/.local/bin/pholama"
 cp "$HOME/.local/bin/pholama" "$HOME/.local/bin/phollama" 2>/dev/null || true
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) say "Add this to your shell profile so the pholama command works everywhere:  export PATH=\"\$HOME/.local/bin:\$PATH\"";; esac
+# App icon so it is easy to find: Linux gets a launcher entry, Mac gets a double-clickable .command on the Desktop
+ICON="$DIR/web/icon-512.png"
+if [ "$(uname)" = "Linux" ]; then
+  mkdir -p "$HOME/.local/share/applications"
+  printf '[Desktop Entry]\nType=Application\nName=Pholama\nComment=Private AI on your PC\nExec=node "%s/server/cli.js" web\nIcon=%s\nTerminal=false\nCategories=Utility;\n' "$DIR" "$ICON" > "$HOME/.local/share/applications/pholama.desktop"
+  [ -d "$HOME/Desktop" ] && cp "$HOME/.local/share/applications/pholama.desktop" "$HOME/Desktop/Pholama.desktop" && chmod +x "$HOME/Desktop/Pholama.desktop" 2>/dev/null || true
+elif [ "$(uname)" = "Darwin" ]; then
+  printf '#!/usr/bin/env bash\nexec node "%s/server/cli.js" web\n' "$DIR" > "$HOME/Desktop/Pholama.command"; chmod +x "$HOME/Desktop/Pholama.command"
+fi
 say "Installed. Try:  pholama list     then:  pholama pull qwen2.5-0.5b"
 say "Or open the app:  pholama web"
 node "$DIR/server/cli.js" web || true

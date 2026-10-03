@@ -33,6 +33,21 @@ $bin = Join-Path $env:USERPROFILE '.pholama\cmd'; New-Item -ItemType Directory -
 foreach ($n in 'pholama','phollama') { Set-Content -Path (Join-Path $bin "$n.cmd") -Value "@echo off`r`nnode `"$dir\server\cli.js`" %*" -Encoding ASCII }
 $path = [Environment]::GetEnvironmentVariable('Path','User')
 if (($path -split ';') -notcontains $bin) { [Environment]::SetEnvironmentVariable('Path', "$path;$bin", 'User') }
+# Desktop + Start Menu shortcuts that carry the Pholama llama icon, so it is easy to spot and click
+try {
+  $ws = New-Object -ComObject WScript.Shell
+  $targets = @((Join-Path ([Environment]::GetFolderPath('Desktop')) 'Pholama.lnk'), (Join-Path ([Environment]::GetFolderPath('Programs')) 'Pholama.lnk'))
+  foreach ($t in $targets) {
+    $sc = $ws.CreateShortcut($t)
+    $sc.TargetPath = Join-Path $env:SystemRoot 'System32\wscript.exe'
+    $sc.Arguments = '"' + (Join-Path $dir 'install\Pholama.vbs') + '"'
+    $sc.WorkingDirectory = $dir
+    $sc.IconLocation = (Join-Path $dir 'install\pholama.ico') + ',0'
+    $sc.Description = 'Pholama: private AI on your PC'
+    $sc.Save()
+  }
+  Say "Added a Pholama icon (llama) to your Desktop and Start Menu. Double-click it to open Pholama."
+} catch { Say "Could not add the Desktop icon ($($_.Exception.Message)). You can still double-click start.bat." }
 Say "Installed. Open a NEW terminal and try:  pholama list    then:  pholama pull qwen2.5-0.5b"
 Say "Or open the app now: double-click start.bat in $dir"
 Set-Location $dir

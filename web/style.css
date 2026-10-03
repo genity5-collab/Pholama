@@ -125,3 +125,8 @@ button.p.stop{background:var(--fg);color:var(--bg)}
 .cmdcode,.cmdout{margin:6px 0;padding:8px;border-radius:8px;background:rgba(127,127,127,.12);white-space:pre-wrap;word-break:break-all;font:12px/1.4 ui-monospace,Consolas,monospace;max-height:200px;overflow:auto}
 .cmdrow{display:flex;gap:6px;margin-top:6px}.cmdwhy{opacity:.8;margin:4px 0}
 .logrow code{display:block;margin-top:3px;font:11px ui-monospace,Consolas,monospace;word-break:break-all;opacity:.85}
+
+.promo{position:relative;margin:18px auto 0;max-width:460px;text-align:left;padding:12px 34px 12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:13.5px;line-height:1.45;color:var(--mut)}
+.promo[hidden]{display:none}.promo b:first-child{display:block;color:var(--fg);font-size:14.5px;margin-bottom:2px}.promo span b{color:var(--fg)}
+.promo a{display:inline-block;margin-top:6px;color:var(--fg);font-weight:600;text-decoration:underline}
+.promoX{position:absolute;top:4px;right:6px;background:none;border:0;color:var(--mut);font-size:20px;line-height:1;cursor:pointer;padding:4px 8px}

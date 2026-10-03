@@ -1030,3 +1030,13 @@ $('#updCheck').onclick = async () => { $('#updMsg').textContent = 'Checking...';
 $('#updAuto').onchange = async e => { try { await fetch('/api/update/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: e.target.checked }) }); } catch {} paintUpdate(); };
 $('#updPill').onclick = () => { $('#opt').click(); };
 paintUpdate(); setInterval(paintUpdate, 10 * 60 * 1000);
+
+
+// ---------- PC celebration banner (website only; hidden on the PC app itself, and once dismissed) ----------
+(() => {
+  const box = $('#pcPromo'); if (!box) return;
+  let gone = false; try { gone = localStorage.getItem('pholama.promo.pc') === '1'; } catch {}
+  // Wait until we know whether this page is served by the PC app (server set) or is the plain website.
+  setTimeout(() => { if (!gone && !server) box.hidden = false; }, 1500);
+  $('#pcPromoX').onclick = () => { box.hidden = true; try { localStorage.setItem('pholama.promo.pc', '1'); } catch {} };
+})();

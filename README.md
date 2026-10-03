@@ -65,7 +65,31 @@ curl -fsSL https://raw.githubusercontent.com/genity5-collab/Pholama/main/install
 
 **C. Zip file:** [download](https://github.com/genity5-collab/Pholama/archive/refs/heads/main.zip), unzip, then double-click **start.bat** (Windows) or run `./start.sh` (Mac/Linux).
 
+**Look for the llama icon.** The installer (B) puts a **Pholama** icon on your Desktop and in the Start Menu (Windows), in your app launcher (Linux) or on your Desktop (Mac). Double-click it to open Pholama. If you used the zip (C), the first time you run **start.bat** it adds the icon to your Desktop too.
+
 Then open **http://localhost:11435**, tap **Models**, then **Install**, then **Download** a model.
+
+### How big is the PC version?
+
+| Part | Size | Notes |
+|---|---|---|
+| **Pholama itself** | **about 0.5 MB** | The program and screens. No extra packages to install. |
+| **AI engine (llama.cpp)** | **11 to 18 MB** | Downloaded once from **Models > Install**. Windows CPU 18 MB, Mac 11 MB, Linux 17 MB. |
+| **AI engine with NVIDIA GPU (Windows)** | **about 250 MB** | Faster on NVIDIA graphics cards. Chosen automatically if one is found. |
+| **Each AI model** | **0.13 GB to 13.4 GB** | You only download the ones you pick. |
+
+Model sizes by what your PC has:
+
+| Your PC's memory (RAM) | Models that fit | Download size each |
+|---|---|---|
+| 2 to 4 GB | SmolLM2, Qwen2.5 0.5B/1.5B, Gemma 3 1B, Llama 3.2 1B | 0.1 to 1.9 GB |
+| 5 to 8 GB | Gemma 3 4B, Phi-4 Mini, Qwen2.5 3B/7B, Llama 3.1 8B | 2 to 5 GB |
+| 9 to 16 GB | Gemma 2 9B, Gemma 3 12B, Qwen2.5 14B, Phi-4 14B, GPT-OSS 20B | 5 to 11 GB |
+| 17 GB and up | DeepSeek-R1 32B, Qwen2.5-Coder 32B, Mistral Small 24B | 11 to 13.4 GB |
+
+**A good start:** Pholama + engine + one small model is roughly **1 to 3 GB** in total. Each model you add is a separate file, so free space is the only limit. All 47 models together would be about 194 GB, so nobody needs to download them all.
+
+Models are saved in one folder, so you can delete any you stop using (`pholama rm <model>`) to get the space back. Updates only replace the 0.5 MB program, never your models.
 
 To reach your PC from your phone or away from home, see "Use your PC's AI from anywhere" in [docs-md/AGENT.md](docs-md/AGENT.md).
 

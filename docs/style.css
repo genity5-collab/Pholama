@@ -112,3 +112,21 @@ button.p.stop{background:var(--fg);color:var(--bg)}
 @media (max-width:420px){.effort button{padding:0 8px}}
 #crBox{flex:0 0 auto;margin:0 6px;align-self:center}
 @media (max-width:640px){#cr{display:none!important}#crBox{font-size:12px;padding:3px 8px}.toolbar{flex-wrap:wrap}.toolbar .swrow{flex-wrap:nowrap;overflow-x:auto}}
+
+.cmdrow{display:flex;gap:6px;align-items:stretch;margin-top:4px}
+.cmdrow code{flex:1;min-width:0;overflow-x:auto;white-space:nowrap;padding:8px;border:1px solid var(--line);border-radius:8px;font-size:12px;text-align:left}
+.cmdrow button{flex:none;min-height:36px}
+
+.pcfilters{display:flex;flex-wrap:wrap;gap:6px;margin:6px 0}
+.chipbtn{font-size:12.5px;padding:3px 11px;min-height:30px;border:1px solid var(--line);border-radius:999px;background:transparent;color:var(--mut)}
+.chipbtn.on{background:var(--acc);color:#fff;border-color:var(--acc)}
+
+.cmdcard{margin:8px 0;padding:10px;border:1px solid var(--line);border-radius:10px;text-align:left}
+.cmdcode,.cmdout{margin:6px 0;padding:8px;border-radius:8px;background:rgba(127,127,127,.12);white-space:pre-wrap;word-break:break-all;font:12px/1.4 ui-monospace,Consolas,monospace;max-height:200px;overflow:auto}
+.cmdrow{display:flex;gap:6px;margin-top:6px}.cmdwhy{opacity:.8;margin:4px 0}
+.logrow code{display:block;margin-top:3px;font:11px ui-monospace,Consolas,monospace;word-break:break-all;opacity:.85}
+
+.promo{position:relative;margin:18px auto 0;max-width:460px;text-align:left;padding:12px 34px 12px 14px;border:1px solid var(--line);border-radius:12px;background:var(--card);font-size:13.5px;line-height:1.45;color:var(--mut)}
+.promo[hidden]{display:none}.promo b:first-child{display:block;color:var(--fg);font-size:14.5px;margin-bottom:2px}.promo span b{color:var(--fg)}
+.promo a{display:inline-block;margin-top:6px;color:var(--fg);font-weight:600;text-decoration:underline}
+.promoX{position:absolute;top:4px;right:6px;background:none;border:0;color:var(--mut);font-size:20px;line-height:1;cursor:pointer;padding:4px 8px}
