@@ -257,6 +257,62 @@ function cleanGuidedLine(answer, oldLine) {
   return (oldLine.match(/^\s*/) || [''])[0] + trimmed;
 }
 
+// ---- Guided build: a request to MAKE something in Studio. A 1.5B model rarely calls tools, but it can write code when it only has to answer,
+// so Pholama asks for the files in a strict format and writes them itself. ----
+const BUILD_WORDS = /\b(make|build|create|write|code|generate|program|develop|design|add|do it|do that|try again|start)\b/i;
+const BUILD_THINGS = /\b(game|races?|racing|page|site|website|app|script|program|calculator|clock|timer|button|counter|quiz|tool|animation|canvas|form|list|todo|to-do|menu|snake|pong|tetris|platformer|clicker|landing|portfolio|prints?|hello|hi)\b/i;
+const NOT_BUILD = /^(what|why|how|who|when|where|explain|tell me|is |are |can you (explain|tell)|thanks|thank you|ok$|okay$|no$|yes$)\b/i;
+function planGuidedBuild(userText, prevUser, files, project) {
+  const text = String(userText || '').trim(); if (!text || text.length > 600 || !project) return null;
+  if (NOT_BUILD.test(text) && !BUILD_WORDS.test(text)) return null;
+  const detail = prevUser && text.length < 90 && !/\?\s*$/.test(text) && !NOT_BUILD.test(text) && /\b(player|players|car|cars|lamborghini|ferrari|short|long|fast|slow|level|levels|color|colour|red|blue|green|dark|big|small|simple|easy|hard|with|without|only|use|using)\b|^\d/i.test(text);
+  const vague = detail || /^(do it|do that|try again|again|go|start|proceed|ok proceed|yes do it|do it in the project|put it in the project|in the project|now start|start now)\b/i.test(text) || (text.length < 40 && !BUILD_THINGS.test(text));
+  let ask = text;
+  if (vague && prevUser) ask = String(prevUser).trim().slice(0, 500) + ' (details: ' + text + ')';
+  else if (!BUILD_WORDS.test(text) || !BUILD_THINGS.test(text)) return null;
+  if (!BUILD_THINGS.test(ask) && !BUILD_WORDS.test(ask)) return null;
+  const has = (files || []).map(f => f.name);
+  const fresh = !(files || []).some(f => f.size > 400 && !/^(index\.html|script\.js|style\.css)$/.test(f.name));   // a project that still only has the starter files
+  const py = /\b(python|\.py)\b/i.test(ask), lua = /\b(lua|roblox)\b/i.test(ask);
+  const jsOnly = /\b(script|function|program)\b/i.test(ask) && !/\b(game|page|site|website|app|canvas|button|form|animation|calculator|clock|timer|quiz)\b/i.test(ask);
+  const name = py ? 'main.py' : lua ? 'main.lua' : jsOnly ? 'script.js' : 'index.html', lang = py ? 'python' : lua ? 'lua' : jsOnly ? 'js' : 'html';
+  const prompt = 'Task: ' + ask.replace(/\s+/g, ' ') + '\n\n' +
+    (py || lua || jsOnly ? 'Write the complete program as ONE file, short and working.' : 'Write ONE complete HTML file that contains everything: the HTML, a <style> block for the CSS and a <script> block for the JavaScript. It must run by itself when opened. Make it a real, working, playable thing for the task, with enough code to actually do it (at least 40 lines). Use a <canvas> or simple elements, keyboard or mouse controls, and show a score or message.') + '\n' +
+    'Reply in exactly this shape and nothing else:\n\nFILE: ' + name + '\n```' + lang + '\n<your complete code here>\n```';
+  return { ask, fresh, prompt, file: name };
+}
+function parseFileBlocks(text, project, hint) {
+  const out = [], seen = new Set(), re = /(?:^|\n)[ \t]*(?:#+\s*)?(?:\*\*)?(?:FILE|File|file|Filename|filename)\s*:?\s*`?([A-Za-z0-9_\-./]{1,100}\.[A-Za-z0-9]{1,5})`?(?:\*\*)?[ \t]*\n[ \t]*```[A-Za-z0-9]*\n([\s\S]*?)\n?```/g;
+  let m; const t = String(text || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
+  while ((m = re.exec(t))) { const f = m[1].replace(/^\/+/, ''); if (f.includes('..') || seen.has(f) || !m[2].trim() || /^\(?\s*(the )?(whole|entire|full|real|your)\b[^\n]{0,30}\)?$/i.test(m[2].trim())) continue; seen.add(f); out.push({ file: f, content: m[2] }); }
+  if (!out.length) {   // no FILE: header: take the longest fenced block and name it by language (or by what was asked)
+    const blocks = [...t.matchAll(/```([A-Za-z0-9+#-]*)[ \t]*\n([\s\S]*?)\n?```/g)].map(x => ({ L: (x[1] || '').toLowerCase(), c: x[2] })).filter(x => x.c.trim().length > 8).sort((a, b) => b.c.length - a.c.length);
+    const b = blocks[0];
+    if (b) { const L = b.L || (/<\/?(html|body|canvas|div|script)/i.test(b.c) ? 'html' : /^\s*(def |import |print\()/m.test(b.c) ? 'python' : 'js'); out.push({ file: hint || (/html/.test(L) ? 'index.html' : L === 'css' ? 'style.css' : /^(python|py)$/.test(L) ? 'main.py' : L === 'lua' ? 'main.lua' : 'script.js'), content: b.c }); }
+    else if (hint && /^\s*(console\.log|print\(|document\.|let |const |var |function )/m.test(t)) out.push({ file: hint, content: t });   // the model wrote bare code with no fence
+  }
+  return out.slice(0, 6);
+}
+
+// A small model often forgets the page skeleton or leaves a stray code fence inside the file. Fix that in code, not with another model round.
+function tidyFile(name, content) {
+  let t = String(content || '').replace(/\r\n/g, '\n');
+  t = t.split('\n').filter(l => !/^\s*```[a-z]*\s*$/i.test(l)).join('\n').trim();
+  if (/\.html?$/i.test(name)) {
+    if ((t.match(/<script\b/gi) || []).length > (t.match(/<\/script>/gi) || []).length) t += '\n</script>';
+    if (!/<html|<body|<!doctype/i.test(t)) {
+      const head = [], body = [];
+      const styles = t.match(/<style[\s\S]*?<\/style>/gi) || [], rest = t.replace(/<style[\s\S]*?<\/style>/gi, '');
+      head.push('<meta charset="utf-8">', '<meta name="viewport" content="width=device-width, initial-scale=1">', '<title>Studio</title>', ...styles);
+      body.push(rest.trim());
+      t = '<!doctype html>\n<html>\n<head>\n' + head.join('\n') + '\n</head>\n<body>\n' + body.join('\n') + '\n</body>\n</html>\n';
+    }
+    if (!/<\/body>/i.test(t) && /<body/i.test(t)) t += '\n</body>';
+    if (!/<\/html>/i.test(t) && /<html/i.test(t)) t += '\n</html>';
+  }
+  return t + '\n';
+}
+
 function studioPrompt(project, files) {
   const list = (files || []).slice(0, 40).map(f => `- ${f.name} (${f.size} bytes)`).join('\n') || '(no files yet)';
   return '\n[STUDIO] You are working inside the user\'s Studio project "' + (project || 'none') + '". Files now:\n' + list + '\n' +
@@ -380,4 +436,4 @@ function aboutUserHint(text, memories) {
     : '\n[this question is about the user, and you know nothing about them yet. Reply only: "I don\'t know that about you yet. Tell me and I\'ll remember it." Do not talk about your own preferences or the internet.]\n';
 }
 
-module.exports = { planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+module.exports = { tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

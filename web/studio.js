@@ -162,7 +162,7 @@ export function createStudio(env) {
     if (!S.project) { say('Make a project first: press New.', 'err'); return; }
     save.flush(); await new Promise(r => setTimeout(r, 60));   // make sure the AI sees what the user just typed
     const model = getModel(); if (!model) { say('Pick a model at the top first.', 'err'); return; }
-    S.busy = true; el.stSend.textContent = 'Stop'; say(text, 'me'); hist.push({ role: 'user', content: text }); if (hist.length > 24) hist.splice(0, hist.length - 24);
+    S.busy = true; el.stSend.textContent = 'Stop'; say(text, 'me'); hist.push({ role: 'user', content: text }); if (hist.length > 8) hist.splice(0, hist.length - 8);
     const ac = new AbortController(); S.stopper = () => ac.abort(); let reply = '', node = null, srcCard = null;
     try {
       const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: hist, agent: true, stream: true, studio: { project: S.project }, switches: { search: true, tools: true } }) });
@@ -180,7 +180,9 @@ export function createStudio(env) {
           else if (j.message && j.message.content) { reply += j.message.content; if (!node) node = say('', 'ai'); node.textContent = reply; el.stAiLog.scrollTop = 1e9; }
         }
       }
-      if (reply) hist.push({ role: 'assistant', content: reply });
+      // Keep only the plain answer in the memory of this chat: the model's own <think> notes and chit-chat make a small model repeat itself.
+      const kept = reply.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/<\/?think>/g, '').trim();
+      if (kept) hist.push({ role: 'assistant', content: kept.slice(0, 1200) }); else hist.pop();
     } catch (e) { if (e.name !== 'AbortError') say(e.message || 'Something went wrong.', 'err'); else say('Stopped.', 'warn'); }
     finally { S.busy = false; S.stopper = null; el.stSend.textContent = 'Send'; await refreshFromServer(); }
   }

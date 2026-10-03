@@ -373,6 +373,10 @@ async function chat(req, res, b) {
     if (effortUse !== 'normal') log('step', 'Effort: ' + effortUse);
     const usage = { in: 0, out: 0, got: false }, t1 = Date.now();
     const origUserText = (() => { const u = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return u ? String(u.content) : ''; })();
+    if (inStudio) {   // Studio: only the last few turns, and never the model's own <think> notes, so a small model stays on the request instead of looping
+      const cl = t => String(t || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/<\/?think>/g, '').trim();
+      b.messages = (b.messages || []).map(m => m.role === 'assistant' ? { ...m, content: cl(m.content).slice(0, 1200) } : m).filter(m => m.role !== 'assistant' || m.content).slice(-8);
+    }
     let generated = '';   // everything the model wrote this message (all turns), used only for the estimate
     const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effortUse) + (inStudio && tools.length ? agent.studioPrompt(b.studio.project, (() => { try { return stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })); } catch { return []; } })()) + (() => { try { const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.studioFocus(stu.snapshot(b.studio.project), lu && lu.content, b.studio.project); } catch { return ''; } })() : '') + (() => { if (tools.length) return ''; const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.aboutUserHint(lu && lu.content, b.memory === true && Array.isArray(b.memories) ? b.memories : []); })() }, ...(b.messages || []).filter(m => m.role !== 'system')];
     // Host-side routing: obvious intents run their tool before the model answers (weak models skip tool calls).
@@ -432,6 +436,48 @@ async function chat(req, res, b) {
             line({ model, message: { role: 'assistant', content: txt }, done: false }); generated += txt; guidedDone = true;
           }
         } else if (got.trim()) log('step', 'The model\'s answer was not a clean single line, using the normal way instead.');
+      }
+    }
+    // Guided build: the user asked to MAKE something. Small models talk instead of calling tools, so Pholama asks for the files directly and writes them itself.
+    if (inStudio && stu && b.studio && b.studio.project && !guidedDone && b.guided !== false) {
+      let bp = null;
+      try {
+        const us = (b.messages || []).filter(m => m.role === 'user').map(m => String(m.content || ''));
+        const cur = origUserText, before = us.slice(0, -1).reverse();
+        const prevBuild = before.find(t => /\b(make|build|create|write|code|generate|develop)\b/i.test(t) && t.length < 400) || before[0] || '';
+        bp = agent.planGuidedBuild(cur, prevBuild, stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })), b.studio.project);
+      } catch {}
+      if (bp) {
+        log('step', 'Building in Studio: asking the model for the files directly.');
+        let got = '', tries = 0, written = [];
+        while (tries < 3 && !written.length && !ac.signal.aborted) {
+          tries++; got = '';
+          try { await streamTurn(model, [{ role: 'system', content: 'You write small working web projects. Reply only with files in the requested FILE: format.' }, { role: 'user', content: bp.prompt + (tries > 1 ? '\n\nYour last reply had no FILE: blocks. Reply ONLY with FILE: name then a code block, for each file.' : '') }], { ...opts, temperature: 0.3, num_predict: 2400 }, t => { got += t; }, ac.signal); } catch (e) { log('error', 'Build request failed (' + e.message + ').'); break; }
+          for (const f of agent.parseFileBlocks(got, b.studio.project, bp.file)) {
+            let res; try { res = stu.writeFile(b.studio.project, f.file, agent.tidyFile(f.file, f.content)); } catch (e) { res = 'Tool error: ' + e.message; }
+            const ok = !/^Tool error/.test(String(res));
+            log(ok ? 'result' : 'error', ok ? 'Wrote ' + f.file + ' (' + Buffer.byteLength(f.content) + ' bytes)' : String(res).slice(0, 200));
+            line({ tool: { name: 'studio_write', args: { project: b.studio.project, file: f.file }, result: ok ? 'Saved ' + f.file : String(res).slice(0, 200) } });
+            if (ok) written.push(f.file);
+          }
+        }
+        if (written.length) {
+          line({ studio: { changed: true, project: b.studio.project } });
+          let issues = []; try { issues = stu.check(b.studio.project).filter(x => x !== 'No problems found.'); } catch {}
+          for (let fix = 0; fix < 2 && issues.length && !ac.signal.aborted; fix++) {   // let the model repair what the checker found
+            log('step', 'Auto-check found ' + issues.length + ' problem(s). Asking the model to fix them.');
+            let g2 = ''; try { await streamTurn(model, [{ role: 'system', content: 'You fix small web projects. Reply only with the corrected files in FILE: format.' }, { role: 'user', content: 'Problems found in the project:\n- ' + issues.slice(0, 5).join('\n- ') + '\n\nCurrent files:\n' + stu.snapshot(b.studio.project).filter(f => written.includes(f.name)).map(f => 'FILE: ' + f.name + '\n```\n' + f.content.slice(0, 3000) + '\n```').join('\n\n') + '\n\nReply with the corrected files in FILE: format, nothing else.' }], { ...opts, temperature: 0.2, num_predict: 2400 }, t => { g2 += t; }, ac.signal); } catch { break; }
+            const backup = stu.snapshot(b.studio.project), before = issues.length;
+            for (const f of agent.parseFileBlocks(g2, b.studio.project)) { try { stu.writeFile(b.studio.project, f.file, agent.tidyFile(f.file, f.content)); } catch {} }
+            let now = before; try { now = stu.check(b.studio.project).filter(x => x !== 'No problems found.').length; } catch {}
+            if (now >= before) { for (const f of backup) { try { stu.writeFile(b.studio.project, f.name, f.content); } catch {} } log('step', 'The fix did not help, so I kept the earlier version.'); break; }
+            line({ tool: { name: 'studio_write', args: { project: b.studio.project }, result: 'Fixed problems (' + before + ' -> ' + now + ')' } });
+            line({ studio: { changed: true, project: b.studio.project } });
+            try { issues = stu.check(b.studio.project).filter(x => x !== 'No problems found.'); } catch { issues = []; }
+          }
+          const txt = 'Done. I wrote ' + written.join(', ') + ' in the project "' + b.studio.project + '". Press Run to try it.' + (issues.length ? '\n\nStill not perfect: ' + issues.slice(0, 2).join('; ') + '. Tell me what to fix.' : '');
+          line({ model, message: { role: 'assistant', content: txt }, done: false }); generated += got + txt; guidedDone = true;
+        } else log('step', 'The model did not give usable files, using the normal way.');
       }
     }
     const seenCalls = {};
