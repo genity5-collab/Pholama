@@ -25,7 +25,7 @@ export const effortTokens = (base, e) => (e === 'max' ? Math.round(base * 2) : e
 export const CLOUD_ID = 'cloud:pholama';
 export function mayUse(user) { return !!user; }
 export function mayDownload(user) { return !!user; }
-export const GATE_MESSAGE = 'Create a free account to chat and download models. It only takes a name and a password.';
+export const GATE_MESSAGE = 'Sign in with Discord to chat and download models. It is free and takes one tap.';
 
 // ---- cloud chat ----
 // Returns { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }.

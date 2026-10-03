@@ -4,6 +4,10 @@
 import { Account, cleanName } from './account.js';
 import { llamaLoader, LLAMA_CSS } from './loader.js';
 import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME } from './cloud.js';
+import { planFallback } from './fallback.js';
+import { splitThinking, thinkLabel, countWords } from './thinking.js';
+import { splitBlocks, LANGS, cleanLang, extFor, safeFileName, diffLines, diffStats, extractScript, editPrompt, runCommand } from './codeblocks.js';
+import { collapse, groupByDay, dayTitle, applyFilter, summarise, summaryText, info as logInfo, detailRows, fmtTime, FILTERS } from './editlog.js';
 import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 
 const $ = s => document.querySelector(s);
@@ -47,10 +51,50 @@ async function api(path, opts = {}, bodyData) {
 // You need an account to chat with any model or to download one. This opens the sign-in box and says why.
 function needLogin(what) {
   if (what === 'download' ? mayDownload(Account.user()) : mayUse(Account.user())) return false;
-  aMode = 'sign'; $('#a_msg').textContent = ''; paintAcct();
+  $('#a_msg').textContent = ''; paintAcct();
   $('#a_why').textContent = GATE_MESSAGE; $('#a_why').style.display = '';
   if (dlg.open) dlg.close();
   openSettings('account'); return true;
+}
+
+// Shows an answer: normal text stays plain text, fenced code becomes a block with line numbers and a Copy button.
+function copyText(text, btn, label = 'Copy code') {
+  const done = ok => { btn.textContent = ok ? 'Copied' : 'Select it'; setTimeout(() => { btn.textContent = label; }, 1600); };
+  if (navigator.clipboard && navigator.clipboard.writeText) navigator.clipboard.writeText(text).then(() => done(true), () => done(false)); else done(false);
+}
+function codeBlockEl(code, lang) {
+  const w = document.createElement('div'); w.className = 'cb';
+  const bar = document.createElement('div'); bar.className = 'cbbar';
+  const l = document.createElement('span'); l.textContent = (LANGS.find(x => x[0] === lang) || [0, lang || 'code'])[1];
+  const btn = document.createElement('button'); btn.type = 'button'; btn.textContent = 'Copy code'; btn.onclick = () => copyText(code, btn);
+  const ed = document.createElement('button'); ed.type = 'button'; ed.textContent = 'Edit'; ed.title = 'Open in the script editor'; ed.onclick = () => openScriptEditor(code, lang);
+  bar.append(l, ed, btn);
+  const pre = document.createElement('pre'); const lines = code.split('\n');
+  const nums = document.createElement('span'); nums.className = 'cbn'; nums.textContent = lines.map((_, i) => i + 1).join('\n');
+  const c = document.createElement('code'); c.textContent = code;
+  pre.append(nums, c); w.append(bar, pre); return w;
+}
+function renderAnswer(el, raw) {
+  const parts = splitBlocks(raw);
+  if (!parts.some(p => p.type === 'code')) { if (el.dataset.sig) { el.textContent = ''; delete el.dataset.sig; } el.textContent = raw; return; }
+  const sig = parts.map(p => p.type === 'code' ? 'c' + p.lang : 't').join('|');
+  if (el.dataset.sig !== sig) {                    // the shape changed (new block started): build it again
+    el.dataset.sig = sig; el.textContent = '';
+    for (const p of parts) {
+      if (p.type === 'text') { const d = document.createElement('div'); d.className = 'cbtext'; el.append(d); }
+      else el.append(codeBlockEl('', p.lang));
+    }
+  }
+  // same shape: only refresh the text inside, so scrolling and selection survive while streaming
+  parts.forEach((p, k) => {
+    const node = el.children[k]; if (!node) return;
+    if (p.type === 'text') { if (node.textContent !== p.text) node.textContent = p.text; return; }
+    const c = node.querySelector('code'); if (c.textContent !== p.code) {
+      c.textContent = p.code; node.querySelector('.cbn').textContent = p.code.split('\n').map((_, i) => i + 1).join('\n');
+    }
+    node.querySelector('.cbbar button:last-child').onclick = function () { copyText(p.code, this); };
+    node.querySelector('.cbbar button:nth-of-type(1)').onclick = () => openScriptEditor(p.code, p.lang);
+  });
 }
 
 // One AI message = live log (actions/steps) + live thinking + answer. Everything updates while it streams.
@@ -58,7 +102,16 @@ function makeMsg() {
   const el = document.createElement('div'); el.className = 'm a';
   const live = document.createElement('details'); live.className = 'live'; live.open = true; live.style.display = 'none';
   live.innerHTML = '<summary><span class="dot"></span><span class="sum">Working...</span></summary><div class="lines"></div>';
-  const think = document.createElement('div'); think.className = 'think'; think.style.display = 'none'; think.innerHTML = '<b>Thinking</b><span></span>';
+  const think = document.createElement('details'); think.className = 'thinkcard'; think.style.display = 'none';
+  think.innerHTML = '<summary><span class="tdot"></span><span class="tlabel">Thinking</span></summary><div class="tbody"></div>';
+  const tLabel = think.querySelector('.tlabel'), tBody = think.querySelector('.tbody');
+  let tStart = 0, tTimer = null, tMs = 0;
+  const tStop = () => { if (tTimer) { clearInterval(tTimer); tTimer = null; } };
+  const showThought = (thought, open, ms) => {
+    think.style.display = ''; think.classList.toggle('live', open);
+    tBody.textContent = thought; tLabel.textContent = thinkLabel({ open, ms, words: countWords(thought) });
+    if (open) tBody.scrollTop = 1e9;
+  };
   const ans = document.createElement('div'); ans.className = 'ans';
   const use = document.createElement('div'); use.className = 'usage'; use.style.display = 'none';
   el.append(live, think, ans, use); chatEl.appendChild(el); chatEl.scrollTop = 1e9;
@@ -73,12 +126,19 @@ function makeMsg() {
       lines.appendChild(d); lines.scrollTop = 1e9; sum.textContent = text.slice(0, 70); chatEl.scrollTop = 1e9;
       if (kind === 'error') live.classList.add('err');
     },
-    text(raw) {           // raw model text: split <think> from the answer, live
-      const m = /<think>([\s\S]*?)(<\/think>|$)/.exec(raw);
-      if (m) { think.style.display = ''; think.querySelector('span').textContent = m[1].trim(); think.scrollTop = 1e9; }
-      ans.textContent = m ? raw.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim() : raw;
-      if (m && m[2]) think.querySelector('b').textContent = 'Thought process';
+    text(raw) {           // raw model text: split <think> from the answer, live, with a running timer
+      const r = splitThinking(raw);
+      if (r.thought || r.open) {
+        if (!tStart) { tStart = performance.now(); think.open = true; }
+        if (r.open && !tTimer) tTimer = setInterval(() => { tMs = performance.now() - tStart; showThought(tBody.textContent, true, tMs); }, 100);
+        if (!r.open) { tStop(); tMs = performance.now() - tStart; think.open = false; }
+        showThought(r.thought, r.open, tMs || (performance.now() - tStart));
+      }
+      renderAnswer(ans, r.answer);
       chatEl.scrollTop = 1e9;
+    },
+    thought(text, seconds) {   // a finished reasoning text from Agent Max (not streamed)
+      if (!text) return; tStop(); showThought(String(text).trim(), false, (+seconds || 0) * 1000); think.open = false;
     },
     usage(u) {            // u = {in, out, estimated, seconds}. Real counts come from the model backend; otherwise flagged as estimates.
       if (!u) return; const tot = (u.in || 0) + (u.out || 0), f = n => (+n).toLocaleString();
@@ -86,7 +146,8 @@ function makeMsg() {
       use.title = u.estimated ? 'This model did not report exact counts, so this is an estimate (about 4 characters per token).' : 'Exact count reported by the model.';
       use.style.display = '';
     },
-    finish(ok = true) { live.classList.add(ok ? 'done' : 'err'); if (ok) { live.open = false; sum.textContent = `${n} step${n === 1 ? '' : 's'} (tap to see what happened)`; } },
+    badge(text) { let b = el.querySelector('.fbadge'); if (!b) { b = document.createElement('div'); b.className = 'fbadge'; el.insertBefore(b, ans); } b.textContent = text; },
+    finish(ok = true) { tStop(); if (think.classList.contains('live')) { think.classList.remove('live'); tLabel.textContent = thinkLabel({ open: false, ms: tMs, words: countWords(tBody.textContent) }); think.open = false; } live.classList.add(ok ? 'done' : 'err'); if (ok) { live.open = false; sum.textContent = `${n} step${n === 1 ? '' : 's'} (tap to see what happened)`; } },
     fail(msg) { ans.textContent = 'Error: ' + msg; this.finish(false); },
   };
 }
@@ -107,7 +168,11 @@ async function init() {
   { const L = llamaLoader(84); $('#heroLogo').appendChild(L.el); L.done(); L.el.classList.remove('ok'); L.el.style.color = 'var(--fg)';
     for (const q of ['Explain how a rocket works', 'Write a short poem', 'Help me plan my day']) { const b = document.createElement('button'); b.textContent = q; b.onclick = () => { inEl.value = q; send(); }; $('#heroChips').appendChild(b); } }
   add('sys', server ? 'Connected to your PC. Pick a model, or open Models to download one.' : 'Running in browser mode. Open Models to download a small model to this device.');
-  await Account.load(); await afterAuth();
+  paintPcWelcome();
+  await Account.load();
+  try { await Account.finishLogin(); }
+  catch (e) { Account.logout(); openSettings('account'); $('#a_msg').textContent = e.message; }
+  await afterAuth(); paintAcct();
   if (![...sel.options].some(o => !o.disabled)) dlg.showModal(), render();
 }
 
@@ -292,6 +357,32 @@ function setBusy(on) {
 function stopGen() { if (busy && stopper) { stopped = true; try { stopper(); } catch {} } }
 
 // ----- chat sending -----
+// PC models the user has installed (the dropdown is built from the PC server, so phone and cloud entries are filtered out by planFallback).
+const pcModelNames = () => [...sel.options].filter(o => !o.disabled).map(o => o.value);
+
+// Talks to the PC server and streams the answer. Shared by the normal PC path and the Max fallback.
+async function pcChat(model, msg, onText) {
+  const ac = new AbortController(); stopper = () => ac.abort();
+  const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: history, agent: true, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [] }) });
+  const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
+  for (;;) {
+    const { done, value } = await rd.read(); if (done) break;
+    buf += dec.decode(value, { stream: true }); let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!l) continue;
+      const j = JSON.parse(l); if (j.error) throw new Error(j.error);
+      if (j.log) { msg.log(j.log.kind, j.log.text, j.log.t); continue; }
+      if (j.status) { msg.log('step', j.status); continue; }
+      if (j.memory) { const note = await saveMemory(j.memory.text); msg.log(/^Saved/.test(note) ? 'result' : 'error', note); continue; }
+      if (j.approve) { (j.approve.type === 'command' ? cmdAsk : ghAsk)(msg, j.approve); continue; }
+      if (j.tool) { refreshCredits(); continue; }
+      if (j.usage) { msg.usage(j.usage); continue; }
+      if (j.credits) { refreshCredits(); continue; }
+      onText(j.message?.content || '');
+    }
+  }
+}
+
 async function send() {
   if (busy) { stopGen(); return; }
   const text = inEl.value.trim(); if (!text) return;
@@ -302,7 +393,7 @@ async function send() {
   inEl.value = ''; inEl.style.height = 'auto'; setBusy(true); stopped = false;
   hideHero(); addUser(text); history.push({ role: 'user', content: text });
   saveCurrentSession();
-  const msg = makeMsg(); let acc = '', pendingUi = null; const sessionAtStart = sessionId;
+  const msg = makeMsg(); let acc = '', pendingUi = null, plan = null; const sessionAtStart = sessionId;
   try {
     const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');
     if (local) { const ri = rememberIntent(text); if (ri && memOn) msg.log('result', await saveMemory(ri), 0); }
@@ -313,7 +404,7 @@ async function send() {
       const ac = new AbortController(); stopper = () => ac.abort();
       const t0 = performance.now();
       const r = await cloudChat(history, effort, token, ac.signal);
-      acc = r.reply; pendingUi = r.actions; msg.text(acc); if (r.thinking) msg.log('think', r.thinking, +((performance.now() - t0) / 1000));
+      acc = r.reply; pendingUi = r.actions; msg.text(acc); if (r.thinking) msg.thought(r.thinking, +((performance.now() - t0) / 1000));
       for (const t of (r.tools || [])) msg.log('action', `${t.name}${t.input && (t.input.expression || t.input.question) ? ' ' + (t.input.expression || t.input.question) : ''}`, +((performance.now() - t0) / 1000));
       msg.log('result', `${MAX_NAME} used ${(r.tools || []).length} tool(s). Today: ${r.day_used}/${r.day_cap}. Month: ${r.month_used}/${r.month_cap}.`, +((performance.now() - t0) / 1000));
       msg.usage({ in: history.reduce((n, m) => n + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: +((performance.now() - t0) / 1000).toFixed(1) });
@@ -336,25 +427,7 @@ async function send() {
       const sec = +((performance.now() - t0) / 1000).toFixed(1);
       msg.usage(wu ? { in: wu.prompt_tokens, out: wu.completion_tokens, estimated: false, seconds: sec } : { in: send_.reduce((a, m) => a + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: sec });
     } else {
-      const ac = new AbortController(); stopper = () => ac.abort();
-      const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model: sel.value, messages: history, agent: true, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [] }) });
-      const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
-      for (;;) {
-        const { done, value } = await rd.read(); if (done) break;
-        buf += dec.decode(value, { stream: true }); let i;
-        while ((i = buf.indexOf('\n')) >= 0) {
-          const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!l) continue;
-          const j = JSON.parse(l); if (j.error) throw new Error(j.error);
-          if (j.log) { msg.log(j.log.kind, j.log.text, j.log.t); continue; }
-          if (j.status) { msg.log('step', j.status); continue; }
-          if (j.memory) { const note = await saveMemory(j.memory.text); msg.log(/^Saved/.test(note) ? 'result' : 'error', note); continue; }
-          if (j.approve) { (j.approve.type === 'command' ? cmdAsk : ghAsk)(msg, j.approve); continue; }
-          if (j.tool) { refreshCredits(); continue; }
-          if (j.usage) { msg.usage(j.usage); continue; }
-          if (j.credits) { refreshCredits(); continue; }
-          acc += j.message?.content || ''; msg.text(acc);
-        }
-      }
+      await pcChat(sel.value, msg, t => { acc += t; msg.text(acc); });
     }
     if (sessionAtStart !== sessionId) return;                // a New session began while this ran: drop the late reply
     const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
@@ -371,8 +444,26 @@ async function send() {
       if (clean) history.push({ role: 'assistant', content: clean }); else history.pop();
       msg.log('step', clean ? 'Stopped. Kept what was written so far.' : 'Stopped before any answer.'); msg.finish(true);
       saveCurrentSession();
+    } else if (isCloud && (plan = planFallback({ err: e, isPc: !!server && !remoteBase(), models: pcModelNames(), isCloud })).use) {
+      // Max could not answer. Your own PC model answers the SAME message instead (free, no credits), and you are told.
+      if (e.info) paintCloudLeft(e.info);
+      msg.log('error', plan.reason + '.', 0);
+      msg.badge('Answered by your PC: ' + plan.model.replace(/^(gguf|ollama):/, ''));
+      msg.log('step', 'Switching to your own AI on this PC. No credits used.', 0);
+      acc = '';
+      try {
+        await pcChat(plan.model, msg, t => { acc += t; msg.text(acc); });
+        const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
+        if (clean) history.push({ role: 'assistant', content: clean }); else history.pop();
+        msg.finish(true); saveCurrentSession();
+      } catch (e2) {
+        history.pop();
+        if (e2 && (e2.name === 'AbortError' || stopped)) { msg.log('step', 'Stopped.', 0); msg.finish(true); }
+        else msg.fail('Max was unavailable and your PC model also failed: ' + e2.message);
+      }
     } else {
       history.pop();
+      if (plan && plan.why) msg.log('step', plan.why, 0);
       if (e && e.code === 'login') { msg.fail(e.message); needLogin('use'); }
       else if (e && (e.code === 'limit-day' || e.code === 'limit-month')) { msg.fail(e.message); if (e.info) paintCloudLeft(e.info); }
       else msg.fail(e.message);
@@ -389,16 +480,10 @@ async function afterAuth() {
   if (u) claimBonus();
   if (u) { try { memOn = await Account.memoryOn(); if (memOn) memories = (await Account.list()).map(m => m.content); } catch {} }
 }
-let aMode = 'login';
 function paintAcct() {
   const u = Account.user();
   $('#a_out').style.display = u ? 'none' : ''; $('#a_in').style.display = u ? '' : 'none';
-  if (!u) {
-    $('#a_tLogin').classList.toggle('on', aMode === 'login'); $('#a_tSign').classList.toggle('on', aMode === 'sign');
-    $('#a_go').textContent = aMode === 'login' ? 'Log in' : 'Create account'; $('#a_warn').style.display = aMode === 'sign' ? '' : 'none';
-    $('#a_pass').autocomplete = aMode === 'login' ? 'current-password' : 'new-password';
-    return;
-  }
+  if (!u) return;
   $('#a_who').textContent = Account.name(); $('#a_mem').checked = memOn;
   $('#a_memNote').textContent = memOn
     ? (server ? 'On. Pholama can save facts you ask it to (5 credits each) and uses them in chats.' : 'On. Say "remember that..." and it is saved. Free on this device.')
@@ -417,18 +502,17 @@ async function paintMemList() {
     box.appendChild(d);
   }
 }
-$('#a_tLogin').onclick = () => { aMode = 'login'; $('#a_msg').textContent = ''; paintAcct(); };
-$('#a_tSign').onclick = () => { aMode = 'sign'; $('#a_msg').textContent = ''; paintAcct(); };
 async function submitAcct() {
   const name = $('#a_name').value, pw = $('#a_pass').value, btn = $('#a_go'); $('#a_msg').textContent = '';
   if (!cleanName(name)) return $('#a_msg').textContent = 'Type your name.';
-  if (pw.length < 8) return $('#a_msg').textContent = 'Password must be at least 8 characters.';
+  if (!pw) return $('#a_msg').textContent = 'Type your password.';
   btn.disabled = true; btn.textContent = '...';
-  try { await (aMode === 'login' ? Account.login(name, pw) : Account.signup(name, pw)); $('#a_pass').value = ''; await afterAuth(); paintAcct(); }
+  try { await Account.login(name, pw); $('#a_pass').value = ''; await afterAuth(); paintAcct(); }
   catch (e) { $('#a_msg').textContent = e.message; }
   btn.disabled = false; paintAcct();
 }
 $('#a_go').onclick = submitAcct;
+$('#a_login').onclick = () => { $('#a_msg').textContent = ''; Account.startLogin(); };
 for (const id of ['#a_name', '#a_pass']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') submitAcct(); });
 $('#a_mem').onchange = async e => {
   const want = e.target.checked; e.target.disabled = true;
@@ -437,6 +521,81 @@ $('#a_mem').onchange = async e => {
 };
 $('#a_wipe').onclick = async () => { if (!confirm('Forget everything Pholama remembers about you?')) return; try { await Account.forgetAll(); } catch {} memories = []; paintMemList(); };
 $('#a_outBtn').onclick = async () => { Account.logout(); await afterAuth(); paintAcct(); };
+
+
+// One question to a PC model with no chat history and no tools, so an edit never touches the conversation.
+async function pcOneShot(model, prompt) {
+  if (!server || remoteBase()) throw new Error('This needs the Pholama PC app, or pick Agent Max at the top.');
+  const r = await api('api/chat', { method: 'POST', body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], agent: false, effort: 'normal' }) });
+  if (!r.ok) { let m = 'The PC model had a problem.'; try { m = (await r.json()).error || m; } catch {} throw new Error(m); }
+  const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '', text = '';
+  for (;;) {
+    const { done, value } = await rd.read(); if (done) break;
+    buf += dec.decode(value, { stream: true }); let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!l) continue;
+      let j; try { j = JSON.parse(l); } catch { continue; } if (j.error) throw new Error(j.error);
+      if (j.message && j.message.content) text += j.message.content; else if (typeof j.text === 'string') text += j.text;
+    }
+  }
+  return text;
+}
+
+// ----- Script editor: paste a script, ask the model to change it, review the difference, copy it -----
+let scProposed = null;
+function scLang() { return $('#sc_lang').value; }
+function scFile() { return safeFileName($('#sc_name').value, scLang()); }
+function scPaint() {
+  const code = $('#sc_code').value, f = scFile(), cmd = runCommand(scLang(), f);
+  $('#sc_run').textContent = code.trim() ? (cmd ? 'To run it on your PC, open a terminal in the file\u2019s folder and type: ' + cmd : 'Saved as ' + f) : '';
+  $('#sc_runcopy').style.display = cmd ? '' : 'none';
+}
+function openScriptEditor(code, lang) {
+  if (code != null) { $('#sc_code').value = code; if (lang && [...$('#sc_lang').options].some(o => o.value === lang)) $('#sc_lang').value = lang; }
+  scProposed = null; $('#sc_diffbox').style.display = 'none'; $('#sc_msg').textContent = ''; scPaint();
+  if (dlg.open) dlg.close(); openSettings('script');
+}
+for (const [v, n] of LANGS) { const o = document.createElement('option'); o.value = v; o.textContent = n; $('#sc_lang').append(o); }
+$('#sc_code').addEventListener('input', () => { scPaint(); });
+$('#sc_lang').onchange = scPaint; $('#sc_name').oninput = scPaint;
+$('#sc_copy').onclick = function () { copyText($('#sc_code').value, this); };
+$('#sc_runcopy').onclick = function () { copyText(runCommand(scLang(), scFile()), this, 'Copy run command'); };
+$('#sc_clear').onclick = () => { $('#sc_code').value = ''; $('#sc_ask').value = ''; scProposed = null; $('#sc_diffbox').style.display = 'none'; $('#sc_msg').textContent = ''; scPaint(); };
+$('#sc_dl').onclick = () => {
+  const code = $('#sc_code').value; if (!code.trim()) return $('#sc_msg').textContent = 'Nothing to download yet.';
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([code], { type: 'text/plain;charset=utf-8' })); a.download = scFile(); document.body.append(a); a.click(); a.remove(); setTimeout(() => URL.revokeObjectURL(a.href), 2000);
+};
+$('#sc_reject').onclick = () => { scProposed = null; $('#sc_diffbox').style.display = 'none'; $('#sc_msg').textContent = 'Kept your version.'; };
+$('#sc_accept').onclick = () => { if (scProposed == null) return; $('#sc_code').value = scProposed; scProposed = null; $('#sc_diffbox').style.display = 'none'; $('#sc_msg').textContent = 'Using the new version. Use Copy code to take it.'; scPaint(); };
+function scShowDiff(before, after) {
+  const d = diffLines(before, after), st = diffStats(d), box = $('#sc_diff'); box.textContent = '';
+  $('#sc_stat').textContent = st.add || st.del ? `${st.add} line${st.add === 1 ? '' : 's'} added, ${st.del} removed` : 'No changes';
+  for (const x of d) { const r = document.createElement('div'); r.className = x.t === 'same' ? '' : x.t; const m = document.createElement('i'); m.textContent = x.t === 'add' ? '+' : x.t === 'del' ? '-' : ''; const t = document.createElement('span'); t.textContent = x.text || ' '; r.append(m, t); box.append(r); }
+  $('#sc_diffbox').style.display = ''; $('#sc_accept').disabled = !(st.add || st.del);
+}
+$('#sc_go').onclick = async () => {
+  const code = $('#sc_code').value, ask = $('#sc_ask').value.trim(), msg = $('#sc_msg'), btn = $('#sc_go');
+  $('#sc_diffbox').style.display = 'none'; scProposed = null;      // never leave an old suggestion on screen
+  if (!code.trim()) return msg.textContent = 'Paste a script first.';
+  if (!ask) return msg.textContent = 'Say what should change.';
+  const model = sel.value; if (!model) return msg.textContent = 'Pick a model at the top first.';
+  if (/^(web|cpu):/.test(model)) return msg.textContent = 'The editor needs Agent Max or a model on your PC. Pick one at the top.';
+  if (needLogin('use')) return;
+  btn.disabled = true; btn.textContent = 'Editing...'; msg.textContent = 'Asking the model. Your script is not changed until you accept.'; $('#sc_diffbox').style.display = 'none';
+  const prompt = editPrompt({ script: code, instruction: ask, lang: scLang() });
+  let out = '';
+  try {
+    if (model === CLOUD_ID) {
+      const token = Account.token(); if (!token) return needLogin('use');
+      const r = await cloudChat([{ role: 'user', content: prompt }], 'normal', token); out = r.reply || ''; paintCloudLeft(r);
+    } else out = await pcOneShot(model, prompt);
+    const next = extractScript(out.replace(/<think>[\s\S]*?(<\/think>|$)/g, ''));
+    if (!next) throw new Error('The model sent back nothing usable.');
+    scProposed = next; scShowDiff(code, next); msg.textContent = 'Review the changes below. Nothing is applied until you press "Use the new version".';
+  } catch (e) { msg.textContent = 'Could not edit: ' + e.message; }
+  btn.disabled = false; btn.textContent = 'Edit with AI';
+};
+scPaint();
 
 // Saves a fact for the signed-in user. Returns a short status for the chat log.
 async function saveMemory(text) {
@@ -612,7 +771,7 @@ inEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && 
 
 // ----- Settings dialog & tabs -----
 function openSettings(tabName = 'usage') {
-  const tabs = ['usage', 'tools', 'account', 'remote', 'safety'];
+  const tabs = ['usage', 'tools', 'account', 'script', 'remote', 'safety'];
   if (!tabs.includes(tabName)) tabName = 'usage';
   for (const t of tabs) {
     const btn = $('#s_tab_' + t);
@@ -627,7 +786,7 @@ function openSettings(tabName = 'usage') {
   $('#dlgSettings').showModal();
 }
 
-for (const t of ['usage', 'tools', 'account', 'remote', 'safety']) {
+for (const t of ['usage', 'tools', 'account', 'script', 'remote', 'safety']) {
   const btn = $('#s_tab_' + t);
   if (btn) btn.onclick = () => openSettings(t);
 }
@@ -637,7 +796,33 @@ $('#opt').onclick = () => openSettings('tools');
 $('#acct').onclick = () => openSettings('account');
 $('#cr').onclick = () => openSettings('usage');
 
+// Tells the user, in Settings, what happens when Max runs out. Only shown on the user's own PC.
+function paintFallback() {
+  const box = $('#fbBox'), note = $('#fbNote'); if (!box || !note) return;
+  const onPc = !!server && !remoteBase();
+  box.style.display = onPc ? '' : 'none'; if (!onPc) return;
+  const m = planFallback({ err: { code: 'limit-day' }, isPc: true, models: pcModelNames(), isCloud: true });
+  note.textContent = m.use
+    ? `When Agent Max reaches its limit or cannot be reached, your own model (${m.model.replace(/^(gguf|ollama):/, '')}) answers instead. Free, no credits, and you will see a badge on those answers.`
+    : 'When Agent Max reaches its limit, your PC can answer instead. Download a model in Models to turn this on. It is automatic and free.';
+}
+// The welcome screen on the user's own PC: real facts about this machine, nothing invented.
+function paintPcWelcome() {
+  const onPc = !!server && !remoteBase(); const badge = $('#pcBadge'); if (badge) badge.style.display = onPc ? '' : 'none';
+  const box = $('#pcStatus'); if (!box) return; if (!onPc) { box.style.display = 'none'; return; }
+  const hw = server.hardware || {}, n = pcModelNames().filter(v => !/^(web|cpu|cloud):/.test(v)).length;
+  const chip = (label, value) => { const c = document.createElement('div'); c.className = 'pcchip'; const a = document.createElement('small'); a.textContent = label; const b = document.createElement('b'); b.textContent = value; c.append(a, b); return c; };
+  box.textContent = '';
+  box.append(chip('This PC', (hw.ramGB ? Math.round(hw.ramGB) + ' GB RAM' : 'Ready') + (hw.gpu ? ' \u00b7 GPU' : '')));
+  box.append(chip('Your models', n ? n + ' installed' : 'None yet'));
+  box.append(chip('Tools', 'Free'));
+  const h1 = document.querySelector('#hero h1'), p = document.querySelector('#hero p');
+  if (h1) h1.textContent = 'Your AI, running on your own PC';
+  if (p) p.textContent = 'Private and free. Tools, web search and GitHub run right here, and if Agent Max runs out your own model takes over.';
+  box.style.display = '';
+}
 function paintUsage() {
+  paintFallback(); paintPcWelcome();
   let uData = null;
   try { uData = JSON.parse(localStorage.getItem('pholama.maxUsage') || 'null'); } catch {}
   const textEl = $('#u_cloud_text');
@@ -929,23 +1114,41 @@ function cmdAsk(msg, a) {
 }
 
 // ----- Edit log: every command the AI proposed, what you decided, and how it ended -----
-const LOGWORD = { proposed: 'Waiting for you', ok: 'Done', failed: 'Failed', stopped: 'Stopped', denied: 'Denied', refused: 'Blocked for safety', expired: 'Expired', granted: 'Bonus added', 'already-granted': 'Bonus already added', error: 'Error' };
+let elFilter = 'all', elEntries = [];
+function elPaint() {
+  const box = $('#editLog'), fil = $('#elFilters'), sum = $('#elSummary'); if (!box) return;
+  const all = collapse(elEntries), counts = summarise(all);
+  sum.textContent = summaryText(counts);
+  fil.textContent = '';
+  for (const [k, label] of FILTERS) {
+    const b = document.createElement('button'); b.className = 'elf' + (k === elFilter ? ' on' : ''); b.setAttribute('role', 'tab'); b.setAttribute('aria-selected', k === elFilter ? 'true' : 'false');
+    b.textContent = label + (counts[k] ? ' ' + counts[k] : ''); b.onclick = () => { elFilter = k; elPaint(); }; fil.append(b);
+  }
+  box.textContent = '';
+  if (!all.length) { const e = document.createElement('div'); e.className = 'elempty'; e.textContent = 'Nothing yet. When the AI suggests a command on your PC, it shows up here with what you decided and how it ended.'; box.append(e); return; }
+  const shown = applyFilter(all, elFilter);
+  if (!shown.length) { const e = document.createElement('div'); e.className = 'elempty'; e.textContent = 'Nothing in this filter.'; box.append(e); return; }
+  for (const g of groupByDay(shown)) {
+    const h = document.createElement('div'); h.className = 'elday'; h.textContent = dayTitle(g.key); box.append(h);
+    for (const e of g.items) {
+      const st = logInfo(e.status), det = document.createElement('details'); det.className = 'elrow tone-' + st.tone;
+      const sm = document.createElement('summary');
+      const chip = document.createElement('span'); chip.className = 'elchip'; chip.textContent = st.word + (e.kind === 'bonus' ? ' +' + e.credits : '');
+      const what = document.createElement('span'); what.className = 'elwhat'; what.textContent = e.cmd ? e.cmd.replace(/\s+/g, ' ').slice(0, 120) : (e.kind === 'bonus' ? 'Login bonus' : 'Event');
+      const tm = document.createElement('span'); tm.className = 'eltime'; tm.textContent = fmtTime(e.t);
+      sm.append(chip, what, tm); det.append(sm);
+      const body = document.createElement('div'); body.className = 'elbody';
+      if (e.cmd) { const c = document.createElement('code'); c.textContent = e.cmd.slice(0, 600); body.append(c); }
+      for (const [k, v] of detailRows(e)) { const r = document.createElement('div'); r.className = 'elkv'; const kk = document.createElement('span'); kk.textContent = k; const vv = document.createElement('span'); vv.textContent = v; r.append(kk, vv); body.append(r); }
+      det.append(body); box.append(det);
+    }
+  }
+}
 async function paintEditLog() {
   const box = $('#editLog'); if (!box) return;
-  if (!server || remoteBase()) { box.textContent = 'The edit log lives on the PC. Open Pholama on the PC to see it.'; return; }
-  let list = []; try { list = (await (await api('api/editlog?n=60')).json()).entries || []; } catch {}
-  box.textContent = '';
-  if (!list.length) { box.textContent = 'Nothing yet. Commands the AI proposes will be listed here.'; return; }
-  for (const e of list) {
-    if (e.kind === 'command' && e.status === 'proposed' && list.some(x => x.id === e.id && x.status !== 'proposed')) continue;   // show only the final outcome of each command
-    const d = document.createElement('div'); d.className = 'row logrow';
-    const sp = document.createElement('div'); sp.className = 'sp';
-    const b = document.createElement('b'); b.textContent = (LOGWORD[e.status] || e.status) + (e.kind === 'bonus' ? ' (+' + e.credits + ')' : '');
-    const sm = document.createElement('small'); sm.textContent = new Date(e.t).toLocaleString() + (e.ms != null ? ' · ' + (e.ms / 1000).toFixed(1) + 's' : '') + (e.reason ? ' · ' + e.reason : '');
-    sp.append(b, sm);
-    if (e.cmd) { const c = document.createElement('code'); c.textContent = e.cmd.slice(0, 200); sp.append(c); }
-    d.append(sp); box.append(d);
-  }
+  if (!server || remoteBase()) { box.textContent = 'The edit log lives on the PC. Open Pholama on the PC to see it.'; $('#elFilters').textContent = ''; $('#elSummary').textContent = ''; return; }
+  try { elEntries = (await (await api('api/editlog?n=200')).json()).entries || []; } catch { elEntries = []; }
+  elPaint();
 }
 $('#logRefresh').onclick = paintEditLog;
 $('#logClear').onclick = async () => { if (!confirm('Clear the edit log? This cannot be undone.')) return; try { await api('api/editlog', { method: 'DELETE' }); } catch {} paintEditLog(); };

@@ -25,11 +25,36 @@ function niceError(j, fallback) {
   return m;
 }
 
+// ----- Discord sign-in (Supabase OAuth, implicit flow: tokens come back in the URL #hash) -----
+// Discord is free. Its account must have a verified email, which is what stops people farming accounts.
+// Builds the address that sends the person to Discord. `returnTo` must be allow-listed in Supabase.
+export function oauthUrl(supabaseUrl, returnTo) {
+  return String(supabaseUrl).replace(/\/+$/, '') + '/auth/v1/authorize?provider=discord&prompt=consent&redirect_to=' + encodeURIComponent(returnTo);
+}
+// Where to come back to: this exact page, without any old query or hash.
+export function returnAddress(loc) { return loc.origin + loc.pathname; }
+// Reads a sign-in result out of the address hash. Returns null when the hash holds no sign-in.
+export function parseAuthHash(hash) {
+  const h = String(hash || '').replace(/^#/, ''); if (!h) return null;
+  const p = new URLSearchParams(h);
+  if (p.get('error') || p.get('error_description')) return { error: (p.get('error_description') || p.get('error')).replace(/\+/g, ' ') };
+  const access = p.get('access_token'); if (!access) return null;
+  const exp = +p.get('expires_at') || (Math.floor(Date.now() / 1000) + (+p.get('expires_in') || 3600));
+  return { access_token: access, refresh_token: p.get('refresh_token') || '', expires_at: exp, token_type: p.get('token_type') || 'bearer' };
+}
+// A display name taken from the Discord profile; never the email address.
+export function oauthName(user) {
+  const m = (user && user.user_metadata) || {};
+  const n = cleanName(m.custom_claims && m.custom_claims.global_name || m.full_name || m.name || m.preferred_username || '');
+  return n || 'Friend';
+}
+
 export const Account = {
   configured: () => !!(C().SUPABASE_URL && C().SUPABASE_ANON_KEY),
   user: () => (session && session.user) || null,
   token: () => (session && session.access_token) || null,   // sent to the cloud model so it knows who is asking
-  name: () => (session && session.user && session.user.user_metadata && session.user.user_metadata.name) || '',
+  name: () => { const u = session && session.user; if (!u) return ''; const m = u.user_metadata || {}; return m.name || (u.app_metadata && u.app_metadata.provider === 'discord' ? oauthName(u) : (m.full_name || '')); },
+  isDiscord: () => !!(session && session.user && session.user.app_metadata && session.user.app_metadata.provider === 'discord'),
 
   async load() {
     try { session = JSON.parse(localStorage.getItem(KEY) || 'null'); } catch { session = null; }
@@ -58,6 +83,19 @@ export const Account = {
     const j = await r.json();
     if (!r.ok) throw new Error(niceError(j, 'Could not log in'));
     save(j); return this.user();
+  },
+  // Sends the person to Discord. They come back to this same page with a sign-in in the address hash.
+  startLogin() { location.href = oauthUrl(base(), returnAddress(location)); },
+  // Call on page load. If the address holds a Discord result, verify it with Supabase, save the session, and clean the address bar.
+  async finishLogin() {
+    const r = parseAuthHash(location.hash); if (!r) return null;
+    try { history.replaceState(null, '', location.pathname + location.search); } catch {}   // tokens must not stay in the address bar / history
+    if (r.error) throw new Error(/access_denied|denied|cancel/i.test(r.error) ? 'Discord sign-in was cancelled.' : 'Discord sign-in failed: ' + r.error);
+    const who = await fetch(base() + '/auth/v1/user', { headers: hdr(r.access_token) });   // never trust a token we have not verified
+    const user = await who.json().catch(() => null);
+    if (!who.ok || !user || !user.id) throw new Error('Discord sign-in could not be verified. Try again.');
+    if (!user.email || !(user.email_confirmed_at || user.confirmed_at)) throw new Error('That Discord account has no verified email. Verify it in Discord first, then try again.');
+    save({ ...r, user }); return this.user();
   },
   logout() { save(null); },
 
