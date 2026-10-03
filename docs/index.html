@@ -21,13 +21,29 @@ dialog::backdrop{background:#000a}
 .row{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #22262f}
 .row small{color:#8a90a0;display:block}.row .sp{min-width:0}
 .bar{height:5px;background:#22262f;border-radius:3px;margin-top:5px;overflow:hidden}.bar i{display:block;height:100%;background:#5b7cff;width:0}
-.tabs{display:flex;gap:6px;margin-bottom:8px}.tabs button.on{background:#5b7cff;border-color:#5b7cff}
+.pill{font-size:12px;padding:4px 9px;border-radius:999px;background:#1a1d25;border:1px solid #2a2f3a;white-space:nowrap}.pill.low{border-color:#d9a441;color:#d9a441}.pill.zero{border-color:#e5584f;color:#e5584f}
+.tool{max-width:760px;margin:0 auto 10px;padding:7px 11px;border-left:3px solid #5b7cff;background:#141720;border-radius:8px;font-size:13px;color:#aab1c3;white-space:pre-wrap;word-break:break-word}
+.tool b{color:#e6e8ee}.sw{display:flex;align-items:center;gap:8px;padding:7px 0}.sw input{width:18px;height:18px}
+.sw span{flex:1}.sw small{color:#8a90a0;display:block}input[type=text]{width:100%;font:inherit;color:inherit;background:#1a1d25;border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px;margin:4px 0}
+h4{margin:14px 0 4px}.tabs{display:flex;gap:6px;margin-bottom:8px}.tabs button.on{background:#5b7cff;border-color:#5b7cff}
 </style></head><body>
-<header><b>Pholama</b><span class="sp"></span>
-<select id="model"></select><button id="mgr">Models</button></header>
+<header><b>Pholama</b><span class="sp"></span><span class="pill" id="cr" title="Daily credits"></span>
+<select id="model"></select><button id="mgr">Models</button><button id="opt" title="Tools and credits">Tools</button></header>
 <div id="chat"></div>
 <footer><textarea id="in" rows="1" placeholder="Message..."></textarea><button class="p" id="send">Send</button></footer>
 <dialog id="dlg"><div class="tabs"><button id="tBrowser">In this browser</button><button id="tLocal">On this PC</button></div>
 <div id="hw" class="sys"></div><div id="list"></div><p style="text-align:right"><button id="close">Close</button></p></dialog>
+<dialog id="dlg2"><h3 style="margin:0 0 6px">Tools and credits</h3>
+<div id="t_off" class="sys" style="display:none">Tools need the Pholama PC host. Phone-only browser mode is plain chat.</div>
+<div id="t_body"><div id="t_cr" class="sys"></div>
+<label class="sw"><input type="checkbox" id="p_search"><span>Live web search<small>Search and read pages. 20 credits per search, 10 per page.</small></span></label>
+<label class="sw"><input type="checkbox" id="p_tools"><span>Tools<small>Calculator and clock. 1 credit each.</small></span></label>
+<label class="sw"><input type="checkbox" id="p_mcp"><span>MCP tools<small>Tools from MCP servers you add. 15 credits per call.</small></span></label>
+<label class="sw"><input type="checkbox" id="p_thinking"><span>Thinking<small>Reason step by step before answering. 25 credits per message.</small></span></label>
+<h4>MCP servers</h4><div id="mcpList"></div>
+<input type="text" id="mName" placeholder="Name (e.g. files)"><input type="text" id="mUrl" placeholder="https://host/mcp (HTTP MCP server)"><input type="text" id="mAuth" placeholder="Authorization header (optional, e.g. Bearer abc)">
+<button id="mAdd">Add server</button> <span id="mMsg" class="sys"></span>
+<h4>Cloud models</h4><div class="sys" style="text-align:left">Cloud models are coming soon. Everything runs locally for now.</div></div>
+<p style="text-align:right"><button id="close2">Close</button></p></dialog>
 <script src="app.js" type="module"></script>
 </body></html>

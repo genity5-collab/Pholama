@@ -4,6 +4,7 @@
 // Serves the web UI and an Ollama-compatible API on http://localhost:11435
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path');
 const https = require('https'), { spawn, execSync } = require('child_process');
+const agent = require('./agent');
 
 const PORT = +process.env.PORT || 11435;
 const HOST = process.env.HOST || '127.0.0.1'; // set HOST=0.0.0.0 to chat from your phone on same WiFi
@@ -118,34 +119,83 @@ const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'applic
 const body = (req) => new Promise(r => { let d = ''; req.on('data', c => d += c); req.on('end', () => { try { r(JSON.parse(d || '{}')); } catch { r({}); } }); });
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
-// Streams a chat to whichever backend serves `model`. Emits Ollama-style NDJSON.
+// Streams ONE model turn from whichever backend serves `model`, calling onToken(text). Returns the full text.
+async function streamTurn(model, messages, options, onToken, signal) {
+  if (model.startsWith('ollama:')) {
+    const r = await fetch(OLLAMA + '/api/chat', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model.slice(7), messages, options, stream: true }) });
+    let buf = '', all = '';
+    for await (const c of r.body) {
+      buf += Buffer.from(c).toString('utf8'); let i;
+      while ((i = buf.indexOf('\n')) >= 0) { const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!l) continue;
+        try { const j = JSON.parse(l); const t = j.message && j.message.content; if (t) { all += t; onToken(t); } } catch {} }
+    }
+    return all;
+  }
+  const m = CATALOG.find(x => x.id === model.replace(/^gguf:/, ''));
+  if (!m) throw new Error('Unknown model ' + model);
+  if (!fs.existsSync(path.join(MODELS_DIR, m.file))) throw new Error('Model not downloaded yet');
+  await startLlama(m.file);
+  const r = await fetch(`http://127.0.0.1:${LLAMA_PORT}/v1/chat/completions`, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ messages, stream: true, temperature: (options || {}).temperature ?? 0.7 }) });
+  let buf = '', all = '';
+  for await (const c of r.body) {
+    buf += Buffer.from(c).toString('utf8'); let i;
+    while ((i = buf.indexOf('\n')) >= 0) {
+      const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
+      if (!l.startsWith('data:')) continue; const d = l.slice(5).trim(); if (d === '[DONE]') continue;
+      try { const t = JSON.parse(d).choices[0].delta.content; if (t) { all += t; onToken(t); } } catch {}
+    }
+  }
+  return all;
+}
+
+// Chat endpoint. Plain Ollama-style NDJSON. Extra event types: {tool:{...}} / {status:"..."} / {credits:{...}}.
 async function chat(req, res, b) {
   const model = b.model || '';
   res.writeHead(200, { 'Content-Type': 'application/x-ndjson', 'Access-Control-Allow-Origin': '*', 'Cache-Control': 'no-cache' });
   const line = (o) => res.write(JSON.stringify(o) + '\n');
+  const ac = new AbortController(); res.on('close', () => ac.abort());
   try {
-    if (model.startsWith('ollama:')) {
-      const r = await fetch(OLLAMA + '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ ...b, model: model.slice(7), stream: true }) });
-      for await (const c of r.body) res.write(c);
-      return res.end();
-    }
-    const m = CATALOG.find(x => x.id === model.replace(/^gguf:/, ''));
-    if (!m) throw new Error('Unknown model ' + model);
-    if (!fs.existsSync(path.join(MODELS_DIR, m.file))) throw new Error('Model not downloaded yet');
-    await startLlama(m.file);
-    const ac = new AbortController(); res.on('close', () => ac.abort());
-    const r = await fetch(`http://127.0.0.1:${LLAMA_PORT}/v1/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: b.messages, stream: true, temperature: (b.options || {}).temperature ?? 0.7 }) });
-    let buf = '';
-    for await (const c of r.body) {
-      buf += Buffer.from(c).toString('utf8'); let i;
-      while ((i = buf.indexOf('\n')) >= 0) {
-        const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1);
-        if (!l.startsWith('data:')) continue; const d = l.slice(5).trim();
-        if (d === '[DONE]') { line({ model, message: { role: 'assistant', content: '' }, done: true }); continue; }
-        try { const t = JSON.parse(d).choices[0].delta.content; if (t) line({ model, message: { role: 'assistant', content: t }, done: false }); } catch {}
+    const allow = b.agent ? agent.allowed() : { search: false, tools: false, mcp: false, thinking: false };
+    if (b.agent && !allow.credits) line({ status: 'Daily credits used up: search, tools, MCP and thinking are off. Plain local chat still works.' });
+    const { tools } = await agent.buildTools(allow);
+    const thinking = allow.thinking && agent.spend(agent.COST.thinking);
+    const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking) }, ...(b.messages || []).filter(m => m.role !== 'system')];
+    // Host-side routing: obvious intents run their tool before the model answers (weak models skip tool calls).
+    if (tools.length) {
+      const lastUser = [...messages].reverse().find(m => m.role === 'user');
+      const r0 = lastUser && agent.routeIntent(lastUser.content, tools);
+      if (r0) {
+        line({ status: 'Using ' + r0.name + '...' });
+        let result; try { result = String(await agent.runTool(tools, r0.name, r0.args)); } catch (e) { result = 'Tool error: ' + e.message; }
+        line({ tool: { name: r0.name, args: r0.args, result: result.slice(0, 400) } });
+        messages.push({ role: 'assistant', content: `<tool>${JSON.stringify(r0)}</tool>` }, { role: 'user', content: `Tool result for ${r0.name}:\n${result}\n\nNow answer the user's question using this result. Be brief.` });
       }
     }
+    for (let round = 0; round < 5; round++) {
+      // With tools on, buffer the start of the reply: if it begins with "<tool" it is a tool call (hide it),
+      // otherwise flush what we have and stream the rest live.
+      let acc = '', mode = tools.length ? 'undecided' : 'stream', sent = 0;
+      const flush = () => { if (acc.length > sent) { line({ model, message: { role: 'assistant', content: acc.slice(sent) }, done: false }); sent = acc.length; } };
+      const text = await streamTurn(model, messages, b.options, t => {
+        acc += t;
+        if (mode === 'undecided') {
+          const head = acc.trimStart();
+          if (head.startsWith('<tool')) mode = 'tool';
+          else if (head.length >= 5 || !'<tool'.startsWith(head)) mode = 'stream';
+        }
+        if (mode === 'stream') flush();
+      }, ac.signal);
+      const shown = sent;
+      const call = tools.length ? agent.parseTool(text) : null;
+      if (!call) { if (shown < text.length) line({ model, message: { role: 'assistant', content: text.slice(shown) }, done: false }); break; }
+      line({ status: 'Using ' + call.name + '...' });
+      let result; try { result = String(await agent.runTool(tools, call.name, call.args)); } catch (e) { result = 'Tool error: ' + e.message; }
+      line({ tool: { name: call.name, args: call.args, result: result.slice(0, 400) } });
+      messages.push({ role: 'assistant', content: text }, { role: 'user', content: `Tool result for ${call.name}:\n${result}\n\nNow answer the user using this result. Do not call another tool unless you must.` });
+    }
+    line({ credits: agent.credits() });
+    line({ model, message: { role: 'assistant', content: '' }, done: true });
   } catch (e) { line({ error: e.message, done: true }); }
   res.end();
 }
@@ -154,6 +204,11 @@ const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname;
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*' }); return res.end(); }
   try {
+    if (p === '/api/credits') return json(res, 200, { ...agent.credits(), allowed: agent.allowed() });
+    if (p === '/api/prefs' && req.method === 'POST') return json(res, 200, agent.setPrefs(await body(req)));
+    if (p === '/api/mcp' && req.method === 'GET') return json(res, 200, { servers: agent.state().mcp.map(x => ({ name: x.name, url: x.url })), tools: await agent.listMcp() });
+    if (p === '/api/mcp' && req.method === 'POST') return json(res, 200, { servers: agent.addMcp(await body(req)) });
+    if (p === '/api/mcp' && req.method === 'DELETE') { agent.removeMcp(u.searchParams.get('name')); return json(res, 200, { ok: true }); }
     if (p === '/api/hardware') { const h = hardware(); return json(res, 200, { hardware: h, ollama: await ollamaUp(), llamaServer: !!findLlamaServer(), models: recommend(h) }); }
     if (p === '/api/tags') { // Ollama-compatible model list (ours + Ollama's)
       const list = CATALOG.filter(m => fs.existsSync(path.join(MODELS_DIR, m.file))).map(m => ({ name: 'gguf:' + m.id, model: 'gguf:' + m.id, size: m.sizeGB * 2 ** 30 }));

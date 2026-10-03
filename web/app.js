@@ -7,6 +7,13 @@ let hasGPU = false;
 async function probeGPU() { try { return !!(navigator.gpu && await navigator.gpu.requestAdapter()); } catch { return false; } }
 let catalog = null, server = null, tab = 'browser', engine = null, engineModel = null, history = [], busy = false;
 
+function showAnswer(el, raw) {
+  const m = /<think>([\s\S]*?)(<\/think>|$)/.exec(raw);
+  if (!m) { el.textContent = raw; return; }
+  const answer = raw.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
+  el.textContent = ''; const t = document.createElement('div'); t.style.cssText = 'color:#8a90a0;font-size:13px;border-left:3px solid #2a2f3a;padding-left:8px;margin-bottom:6px;max-height:90px;overflow:auto';
+  t.textContent = 'Thinking: ' + m[1].trim(); el.appendChild(t); el.appendChild(document.createTextNode(answer));
+}
 const add = (cls, txt) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; chatEl.appendChild(d); chatEl.scrollTop = 1e9; return d; };
 const saved = () => JSON.parse(localStorage.getItem('pholama.ready') || '[]');
 const markReady = id => { const s = new Set(saved()); s.add(id); localStorage.setItem('pholama.ready', JSON.stringify([...s])); };
@@ -19,7 +26,7 @@ async function init() {
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) navigator.serviceWorker.register('sw.js').catch(() => {});
   refreshSelect();
   add('sys', server ? 'Connected to your PC. Pick a model, or open Models to download one.' : 'Running in browser mode. Open Models to download a small model to this device.');
-  if (!sel.options.length) dlg.showModal(), render();
+  if (![...sel.options].some(o => !o.disabled)) dlg.showModal(), render();
 }
 
 async function refreshSelect() {
@@ -28,6 +35,7 @@ async function refreshSelect() {
     const m = catalog.browser.find(x => x.id === id); if (m) sel.add(new Option('📱 ' + m.name, 'web:' + id));
     const c = (catalog.cpu || []).find(x => 'cpu:' + x.id === id); if (c) sel.add(new Option('📱 ' + c.name, id));
   }
+  const cl = new Option('☁ Cloud models (coming soon)', ''); cl.disabled = true; sel.add(cl);
   if (server) try {
     const t = await (await fetch('api/tags')).json();
     for (const m of t.models) sel.add(new Option('💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
@@ -62,8 +70,59 @@ async function cpuChat(messages, onToken) {
   await cpuPipe(messages, { max_new_tokens: 512, do_sample: true, temperature: 0.7, streamer });
 }
 
+
+// ----- credits, tools, MCP (PC host only) -----
+let cred = null;
+async function refreshCredits() {
+  if (!server) { $('#cr').style.display = 'none'; $('#opt').style.display = 'none'; return; }
+  try { cred = await (await fetch('api/credits')).json(); } catch { return; }
+  const c = $('#cr'); c.style.display = ''; c.textContent = cred.left + ' / ' + cred.daily + ' credits';
+  c.className = 'pill' + (cred.left === 0 ? ' zero' : cred.left < cred.daily * 0.2 ? ' low' : '');
+  c.title = cred.left === 0 ? 'Out of credits: search, tools, MCP and thinking are off until tomorrow' : 'Resets daily';
+}
+function addTool(t) {
+  const d = add('tool', ''); d.innerHTML = '<b></b> <span></span><div></div>';
+  d.querySelector('b').textContent = t.name; d.querySelector('span').textContent = JSON.stringify(t.args || {});
+  d.querySelector('div').textContent = String(t.result || '').slice(0, 220);
+}
+async function openOpts() {
+  const off = !server; $('#t_off').style.display = off ? '' : 'none'; $('#t_body').style.display = off ? 'none' : '';
+  if (!off) {
+    await refreshCredits();
+    $('#t_cr').textContent = cred.left === 0 ? 'Out of credits. Search, tools, MCP and thinking are off until tomorrow. Plain chat still works.' : `${cred.left} of ${cred.daily} credits left today. Resets at midnight.`;
+    const pr = cred.allowed.prefs; for (const k of ['search', 'tools', 'mcp', 'thinking']) $('#p_' + k).checked = !!pr[k];
+    await listMcpUI();
+  }
+  $('#dlg2').showModal();
+}
+async function listMcpUI() {
+  const box = $('#mcpList'); box.innerHTML = '';
+  let r; try { r = await (await fetch('api/mcp')).json(); } catch { return; }
+  if (!r.servers.length) { box.innerHTML = '<div class="sys" style="text-align:left">No MCP servers yet.</div>'; return; }
+  for (const sv of r.servers) {
+    const tools = r.tools.filter(t => t.server === sv.name), err = tools.find(t => t.error);
+    const d = document.createElement('div'); d.className = 'row';
+    d.innerHTML = '<div class="sp"><b></b><small></small></div><button>Remove</button>';
+    d.querySelector('b').textContent = sv.name;
+    d.querySelector('small').textContent = err ? 'Error: ' + err.error : tools.length + ' tools: ' + tools.map(t => t.name).join(', ').slice(0, 120);
+    d.querySelector('button').onclick = async () => { await fetch('api/mcp?name=' + encodeURIComponent(sv.name), { method: 'DELETE' }); listMcpUI(); };
+    box.appendChild(d);
+  }
+}
+for (const k of ['search', 'tools', 'mcp', 'thinking']) $('#p_' + k).onchange = e => fetch('api/prefs', { method: 'POST', body: JSON.stringify({ [k]: e.target.checked }) });
+$('#mAdd').onclick = async () => {
+  const name = $('#mName').value.trim(), url = $('#mUrl').value.trim(), auth = $('#mAuth').value.trim();
+  $('#mMsg').textContent = '';
+  try {
+    const r = await fetch('api/mcp', { method: 'POST', body: JSON.stringify({ name, url, headers: auth ? { Authorization: auth } : {} }) });
+    if (!r.ok) throw new Error((await r.json()).error || 'failed');
+    $('#mName').value = $('#mUrl').value = $('#mAuth').value = ''; await listMcpUI();
+  } catch (e) { $('#mMsg').textContent = e.message; }
+};
+$('#opt').onclick = openOpts; $('#close2').onclick = () => $('#dlg2').close();
+
 async function send() {
-  const text = inEl.value.trim(); if (!text || busy || !sel.value) return;
+  const text = inEl.value.trim(); if (!text || busy || !sel.value) { if (!sel.value) add('sys', 'Pick a model first (open Models to download one).'); return; }
   busy = true; $('#send').disabled = true; inEl.value = '';
   history.push({ role: 'user', content: text }); add('m u', text);
   const out = add('m a', '...'); let acc = '';
@@ -75,7 +134,7 @@ async function send() {
       const s = await engine.chat.completions.create({ messages: history, stream: true });
       for await (const c of s) { acc += c.choices[0]?.delta?.content || ''; out.textContent = acc; chatEl.scrollTop = 1e9; }
     } else {
-      const r = await fetch('api/chat', { method: 'POST', body: JSON.stringify({ model: sel.value, messages: history }) });
+      const r = await fetch('api/chat', { method: 'POST', body: JSON.stringify({ model: sel.value, messages: history, agent: true }) });
       const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
       for (;;) {
         const { done, value } = await rd.read(); if (done) break;
@@ -83,11 +142,14 @@ async function send() {
         while ((i = buf.indexOf('\n')) >= 0) {
           const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!l) continue;
           const j = JSON.parse(l); if (j.error) throw new Error(j.error);
-          acc += j.message?.content || ''; out.textContent = acc; chatEl.scrollTop = 1e9;
+          if (j.status) { out.textContent = acc || j.status; continue; }
+          if (j.tool) { addTool(j.tool); chatEl.appendChild(out); continue; }
+          if (j.credits) { refreshCredits(); continue; }
+          acc += j.message?.content || ''; showAnswer(out, acc); chatEl.scrollTop = 1e9;
         }
       }
     }
-    history.push({ role: 'assistant', content: acc });
+    history.push({ role: 'assistant', content: acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim() });
   } catch (e) { out.textContent = 'Error: ' + e.message; history.pop(); }
   busy = false; $('#send').disabled = false; inEl.focus();
 }
@@ -161,4 +223,4 @@ $('#tBrowser').onclick = () => { tab = 'browser'; render(); };
 $('#tLocal').onclick = () => { tab = 'local'; render(); };
 $('#send').onclick = send;
 inEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !/Mobi|Android/i.test(navigator.userAgent)) { e.preventDefault(); send(); } });
-init();
+init().then(refreshCredits);
