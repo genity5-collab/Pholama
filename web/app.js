@@ -3,7 +3,7 @@
 //  "local":   talks to the Pholama server on your PC (llama.cpp / Ollama) using PC RAM/GPU.
 import { Account, cleanName } from './account.js';
 import { llamaLoader, LLAMA_CSS } from './loader.js';
-import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME } from './cloud.js';
+import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME, setLocalToolAI } from './cloud.js';
 import { planFallback } from './fallback.js';
 import { splitThinking, thinkLabel, countWords } from './thinking.js';
 import { splitBlocks, LANGS, cleanLang, extFor, safeFileName, diffLines, diffStats, extractScript, editPrompt, runCommand } from './codeblocks.js';
@@ -160,7 +160,7 @@ const markReady = id => { const s = new Set(saved()); s.add(id); localStorage.se
 async function init() {
   hasGPU = await probeGPU();
   catalog = await (await fetch('models.json')).json();
-  try { const r = await api('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json(); } catch {}
+  try { const r = await api('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) { server = await r.json(); setLocalToolAI(server.toolAI === true); } } catch { setLocalToolAI(false); }
   tab = server ? 'local' : 'browser';
   if (server) { const tb = $('#tBrowser'); if (tb) tb.style.display = 'none'; const tl = $('#tLocal'); if (tl) tl.textContent = 'Models on this PC'; }   // PC build: phone models are never offered
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) navigator.serviceWorker.register('sw.js').catch(() => {});
@@ -681,6 +681,7 @@ function renderPC() {
   hint.innerHTML = 'Terminal: <code>pholama pull NAME</code> downloads, <code>pholama chat NAME</code> chats, <code>pholama serve NAME</code> shares it with your apps on this PC, <code>pholama rm NAME</code> removes it. Or use the buttons here.';
   listEl.appendChild(hint);
   const shown = models.filter(m => (pcCat === 'all' || (m.categories || []).includes(pcCat)) && (pcFam === 'all' || m.family === pcFam) && (!pcInstalled || m.downloaded || m.partial));
+  shown.sort((a, b) => (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0));   // the recommended model always comes first
   if (!shown.length) { const e = document.createElement('div'); e.className = 'sys'; e.textContent = 'No models match these filters.'; listEl.appendChild(e); }
   for (const m of shown) {
     const bytes = m.bytes || m.sizeGB * 1073741824;
@@ -688,6 +689,7 @@ function renderPC() {
     const catTxt = (m.categories || []).map(c => (PC_CATS.find(x => x[0] === c) || [0, c])[1]).join(' · ');
     const base = `${fmtMB(bytes)} · needs about ${m.minRamGB} GB RAM · ${m.fits ? 'fits your PC' : 'may be too big for your PC'}${catTxt ? ' · ' + catTxt : ''}`;
     r.sub.textContent = base;
+    if (m.recommended) { const badge = document.createElement('span'); badge.className = 'chip rec'; badge.textContent = 'Recommended'; badge.title = 'Smallest model that runs tools well'; r.sub.parentNode.insertBefore(badge, r.sub); }
     if (m.blurb) { const bl = document.createElement('small'); bl.textContent = m.blurb; r.sub.parentNode.insertBefore(bl, r.bar); }
     const cmd = document.createElement('div'); cmd.className = 'cmdrow';
     const code = document.createElement('code'); code.textContent = m.command || ('pholama pull ' + m.id);
@@ -728,6 +730,7 @@ async function refreshModels() {
     if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json();
     else server = null;
   } catch { server = null; }
+  setLocalToolAI(!!server && server.toolAI === true);   // a new download or a delete changes the Agent Max daily allowance
   await refreshSelect(); render();
 }
 function row(title, sub, btn) {

@@ -1,10 +1,10 @@
-// Agent Max: Pholama's cloud assistant. Needs a Pholama login. 10 messages/day, 30/month per account.
+// Agent Max: Pholama's cloud assistant. Needs a Pholama login. 10 messages/day (1/day once the PC has a local AI that runs tools), 30/month per account.
 // Can use tools: calculator, clock, site_help (how Pholama works). GENERATED from tools/agentMax.template.ts by tools/build_agent_max.py
 // POST { messages:[{role,content}], effort:'normal'|'long'|'max' }  Authorization: Bearer <Pholama login token>
 // -> { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }  or { error, code }
 
 const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
-const DAY_CAP = 10, MONTH_CAP = 30;
+const DAY_CAP_NO_LOCAL = 10, DAY_CAP_WITH_LOCAL = 1, MONTH_CAP = 30;   // a capable local AI is free and unlimited, so the cloud one is only a backup
 const ROUNDS: Record<string, number> = { normal: 3, long: 4, max: 5 };   // model calls per message; one message always counts as 1
 const KNOWLEDGE: { id: string; keys: string; text: string; remote?: boolean }[] = /*KNOWLEDGE*/[];
 const KNOWLEDGE_URL = 'https://genity5-collab.github.io/Pholama/max-knowledge.json';
@@ -140,6 +140,9 @@ Deno.serve(async (req) => {
     const last = msgs[msgs.length - 1];
     if (!last || last.role !== 'user' || !last.content.trim()) return out({ error: 'Type a message first.', code: 'empty' }, 400);
 
+    // The page reports whether this PC has a local AI that can run tools. With one, the daily allowance is 1; without, 10.
+    const DAY_CAP = body.localTools === true ? DAY_CAP_WITH_LOCAL : DAY_CAP_NO_LOCAL;
+
     // 3) count ONE message (atomic in the database) before doing any work
     const sp = await rpc('pholama_max_spend', { p_user: user.id, p_day_cap: DAY_CAP, p_month_cap: MONTH_CAP });
     if (!sp.ok) return out({ error: 'Could not check your allowance. Try again.', code: 'limit-check' }, 502);
@@ -148,7 +151,7 @@ Deno.serve(async (req) => {
     if (!row.ok) {
       return out(row.reason === 'month'
         ? { error: `You used all ${MONTH_CAP} Agent Max messages this month. It restocks next month (1st, UTC). Local models stay free and unlimited.`, code: 'limit-month', ...info }
-        : { error: `You used today's ${DAY_CAP} Agent Max messages. They come back tomorrow (midnight UTC). Local models stay free.`, code: 'limit-day', ...info }, 429);
+        : { error: `You used today's ${DAY_CAP} Agent Max messages. They come back tomorrow (midnight UTC). Local models stay free.${DAY_CAP === DAY_CAP_WITH_LOCAL ? ' You have a local AI that runs tools, so your daily allowance is 1. Remove it from Models and the daily allowance goes back to 10.' : ''}`, code: 'limit-day', ...info }, 429);
     }
     charged = user.id;
 

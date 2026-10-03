@@ -213,15 +213,18 @@
   "minRamGB": 3,
   "ctx": 8192,
   "categories": [
+   "tools",
    "fast"
   ],
-  "blurb": "Strong 1.5B multilingual instruct model balancing fast speed and general capability.",
+  "blurb": "Recommended. The smallest model that runs tools well: calculator, time, web search and page reading. Only 1 GB, so it fits most PCs.",
   "license": "Apache-2.0",
   "caps": [
    "chat",
+   "tools",
    "fast"
   ],
-  "command": "pholama pull qwen2.5-1.5b"
+  "command": "pholama pull qwen2.5-1.5b",
+  "recommended": true
  },
  {
   "id": "qwen2.5-coder-1.5b",
@@ -1056,5 +1059,71 @@
   "bytes": 14333910496,
   "sizeGB": 13.35,
   "minRamGB": 19
+ },
+ {
+  "id": "tinyllama-1.1b",
+  "name": "TinyLlama 1.1B Chat",
+  "family": "TinyLlama",
+  "params": "1.1B",
+  "url": "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+  "file": "tinyllama-1.1b-chat-v1.0.Q4_K_M.gguf",
+  "bytes": 668788096,
+  "minRamGB": 2,
+  "ctx": 2048,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Very small and very fast everyday chat. Good on older PCs. Chat only, no tools.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "sizeGB": 0.62,
+  "command": "pholama pull tinyllama-1.1b"
+ },
+ {
+  "id": "qwen2-1.5b",
+  "name": "Qwen2 1.5B Instruct",
+  "family": "Qwen",
+  "params": "1.5B",
+  "url": "https://huggingface.co/Qwen/Qwen2-1.5B-Instruct-GGUF/resolve/main/qwen2-1_5b-instruct-q4_k_m.gguf",
+  "file": "qwen2-1_5b-instruct-q4_k_m.gguf",
+  "bytes": 986045824,
+  "minRamGB": 3,
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Light multilingual chat, summaries and simple code. Chat only, no tools.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "sizeGB": 0.92,
+  "command": "pholama pull qwen2-1.5b"
+ },
+ {
+  "id": "stablelm-zephyr-1.6b",
+  "name": "StableLM 2 Zephyr 1.6B",
+  "family": "StableLM",
+  "params": "1.6B",
+  "url": "https://huggingface.co/second-state/stablelm-2-zephyr-1.6b-GGUF/resolve/main/stablelm-2-zephyr-1_6b-Q4_K_M.gguf",
+  "file": "stablelm-2-zephyr-1_6b-Q4_K_M.gguf",
+  "bytes": 1031442432,
+  "minRamGB": 3,
+  "ctx": 4096,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Friendly assistant style writing in several languages. Chat only, no tools.",
+  "license": "StabilityAI Community",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "sizeGB": 0.96,
+  "command": "pholama pull stablelm-zephyr-1.6b"
  }
 ]

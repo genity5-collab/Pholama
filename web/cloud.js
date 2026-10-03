@@ -30,10 +30,12 @@ export const GATE_MESSAGE = 'Sign in with Discord to chat and download models. I
 // ---- cloud chat ----
 // Returns { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }.
 // Throws Error with .code = login | limit-day | limit-month | server | setup | network (and .info with the counts).
+export let localToolAI = false;                       // set by the page: does this PC have a local AI that can run tools?
+export function setLocalToolAI(v) { localToolAI = !!v; }
 export async function cloudChat(messages, effort, token, signal) {
   let r;
   try {
-    r = await fetch(FN, { method: 'POST', signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ messages: messages.slice(-12), effort: cleanEffort(effort) }) });
+    r = await fetch(FN, { method: 'POST', signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ messages: messages.slice(-12), effort: cleanEffort(effort), localTools: localToolAI }) });
   } catch (e) {
     if (e && e.name === 'AbortError') throw e;
     const err = new Error('Could not reach the cloud model. Check your connection.'); err.code = 'network'; throw err;

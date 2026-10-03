@@ -188,6 +188,11 @@ function routeIntent(text, tools) {
   if (se && has('web_search')) return { name: 'web_search', args: { query: se[1].replace(/[?.!]+$/, '') } };
   const rm = /^(?:please\s+)?(?:remember|memorize|don'?t forget)\s+(?:that\s+)?(?!that\b)(\S.{5,})/i.exec(t);
   if (rm && has('remember_thing')) return { name: 'remember_thing', args: { text: rm[1].replace(/[?.!]+$/, '') } };
+  // Natural questions that need fresh facts: "what are the latest news about X", "tell me the newest X news", "who won the last X".
+  const nw = /^(?:please\s+)?(?:(?:what(?:'s| is| are)|tell me|give me|show me|any)\s+)?(?:the\s+)?(?:latest|newest|recent|current|breaking)\s+(?:news|headlines|updates?)\s+(?:about|on|for|of)\s+(.{3,})/i.exec(t)
+    || /^(?:please\s+)?(?:what(?:'s| is| are)|tell me|give me|show me)\s+(?:the\s+)?(?:latest|newest|recent)\s+(.{3,}?)\s+(?:news|headlines|updates?)\b/i.exec(t)
+    || /^(?:please\s+)?who\s+(?:won|is winning)\s+(?:the\s+)?(?:last|latest|most recent|newest)\s+(.{3,})/i.exec(t);
+  if (nw && has('web_search')) return { name: 'web_search', args: { query: (/^who\s/i.test(t) ? t.replace(/^(?:please\s+)?/i, '') : 'latest news ' + nw[1]).replace(/[?.!]+$/, '') } };
   const url = /https?:\/\/\S+/.exec(t);
   if (url && has('fetch_page')) return { name: 'fetch_page', args: { url: url[0].replace(/[),.;]+$/, '') } };
   return null;

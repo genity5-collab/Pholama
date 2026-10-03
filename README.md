@@ -89,7 +89,13 @@ Model sizes by what your PC has:
 
 **A good start:** Pholama + engine + one small model is roughly **1 to 3 GB** in total. Each model you add is a separate file, so free space is the only limit. All 47 models together would be about 194 GB, so nobody needs to download them all.
 
-Models are saved in one folder, so you can delete any you stop using (`pholama rm <model>`) to get the space back. Updates only replace the 0.5 MB program, never your models.
+Models are saved in one folder, so you can delete any you stop using (`pholama rm <model>`) to get the space back.
+
+**Recommended model:** `pholama pull qwen2.5-1.5b` (about 1 GB). It is the smallest model that runs tools well.
+
+**Keeps your PC smooth:** while a local AI runs, Pholama watches the PC. If it really starts to lag (memory almost full, the PC freezing, or the CPU maxed out for a long time) it stops all local AIs and tells you why. Only local AIs are stopped. When you close Pholama, every local AI is stopped too.
+
+**Remove Pholama completely:** `pholama remove-all` deletes the app, every downloaded model, the private Node.js, the `pholama` command and the icons. It lists everything first and waits for you to type `remove`. Use `pholama remove-all --dry-run` to only see the list. Updates only replace the 0.5 MB program, never your models.
 
 To reach your PC from your phone or away from home, see "Use your PC's AI from anywhere" in [docs-md/AGENT.md](docs-md/AGENT.md).
 

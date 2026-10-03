@@ -30,7 +30,7 @@
   {
    "id": "pc",
    "keys": "pc computer host node start.bat ollama llama.cpp install wifi windows mac linux localhost 11435 api",
-   "text": "PC HOST: gives more power plus tools and web search. Needs Node.js 18+. Download Pholama, double-click start.bat (Windows) or run ./start.sh (Mac/Linux), open http://localhost:11435, tap Models > On this PC > Install (downloads llama.cpp, with CUDA on NVIDIA GPUs), then Download a model that fits your RAM. If you already use Ollama, leave it running and its models appear in the picker. To use the PC from your phone over WiFi start with HOST=0.0.0.0 and open http://<your-PC-IP>:11435 on the phone (only on a network you trust: the PC host itself has no login). (The full model list could not be loaded right now; the Models button in the app shows every model and what fits your device.)",
+   "text": "PC HOST: gives more power plus tools and web search. You do NOT need to install Node.js: the one-line installer brings its own private copy (about 30 MB, one time, nothing is installed on the PC). Run the installer from the Pholama page or README, or unzip and double-click start.bat (Windows) / run ./start.sh (Mac/Linux), then open http://localhost:11435, tap Models > On this PC > Install (downloads llama.cpp, with CUDA on NVIDIA GPUs), then Download a model that fits your RAM. RECOMMENDED TOOL MODEL: Qwen2.5 1.5B Instruct (about 1 GB, needs 3 GB RAM). (The full model list could not be loaded right now; the Models button in the app shows every model and what fits your device.)",
    "remote": true
   },
   {
@@ -46,7 +46,7 @@
   {
    "id": "agent-max",
    "keys": "agent max cloud limit daily monthly restock quota free no download integration credits",
-   "text": "AGENT MAX is Pholama's cloud assistant: nothing to download, works on any phone, needs a free account. It can use tools (calculator, clock) and knows how Pholama works. LIMITS: 10 messages per day and 30 per month per account. Each message counts as 1 (Normal, Long and Max effort all count the same). Your 10 daily messages come back every day at midnight UTC until you reach 30 in the month. After 30, Agent Max waits for the next month to restock. Any time you are out, local models stay free and unlimited. If Agent Max fails to answer you are not charged. Agent Max cannot browse the web and cannot see your files."
+   "text": "AGENT MAX is Pholama's cloud assistant: nothing to download, works on any phone, needs a free account. It can use tools (calculator, clock) and knows how Pholama works. LIMITS: 10 messages per day and 30 per month per account. Each message counts as 1 (Normal, Long and Max effort all count the same). Your 10 daily messages come back every day at midnight UTC until you reach 30 in the month. After 30, Agent Max waits for the next month to restock. Any time you are out, local models stay free and unlimited. If Agent Max fails to answer you are not charged. LOCAL AI RULE: once you install a local AI that can run tools (any PC model tagged tools, such as Qwen2.5 1.5B), your daily Agent Max allowance drops to 1 message a day (shown as used/1), because the local AI is free and unlimited. If you remove it, or have none, the daily allowance goes back to 10 (used/10). The monthly limit stays 30. Agent Max cannot browse the web and cannot see your files."
   },
   {
    "id": "problems",

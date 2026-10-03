@@ -34,5 +34,18 @@ Plus `GET /api/hardware`, `POST /api/pull {id}`, `POST /api/install-llama`.
 
 Env vars: `PORT`, `HOST`, `PHOLAMA_MODELS` (model folder), `OLLAMA_URL`, `LLAMA_SERVER_DIR`.
 
+## Keeping the PC smooth
 
+While a local AI is running, Pholama checks the PC every few seconds. It stops **all local AIs** (and nothing else) when the lag is real and lasts about 12 seconds: memory almost full, the PC freezing up, or the CPU maxed out for a long time. Short spikes while a model loads are ignored. Agent Max in the cloud is never affected.
 
+Closing Pholama (`pholama stop`, closing the window, Ctrl+C) stops every local AI as well. If Pholama was force-killed, the leftover AI is cleaned up the next time it starts.
+
+## Remove Pholama
+
+```
+pholama remove-all             # lists everything, asks you to type: remove
+pholama remove-all --dry-run   # only shows what would be deleted
+pholama rm <model>             # remove just one model
+```
+
+It removes the app folder, all models, the private Node.js, llama.cpp, the `pholama` command and the Desktop / Start Menu icons. Your browser chats and other programs are not touched.

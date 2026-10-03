@@ -11,6 +11,23 @@ const PORT = +process.env.PORT || 11435;
 const HOST = process.env.HOST || '127.0.0.1'; // set HOST=0.0.0.0 to chat from your phone on same WiFi
 const OLLAMA = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const LLAMA_PORT = 11436;
+const PIDFILE = path.join(os.homedir(), '.pholama', 'llama.pid');
+// A previous Pholama that crashed or was force-killed can leave its model running. Stop that leftover before starting anything new.
+function reapOrphan() {
+  try {
+    const pid = +fs.readFileSync(PIDFILE, 'utf8').trim(); fs.unlinkSync(PIDFILE);
+    if (!pid || pid === process.pid) return;
+    // Only kill it if that pid is STILL a llama-server. After a reboot the number may belong to an unrelated program.
+    let name = '';
+    try {
+      if (process.platform === 'linux') name = fs.readFileSync('/proc/' + pid + '/comm', 'utf8').trim();
+      else if (process.platform === 'win32') name = String(execSync('tasklist /FI "PID eq ' + pid + '" /FO CSV /NH', { encoding: 'utf8', timeout: 4000, windowsHide: true }));
+      else name = String(execSync('ps -p ' + pid + ' -o comm=', { encoding: 'utf8', timeout: 4000 }));
+    } catch { return; }   // not running, or we cannot tell: do nothing
+    if (/llama-server/i.test(name)) { process.kill(pid, 'SIGKILL'); console.log('  Stopped a leftover local AI from a previous run (pid ' + pid + ').'); }
+  } catch {}
+}
+reapOrphan();
 const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'web');
 const MODELS_DIR = process.env.PHOLAMA_MODELS || path.join(os.homedir(), '.pholama', 'models');
@@ -38,7 +55,9 @@ function recommend(h) {
 const get = (url) => new Promise((res, rej) => { http.get(url, r => { let d = ''; r.on('data', c => d += c); r.on('end', () => res({ status: r.statusCode, body: d })); }).on('error', rej); });
 async function ollamaUp() { try { return (await get(OLLAMA + '/api/tags')).status === 200; } catch { return false; } }
 
-let llama = null, llamaModel = null, served = null;
+let llama = null, llamaModel = null, served = null, llamaStartedAt = 0;
+const ollamaUsed = new Set();   // Ollama models THIS app loaded (the only ones the lag guard may unload)
+let guardNote = null;           // set when the guard stopped the local AIs, shown once in the page
 function findLlamaServer() {
   const names = process.platform === 'win32' ? ['llama-server.exe'] : ['llama-server'];
   const dirs = [process.env.LLAMA_SERVER_DIR, path.join(ROOT, 'bin'), path.join(os.homedir(), '.pholama', 'bin'), ...(process.env.PATH || '').split(path.delimiter)].filter(Boolean);
@@ -50,14 +69,30 @@ async function stopLlama(onlyFile) {
   const p = llama; llama = null; llamaModel = null; p.kill();
   await new Promise(r => { p.once('exit', r); setTimeout(r, 2500); }); // wait so Windows releases the file lock
 }
+// Stops every LOCAL model: the llama-server child and any Ollama model this app loaded. Nothing in the cloud or the browser is touched.
+async function stopAllLocal() {
+  const had = !!llama || ollamaUsed.size > 0;
+  await stopLlama();
+  for (const m of [...ollamaUsed]) {
+    try { await fetch(OLLAMA + '/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: m, keep_alive: 0 }), signal: AbortSignal.timeout(4000) }); } catch {}
+  }
+  ollamaUsed.clear(); llamaStartedAt = 0; served = null;
+  return had;
+}
+// Killing right now, without waiting (used when the process is going away and cannot await anything).
+function killLocalNow() {
+  try { if (llama) llama.kill('SIGKILL'); } catch {}
+  llama = null; llamaModel = null; try { fs.unlinkSync(PIDFILE); } catch {}
+}
 async function startLlama(file) {
   if (llama && llamaModel === file) return;
   if (llama) { llama.kill(); llama = null; await new Promise(r => setTimeout(r, 500)); }
   const bin = findLlamaServer();
   if (!bin) throw new Error('llama-server not found. Install Ollama (ollama.com) OR download llama.cpp from github.com/ggml-org/llama.cpp/releases and put llama-server in ' + path.join(os.homedir(), '.pholama', 'bin'));
   const args = ['-m', path.join(MODELS_DIR, file), '--port', String(LLAMA_PORT), '-c', '4096', '-ngl', '99'];
-  llama = spawn(bin, args, { stdio: 'inherit' }); llamaModel = file;
-  llama.on('exit', () => { llama = null; llamaModel = null; });
+  llama = spawn(bin, args, { stdio: 'inherit' }); llamaModel = file; llamaStartedAt = Date.now();
+  try { fs.mkdirSync(path.dirname(PIDFILE), { recursive: true }); fs.writeFileSync(PIDFILE, String(llama.pid)); } catch {}
+  llama.on('exit', () => { llama = null; llamaModel = null; try { fs.unlinkSync(PIDFILE); } catch {} });
   for (let i = 0; i < 120; i++) { try { if ((await get(`http://127.0.0.1:${LLAMA_PORT}/health`)).status === 200) return; } catch {} await new Promise(r => setTimeout(r, 1000)); }
   throw new Error('llama-server did not start in time');
 }
@@ -189,6 +224,7 @@ async function modelCaps(model) {
 // Streams ONE model turn from whichever backend serves `model`, calling onToken(text). Returns the full text.
 async function streamTurn(model, messages, options, onToken, signal, usage) {
   if (model.startsWith('ollama:')) {
+    ollamaUsed.add(model.slice(7)); if (!llamaStartedAt || !ollamaUsed.size) llamaStartedAt = Date.now();
     const r = await fetch(OLLAMA + '/api/chat', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model.slice(7), messages, options, stream: true }) });
     let buf = '', all = '';
     for await (const c of r.body) {
@@ -348,6 +384,17 @@ async function openaiChat(req, res, b) {
   return json(res, 200, { id, object: 'chat.completion', created, model, choices: [{ index: 0, message: { role: 'assistant', content: text }, finish_reason: 'stop' }], usage: { prompt_tokens: u.in, completion_tokens: u.out, total_tokens: u.total } });
 }
 
+// True when this PC has a local AI that can run tools: a downloaded model tagged "tools", or an Ollama model that reports the tools ability.
+async function hasToolAI() {
+  try {
+    for (const m of CATALOG) if ((m.caps || []).includes('tools') && fs.existsSync(path.join(MODELS_DIR, m.file))) return true;
+    if (await ollamaUp()) {
+      const o = JSON.parse((await get(OLLAMA + '/api/tags')).body);
+      for (const m of (o.models || []).slice(0, 25)) { const c = await modelCaps('ollama:' + m.name); if (c.tools) return true; }
+    }
+  } catch {}
+  return false;
+}
 async function listModels() {   // Ollama-compatible model list (ours + Ollama's)
   const list = CATALOG.filter(m => fs.existsSync(path.join(MODELS_DIR, m.file))).map(m => ({ name: 'gguf:' + m.id, model: 'gguf:' + m.id, size: m.sizeGB * 2 ** 30 }));
   if (await ollamaUp()) { try { const o = JSON.parse((await get(OLLAMA + '/api/tags')).body); for (const m of o.models || []) list.push({ ...m, name: 'ollama:' + m.name, model: 'ollama:' + m.name }); } catch {} }
@@ -382,7 +429,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/serve/stop' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); served = null; await stopLlama(); return json(res, 200, { ok: true }); }
     if (p === '/api/serve' && req.method === 'GET') return json(res, 200, { model: served ? 'gguf:' + served : null });
-    if (p === '/api/shutdown' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); json(res, 200, { ok: true }); setTimeout(() => { llama && llama.kill(); process.exit(0); }, 200); return; }
+    if (p === '/api/shutdown' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); json(res, 200, { ok: true }); setTimeout(() => closeAll(0), 200); return; }
     // API keys are managed only from this PC, never remotely
     if (p === '/api/keys') {
       if (req.who !== 'local') return json(res, 403, { error: 'Keys can only be managed on the PC itself.' });
@@ -421,7 +468,9 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/update' && req.method === 'GET') return json(res, 200, require('./update').status());
     if (p === '/api/update/check' && req.method === 'POST') return json(res, 200, await require('./update').backgroundCheck());
     if (p === '/api/update/auto' && req.method === 'POST') { const b = await body(req); return json(res, 200, require('./update').setAuto(b.auto !== false)); }
-    if (p === '/api/hardware') { const h = hardware(); return json(res, 200, { hardware: h, ollama: await ollamaUp(), llamaServer: !!findLlamaServer(), models: recommend(h) }); }
+    if (p === '/api/guard') { const n = guardNote; guardNote = null; return json(res, 200, { stopped: n, loaded: !!llama || ollamaUsed.size > 0 }); }
+    if (p === '/api/stop-local' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); const had = await stopAllLocal(); return json(res, 200, { ok: true, stopped: had }); }
+    if (p === '/api/hardware') { const h = hardware(); return json(res, 200, { hardware: h, ollama: await ollamaUp(), llamaServer: !!findLlamaServer(), toolAI: await hasToolAI(), models: recommend(h) }); }
     if (p === '/api/tags') return json(res, 200, { models: await listModels() });
     if (p === '/api/pull' && req.method === 'POST') { const b = await body(req); const m = CATALOG.find(x => x.id === b.id); if (!m) return json(res, 404, { error: 'unknown model' }); if (!dl[m.id] || dl[m.id].status !== 'downloading') download(m); return json(res, 200, { ok: true }); }
     if (p === '/api/install-llama' && req.method === 'POST') { installLlama(); return json(res, 200, { ok: true }); }
@@ -453,4 +502,24 @@ server.listen(PORT, HOST, () => {
   try { require('./update').startBackground(); } catch {}
   if (HOST !== '127.0.0.1') console.log('  Reachable on your network. Open http://<this-PC-IP>:' + PORT + ' on your phone.\n');
 });
-process.on('exit', () => llama && llama.kill()); process.on('SIGINT', () => { llama && llama.kill(); process.exit(); });
+// ---------- lag guard: if the PC starts struggling, stop the local AIs (and only those) ----------
+const guard = require('./guard').createGuard({
+  isLoaded: () => !!llama || ollamaUsed.size > 0,
+  startedAt: () => llamaStartedAt,
+  stopLocal: () => stopAllLocal(),
+  onStop: (why) => { guardNote = { at: Date.now(), why }; console.log('\n  Lag guard: ' + why + '. Stopped all local AIs. Cloud Agent Max is not affected.\n'); },
+});
+guard.start();
+
+// ---------- closing Pholama closes every local AI, however it is closed ----------
+let closing = false;
+function closeAll(code) {
+  if (closing) return; closing = true;
+  try { guard.stop(); } catch {}
+  killLocalNow();
+  for (const m of ollamaUsed) { try { require('child_process').spawnSync(process.execPath, ['-e', `fetch(${JSON.stringify(OLLAMA + '/api/generate')},{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:${JSON.stringify(m)},keep_alive:0})}).catch(()=>{})`], { timeout: 3000 }); } catch {} }
+  process.exit(code || 0);
+}
+process.on('exit', killLocalNow);
+for (const sig of ['SIGINT', 'SIGTERM', 'SIGHUP', 'SIGBREAK']) { try { process.on(sig, () => closeAll(0)); } catch {} }
+process.on('uncaughtException', e => { console.error('Pholama error:', e && e.stack || e); closeAll(1); });

@@ -59,6 +59,7 @@ Pholama's instructions are private. The AI is told to answer from your message, 
 A cloud assistant that needs no download. Sign in, pick **Agent Max** in the model list.
 
 - **Limits:** 10 messages per day and 30 per month per account (UTC). Normal, Long and Max effort each count as 1. The daily 10 come back every day until you reach 30; after that it restocks next month. A failed reply is not counted. Local models are always free.
+- **With a local AI:** once a PC model that runs tools is installed (for example Qwen2.5 1.5B), the daily allowance drops to **1 message a day**, because the local AI is free and unlimited. Remove it and the allowance returns to 10. The monthly limit stays 30.
 - **Tools:** calculator, clock, a Pholama help lookup, and page controls.
 - **Page controls:** ask it to open Models, Tools or Account, close the windows, start a new session, set Normal/Long/Max, or check your limits. It can only use that fixed list.
 - **Effort:** Long and Max let it think in more steps before answering.

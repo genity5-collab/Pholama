@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Pholama command line.  pholama pull|chat|rm|serve|list|stop|update|help
+// Pholama command line.  pholama pull|chat|rm|serve|list|stop|update|remove-all|help
 // The CLI talks to the Pholama server on this PC and starts it in the background if it is not running.
 'use strict';
 const fs = require('fs'), os = require('os'), path = require('path'), http = require('http'), readline = require('readline');
@@ -182,6 +182,14 @@ async function cmdRm(name) {
   console.log(green('Removed ') + m.id + dim(' (model file, partial download and its folders).'));
 }
 
+async function cmdRemoveAll(args) {
+  const code = await require('./uninstall').run(args, {
+    log: console.log, appRoot: ROOT, color: { red, green, dim, yellow, bold },
+    stopServer: async () => { if (await up()) { try { await req('POST', '/api/shutdown'); } catch {} } try { fs.unlinkSync(path.join(HOME, 'server.pid')); } catch {} },
+  });
+  process.exit(code);
+}
+
 async function cmdServe(name, args) {
   const m = need(name);
   await ensureServer(); await ensureInstalled(m); await ensureEngine();
@@ -222,6 +230,7 @@ ${bold('Pholama')}  AI models on your own PC
   ${cyan('pholama rm <model>')}      remove the model and all its files and folders
   ${cyan('pholama update')}          get the newest Pholama without reinstalling
   ${cyan('pholama stop')}            stop the background server
+  ${cyan('pholama remove-all')}      remove Pholama, its models, folders, command and icons from this PC (asks first; --dry-run only lists)
   ${cyan('pholama web')}             open the chat page in your browser
 
 Categories: tool running, reasoning, fast, slow.  Example:  ${cyan('pholama pull qwen2.5-3b')}
@@ -243,7 +252,9 @@ async function cmdWeb() {
       case 'list': case 'ls': case 'models': return await cmdList(rest);
       case 'pull': case 'install': case 'download': return await cmdPull(arg);
       case 'chat': case 'run': return await cmdChat(arg);
-      case 'rm': case 'remove': case 'delete': case 'uninstall': return await cmdRm(arg);
+      case 'remove-all': case 'uninstall-all': case 'remove-pholama': case 'uninstall-pholama': return await cmdRemoveAll(rest);
+      case 'uninstall': if (!arg) { console.log('To remove ' + bold('all of Pholama') + ' from this PC run:  ' + cyan('pholama remove-all') + '\nTo remove one model run:  ' + cyan('pholama uninstall <model>')); return; } return await cmdRm(arg);
+      case 'rm': case 'remove': case 'delete': return await cmdRm(arg);
       case 'serve': return await cmdServe(arg, rest);
       case 'stop': return await cmdStop();
       case 'update': case 'upgrade': return await cmdUpdate();
