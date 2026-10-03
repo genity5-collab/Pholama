@@ -298,6 +298,74 @@
    ],
    "note": "Best all-rounder here. Flagship phones.",
    "needsF16": true
+  },
+  {
+   "id": "DeepSeek-R1-Distill-Qwen-1.5B-q4f16_1-MLC",
+   "name": "DeepSeek R1 1.5B",
+   "size": "~1.6 GB",
+   "tier": 2,
+   "caps": [
+    "chat",
+    "reasoning",
+    "thinking",
+    "math"
+   ],
+   "note": "Thinks step by step before it answers. Good for logic and maths.",
+   "fallback": "DeepSeek-R1-Distill-Qwen-1.5B-q4f32_1-MLC"
+  },
+  {
+   "id": "TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC",
+   "name": "TinyLlama 1.1B",
+   "size": "~0.7 GB",
+   "tier": 1,
+   "caps": [
+    "chat",
+    "fast"
+   ],
+   "note": "Very light and quick. Easy chat on almost any phone.",
+   "fallback": "TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC",
+   "needsF16": true
+  },
+  {
+   "id": "Qwen2-1.5B-Instruct-q4f16_1-MLC",
+   "name": "Qwen2 1.5B",
+   "size": "~1.6 GB",
+   "tier": 2,
+   "caps": [
+    "chat",
+    "multilingual",
+    "summaries",
+    "code"
+   ],
+   "note": "Solid all-rounder. Many languages, summaries and simple code.",
+   "fallback": "Qwen2-1.5B-Instruct-q4f32_1-MLC"
+  },
+  {
+   "id": "gemma-2b-it-q4f16_1-MLC",
+   "name": "Gemma 2B",
+   "size": "~1.5 GB",
+   "tier": 2,
+   "caps": [
+    "chat",
+    "writing",
+    "summaries"
+   ],
+   "note": "Google's model. Clear, well-organised writing and explanations.",
+   "fallback": "gemma-2b-it-q4f32_1-MLC",
+   "needsF16": true
+  },
+  {
+   "id": "stablelm-2-zephyr-1_6b-q4f16_1-MLC",
+   "name": "StableLM Zephyr 1.6B",
+   "size": "~2.1 GB",
+   "tier": 3,
+   "caps": [
+    "chat",
+    "writing",
+    "multilingual"
+   ],
+   "note": "Friendly assistant style. Speaks English, German, Spanish, French, Italian, Dutch and Portuguese.",
+   "fallback": "stablelm-2-zephyr-1_6b-q4f32_1-MLC"
   }
  ],
  "local": [
