@@ -1,6 +1,7 @@
 // Pholama Studio (browser side). Editor + live preview + console + AI, all talking to the local PC server.
 // Anti-lag rules: typing is debounced, the preview only reloads when something changed, the console is capped,
 // and the preview runs in a sandboxed iframe that cannot reach Pholama's storage, keys or account.
+import { sourcesCard } from './sources.js';
 
 export const PREVIEW_DELAY = 300, SAVE_DELAY = 600, MAX_CONSOLE = 200, MAX_LINE = 400;
 
@@ -81,8 +82,10 @@ export function createStudio(env) {
   const con = (kind, text) => { if (S.log.length >= MAX_CONSOLE) { if (S.log.length === MAX_CONSOLE) { S.log.push({ kind: 'warn', text: 'Too much output. Further lines are hidden. Press Clear.' }); paintConLine(S.log[S.log.length - 1]); } return; } S.log.push({ kind, text }); paintConLine({ kind, text }); };
   const paintConLine = l => { const d = document.createElement('div'); d.className = 'st-l ' + l.kind; d.textContent = l.text; el.stCon.appendChild(d); el.stCon.scrollTop = 1e9; };
   const stat = t => { el.stStat.textContent = t; };
-  const jget = async p => (await api(p)).json();
-  const jsend = async (p, method, body) => { const r = await api(p, { method, body: JSON.stringify(body || {}) }); const j = await r.json().catch(() => ({})); if (j.error) throw new Error(j.error); return j; };
+  // An out-of-date PC server has no Studio routes and answers with a web page instead of JSON. Say so plainly instead of showing a raw parse error.
+  const STALE = 'Your Pholama server on the PC is still the old version. Close Pholama completely (the black window too), then open it again so it loads the new Studio.';
+  const jget = async p => { const r = await api(p); const t = await r.text(); try { return JSON.parse(t); } catch { throw new Error(r.status === 404 || /^\s*</.test(t) || !t.trim() ? STALE : 'The server sent something unexpected: ' + t.slice(0, 80)); } };
+  const jsend = async (p, method, body) => { const r = await api(p, { method, body: JSON.stringify(body || {}) }); const t = await r.text(); let j; try { j = JSON.parse(t); } catch { throw new Error(r.status === 404 || /^\s*</.test(t) ? STALE : 'The server sent something unexpected.'); } if (j.error) throw new Error(j.error); return j; };
 
   async function loadProjects(pick) {
     const { projects } = await jget('api/studio/projects');
@@ -160,7 +163,7 @@ export function createStudio(env) {
     save.flush(); await new Promise(r => setTimeout(r, 60));   // make sure the AI sees what the user just typed
     const model = getModel(); if (!model) { say('Pick a model at the top first.', 'err'); return; }
     S.busy = true; el.stSend.textContent = 'Stop'; say(text, 'me'); hist.push({ role: 'user', content: text }); if (hist.length > 24) hist.splice(0, hist.length - 24);
-    const ac = new AbortController(); S.stopper = () => ac.abort(); let reply = '', node = null;
+    const ac = new AbortController(); S.stopper = () => ac.abort(); let reply = '', node = null, srcCard = null;
     try {
       const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: hist, agent: true, stream: true, studio: { project: S.project }, switches: { search: true, tools: true } }) });
       const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
@@ -171,6 +174,7 @@ export function createStudio(env) {
           if (j.error) throw new Error(j.error);
           if (j.log && (j.log.kind === 'action' || j.log.kind === 'error')) say(j.log.text, j.log.kind === 'error' ? 'err' : 'act');
           else if (j.tool) say(toolLine(j.tool), 'tool');
+          else if (j.sources) { if (!srcCard) { srcCard = sourcesCard([]); el.stAiLog.appendChild(srcCard.el); } srcCard.update(j.sources); el.stAiLog.scrollTop = 1e9; }
           else if (j.studio) refreshSoon();
           else if (j.approve) approve(j.approve);
           else if (j.message && j.message.content) { reply += j.message.content; if (!node) node = say('', 'ai'); node.textContent = reply; el.stAiLog.scrollTop = 1e9; }
@@ -201,5 +205,5 @@ export function createStudio(env) {
     ask('Publish my project "' + S.project + '" to GitHub. ' + (repo.includes('/') ? 'Use the repository ' + repo + '.' : 'Create a ' + (priv ? 'private' : 'public') + ' repository named ' + repo + ', then publish all project files to it.') + ' Use github_create_repo if needed and then github_publish_project with all the files.');
   };
 
-  return { open: async () => { try { await loadProjects(localStorage.getItem('pholama_studio_proj') || undefined); } catch (e) { say('Studio could not start: ' + e.message, 'err'); } }, state: S, ask, refreshFromServer };
+  return { open: async () => { try { await loadProjects(localStorage.getItem('pholama_studio_proj') || undefined); } catch (e) { say('Studio could not start: ' + e.message, 'err'); if (/still the old version/.test(e.message)) { const b = document.createElement('button'); b.textContent = 'Restart Pholama now'; b.className = 'st-restart'; b.onclick = () => window.restartPholama && window.restartPholama(b); el.stAiLog.appendChild(b); } } }, state: S, ask, refreshFromServer };
 }

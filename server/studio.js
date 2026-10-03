@@ -71,14 +71,54 @@ function writeFile(p, f, content) {
 function deleteFile(p, f) { const full = fileOf(p, f); if (!fs.existsSync(full)) throw new Error('no such file: ' + f); fs.unlinkSync(full); return 'Deleted ' + f; }
 
 // Edit ONE spot instead of rewriting the whole file: faster, far less for a small model to get wrong, and no lag.
-function patchFile(p, f, find, replace) {
-  find = String(find == null ? '' : find); if (!find) throw new Error('"find" text is required');
-  const src = readFile(p, f), i = src.indexOf(find);
-  if (i < 0) throw new Error('the text to replace was not found in ' + f + '. Read the file again and copy the exact text.');
-  if (src.indexOf(find, i + find.length) >= 0) throw new Error('that text appears more than once in ' + f + '. Include more surrounding text so it is unique.');
-  writeFile(p, f, src.slice(0, i) + String(replace == null ? '' : replace) + src.slice(i + find.length));
-  return 'Edited ' + f;
+// Safety net for edits made by the AI: if a script parsed fine before and would not parse after, refuse the edit and keep the file as it was.
+function jsBroken(name, text) {
+  if (!/\.m?js$/i.test(name)) return '';
+  try { new vm.Script(String(text), { filename: name }); return ''; } catch (e) { return /import|export|await/.test(e.message) ? '' : e.message; }
 }
+function guardedWrite(p, f, before, after) {
+  const was = jsBroken(f, before), now = was ? '' : jsBroken(f, after);
+  if (now) throw new Error('That change would break ' + f + ' (' + now + '), so I did not save it and the file is unchanged. Change fewer lines, or copy the exact lines with studio_read_numbered and try again.');
+  writeFile(p, f, after);
+}
+
+// Editing a script that already exists. Small models rarely copy text perfectly, so matching forgives the usual slips:
+// Windows line endings, trailing spaces, and different indentation. The file keeps its own line-ending style afterwards.
+function patchFile(p, f, find, replace, all) {
+  find = String(find == null ? '' : find); if (!find.trim()) throw new Error('"find" text is required');
+  const raw = readFile(p, f), crlf = raw.includes('\r\n'), src = raw.replace(/\r\n/g, '\n');
+  const rep = String(replace == null ? '' : replace).replace(/\r\n/g, '\n'), fnd = find.replace(/\r\n/g, '\n');
+  const out = (t) => crlf ? t.replace(/\n/g, '\r\n') : t;
+  let i = src.indexOf(fnd), n = 0;
+  if (i >= 0) { let k = -1; while ((k = src.indexOf(fnd, k + 1)) >= 0) n++; }
+  if (n > 1 && !all) throw new Error('that text appears ' + n + ' times in ' + f + '. Include more surrounding text so it is unique, or set "all" to true to change every one.');
+  if (n >= 1) { guardedWrite(p, f, raw, out(all ? src.split(fnd).join(rep) : src.slice(0, i) + rep + src.slice(i + fnd.length))); return 'Edited ' + f + (all && n > 1 ? ' (' + n + ' places)' : ''); }
+  // Forgiving match: compare line by line ignoring indentation and trailing spaces.
+  const sl = src.split('\n'), fl = fnd.split('\n').map(x => x.trim()); while (fl.length && !fl[0]) fl.shift(); while (fl.length && !fl[fl.length - 1]) fl.pop();
+  const hits = [];
+  if (fl.length) for (let a = 0; a + fl.length <= sl.length; a++) { let ok = true; for (let b = 0; b < fl.length; b++) if (sl[a + b].trim() !== fl[b]) { ok = false; break; } if (ok) hits.push(a); }
+  if (!hits.length) throw new Error('the text to replace was not found in ' + f + '. Read the file again (studio_read) and copy the exact lines, or use studio_lines to replace by line number.');
+  if (hits.length > 1 && !all) throw new Error('that text appears ' + hits.length + ' times in ' + f + '. Include more surrounding lines so it is unique, or set "all" to true.');
+  // Give each new line the indentation of the old line it replaces (same position). Extra lines copy the last old line's indent.
+  const mk = (at) => { const ind = k => (sl[at + Math.min(k, fl.length - 1)].match(/^\s*/) || [''])[0]; return rep.split('\n').map((x, k) => x.trim() ? ind(k) + x.replace(/^\s+/, '') : x); };
+  for (const a of (all ? hits.slice().reverse() : [hits[0]])) sl.splice(a, fl.length, ...mk(a));
+  guardedWrite(p, f, raw, out(sl.join('\n'))); return 'Edited ' + f + ' (matched ignoring spacing)' + (all && hits.length > 1 ? ', ' + hits.length + ' places' : '');
+}
+
+// Edit by line number: replace lines from..to with new text, insert before a line (to omitted), or delete lines (text empty). Lines start at 1.
+function editLines(p, f, from, to, text) {
+  const raw = readFile(p, f), crlf = raw.includes('\r\n'), lines = raw.replace(/\r\n/g, '\n').split('\n');
+  const a = Math.floor(+from); if (!(a >= 1 && a <= lines.length + 1)) throw new Error('"from" must be a line number between 1 and ' + (lines.length + 1) + ' (the file has ' + lines.length + ' lines)');
+  const insert = to == null || to === '', b = insert ? a - 1 : Math.floor(+to);
+  if (!insert && !(b >= a && b <= lines.length)) throw new Error('"to" must be a line number from ' + a + ' to ' + lines.length);
+  const add = text == null || String(text) === '' ? [] : String(text).replace(/\r\n/g, '\n').replace(/\n$/, '').split('\n');
+  lines.splice(a - 1, insert ? 0 : b - a + 1, ...add);
+  const res = lines.join('\n'); guardedWrite(p, f, raw, crlf ? res.replace(/\n/g, '\r\n') : res);
+  return (insert ? 'Inserted ' + add.length + ' line(s) before line ' + a : add.length ? 'Replaced lines ' + a + '-' + b + ' with ' + add.length + ' line(s)' : 'Deleted lines ' + a + '-' + b) + ' in ' + f;
+}
+
+// Same as studio_read but with line numbers in front, so an edit by line number is easy to get right.
+function readNumbered(p, f) { const l = readFile(p, f).replace(/\r\n/g, '\n').split('\n'); const w = String(l.length).length; return l.map((x, k) => String(k + 1).padStart(w) + ' | ' + x).join('\n'); }
 
 function snapshot(p) {
   const d = dirOf(p); if (!fs.existsSync(d)) throw new Error('no such project');
@@ -129,7 +169,9 @@ const TOOLS = {
   studio_files: { desc: 'List the files in a project. args: {"project": string}', run: a => snapshot(a.project).map(f => `${f.name} (${f.size} bytes)`).join('\n') || '(empty)' },
   studio_read: { desc: 'Read one file. args: {"project": string, "file": string}', run: a => readFile(a.project, a.file) },
   studio_write: { desc: 'Create or replace a whole file (use for new files). args: {"project": string, "file": string, "content": string}', run: a => { const r = writeFile(a.project, a.file, a.content); return (r.created ? 'Created ' : 'Saved ') + r.name + ' (' + r.size + ' bytes)'; } },
-  studio_patch: { desc: 'Change ONE spot in an existing file (preferred for edits). args: {"project": string, "file": string, "find": exact old text, "replace": new text}', run: a => patchFile(a.project, a.file, a.find, a.replace) },
+  studio_patch: { desc: 'Change a spot in an existing file (preferred for edits). Spacing differences are forgiven. args: {"project": string, "file": string, "find": old text, "replace": new text, "all": true to change every match (optional)}', run: a => patchFile(a.project, a.file, a.find, a.replace, a.all === true || a.all === 'true') },
+  studio_read_numbered: { desc: 'Read a file with line numbers, to edit it by line. args: {"project": string, "file": string}', run: a => readNumbered(a.project, a.file) },
+  studio_lines: { desc: 'Edit an existing file by line number. Replace lines from..to with text, or insert before a line (leave "to" out), or delete lines (leave "text" empty). args: {"project": string, "file": string, "from": number, "to": number, "text": string}', run: a => editLines(a.project, a.file, a.from, a.to, a.text) },
   studio_delete: { desc: 'Delete one file. args: {"project": string, "file": string}', run: a => deleteFile(a.project, a.file) },
   studio_check: { desc: 'Check a project for broken links and script errors. args: {"project": string}', run: a => check(a.project).join('\n') },
   studio_run_js: { desc: 'Run a short piece of plain JavaScript and get its printed output (no page, no network). args: {"code": string}', run: a => { const r = runJs(a.code); return r.ok ? r.output : (r.output ? r.output + '\n' : '') + 'ERROR: ' + r.error; } },

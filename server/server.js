@@ -349,7 +349,8 @@ async function chat(req, res, b) {
     if (inStudio) { allow.studio = true; if (canTools && !allow.github && (req.headers['x-github-token'] || '')) allow.github = sw.github !== false; }   // Studio tools are local and free; GitHub only with the user's own token
     const { tools } = await agent.buildTools({ ...allow, memory: memOn, inStudio });
     if (inStudio && !canTools) log('error', 'This model cannot use tools, so it cannot build in Studio. Pick a model tagged "tools" (Qwen3 0.6B is the smallest).');
-    const tctx = { ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), onPending: p => line({ approve: p }) };
+    const visited = agent.sources.makeCollector(12); let sentSrc = 0;
+    const tctx = { sources: visited, ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), onPending: p => line({ approve: p }) };
     if (tools.length) log('step', `${tools.length} tools ready: ${tools.map(t => t.name).join(', ')}`);
     const effort = ['long', 'max'].includes(b.effort) ? b.effort : 'normal';
     // Price this message from the two levels, then take the credits BEFORE answering so the counter visibly drops.
@@ -371,8 +372,9 @@ async function chat(req, res, b) {
     const opts = { ...(b.options || {}) }; if (effortUse !== 'normal') opts.num_predict = effortUse === 'max' ? 2048 : 1024;
     if (effortUse !== 'normal') log('step', 'Effort: ' + effortUse);
     const usage = { in: 0, out: 0, got: false }, t1 = Date.now();
+    const origUserText = (() => { const u = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return u ? String(u.content) : ''; })();
     let generated = '';   // everything the model wrote this message (all turns), used only for the estimate
-    const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effortUse) + (inStudio && tools.length ? agent.studioPrompt(b.studio.project, (() => { try { return stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })); } catch { return []; } })()) : '') + (() => { if (tools.length) return ''; const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.aboutUserHint(lu && lu.content, b.memory === true && Array.isArray(b.memories) ? b.memories : []); })() }, ...(b.messages || []).filter(m => m.role !== 'system')];
+    const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effortUse) + (inStudio && tools.length ? agent.studioPrompt(b.studio.project, (() => { try { return stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })); } catch { return []; } })()) + (() => { try { const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.studioFocus(stu.snapshot(b.studio.project), lu && lu.content, b.studio.project); } catch { return ''; } })() : '') + (() => { if (tools.length) return ''; const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.aboutUserHint(lu && lu.content, b.memory === true && Array.isArray(b.memories) ? b.memories : []); })() }, ...(b.messages || []).filter(m => m.role !== 'system')];
     // Host-side routing: obvious intents run their tool before the model answers (weak models skip tool calls).
     if (tools.length) {
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
@@ -383,7 +385,7 @@ async function chat(req, res, b) {
         let result; try { result = String(await agent.runTool(tools, r0.name, r0.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
         if (r0.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
         log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
-        line({ tool: { name: r0.name, args: r0.args, result: result.slice(0, 400) } });
+        line({ tool: { name: r0.name, args: r0.args, result: result.slice(0, 400) } }); if (visited.size() !== sentSrc) { sentSrc = visited.size(); line({ sources: visited.list() }); }
         messages.push({ role: 'assistant', content: `<tool>${JSON.stringify(r0)}</tool>` }, { role: 'user', content: `Tool result for ${r0.name}:\n${result}\n\nNow answer the user's question using this result. Be brief.` });
       }
     }
@@ -410,8 +412,31 @@ async function chat(req, res, b) {
         if (lu2) lu2.content = String(lu2.content) + '\n\n(Your working so far, which you can trust:\n' + notes.slice(0, 1800) + '\n)\nNow reply to me with the final answer in clear sentences, using your working above.';
       }
     }
+    // Guided edit: a small change to a file the user named. Pholama finds the line, the model writes just the new line, Pholama applies it safely.
+    let guidedDone = false;
+    if (inStudio && stu && b.studio && b.studio.project && b.guided !== false) {
+      let plan = null, lu0 = null;
+      try { lu0 = [...(b.messages || [])].reverse().find(m => m.role === 'user'); plan = agent.planGuidedEdit(stu.snapshot(b.studio.project), origUserText); } catch {}
+      if (plan) {
+        log('step', 'Small change to ' + plan.file + ' (line ' + plan.lineNo + '). Asking the model for just the new line.');
+        let got = ''; try { await streamTurn(model, [{ role: 'system', content: 'You edit one line of code. Reply with the single new line only. No explanation, no quotes, no code fence.' }, { role: 'user', content: plan.prompt }], { ...opts, temperature: 0.1, num_predict: 160 }, t => { got += t; }, ac.signal); } catch (e) { log('error', 'Guided edit asked the model but it failed (' + e.message + '). Using the normal way.'); }
+        const nl = agent.cleanGuidedLine(got, plan.oldLine);
+        if (nl) {
+          let res; try { res = stu.patchFile(b.studio.project, plan.file, plan.oldLine.trim(), nl.trim()); } catch (e) { res = 'Tool error: ' + e.message; }
+          const ok = !/^Tool error/.test(res);
+          log(ok ? 'result' : 'error', ok ? 'Line ' + plan.lineNo + ' of ' + plan.file + ': ' + plan.oldLine.trim() + '  ->  ' + nl.trim() : res);
+          line({ tool: { name: 'studio_patch', args: { project: b.studio.project, file: plan.file, find: plan.oldLine.trim(), replace: nl.trim() }, result: ok ? res : res.slice(0, 300) } });
+          if (ok) {
+            line({ studio: { changed: true, project: b.studio.project } });
+            const txt = 'Changed line ' + plan.lineNo + ' of ' + plan.file + ':\n' + plan.oldLine.trim() + '\n' + nl.trim() + '\nEverything else in the file is untouched.';
+            line({ model, message: { role: 'assistant', content: txt }, done: false }); generated += txt; guidedDone = true;
+          }
+        } else if (got.trim()) log('step', 'The model\'s answer was not a clean single line, using the normal way instead.');
+      }
+    }
+    const seenCalls = {};
     const MAX_ROUNDS = inStudio ? 14 : 5;   // building an app takes many tool steps
-    for (let round = 0; round < MAX_ROUNDS; round++) {
+    for (let round = 0; round < MAX_ROUNDS && !guidedDone; round++) {
       // With tools on, buffer the start of the reply: if it begins with "<tool" it is a tool call (hide it),
       // otherwise flush what we have and stream the rest live.
       log('step', round === 0 ? 'Loading model and writing the reply...' : 'Writing the final answer from the tool result...');
@@ -448,11 +473,13 @@ async function chat(req, res, b) {
         if (holdWeb && CLAIMS_WEB.test(text)) { line({ model, message: { role: 'assistant', content: NO_WEB }, done: false }); log('step', 'This model has no web access, so its claim to search was replaced.'); break; }
         if (shown < text.length) line({ model, message: { role: 'assistant', content: text.slice(shown) }, done: false }); break;
       }
+      { const sig = call.name + JSON.stringify(call.args || {}); seenCalls[sig] = (seenCalls[sig] || 0) + 1;
+        if (seenCalls[sig] >= 3) { log('error', 'The model repeated the same step 3 times, so I stopped it to save your time.'); line({ message: { content: '\n(I stopped because the AI kept repeating the same step. Try a bigger model, or ask for one smaller change.)' } }); break; } }
       log('action', `Model asked for ${call.name} ${JSON.stringify(call.args)}`);
       let result; try { result = String(await agent.runTool(tools, call.name, call.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
       if (call.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
       log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
-      line({ tool: { name: call.name, args: call.args, result: result.slice(0, 400) } });
+      line({ tool: { name: call.name, args: call.args, result: result.slice(0, 400) } }); if (visited.size() !== sentSrc) { sentSrc = visited.size(); line({ sources: visited.list() }); }
       if (stu && stu.isStudio(call.name) && call.name !== 'studio_read' && call.name !== 'studio_files' && call.name !== 'studio_projects') line({ studio: { changed: true, project: (call.args && call.args.project) || (b.studio && b.studio.project) || null, file: (call.args && call.args.file) || null } });
       if (inStudio && stu && stu.isStudio(call.name)) {
         // Build loop: after any change the host checks the project itself and hands the model the real problems to fix.
@@ -546,6 +573,16 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/serve/stop' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); served = null; await stopLlama(); return json(res, 200, { ok: true }); }
     if (p === '/api/serve' && req.method === 'GET') return json(res, 200, { model: served ? 'gguf:' + served : null });
+    if (p === '/api/restart' && req.method === 'POST') {
+      if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' });
+      // Start a fresh copy of this same server (hidden, detached) that waits a moment for this one to let go of the port, then close this one.
+      try {
+        const cp = require('child_process');
+        const child = cp.spawn(process.execPath, ['-e', 'setTimeout(()=>{require("child_process").spawn(process.execPath,[' + JSON.stringify(path.join(__dirname, 'server.js')) + '],{detached:true,stdio:"ignore",windowsHide:true,cwd:' + JSON.stringify(path.join(__dirname, '..')) + ',env:process.env}).unref()},1800)'], { detached: true, stdio: 'ignore', windowsHide: true, env: process.env });
+        child.unref();
+      } catch (e) { return json(res, 500, { error: 'Could not restart: ' + e.message }); }
+      json(res, 200, { ok: true }); setTimeout(() => closeAll(0), 300); return;
+    }
     if (p === '/api/shutdown' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); json(res, 200, { ok: true }); setTimeout(() => closeAll(0), 200); return; }
     // API keys are managed only from this PC, never remotely
     if (p === '/api/keys') {

@@ -233,3 +233,20 @@ body.studio-on #chat,body.studio-on footer{display:none!important}
   .viewsw button{padding:4px 10px}
   .st-con{height:80px}
 }
+
+/* Sites the AI looked at */
+.srcs{margin:8px 0 2px;border:1px solid var(--line,#ffffff22);border-radius:12px;padding:8px 10px;background:var(--panel,#ffffff08);max-width:100%}
+.srcs-h{font-size:12px;opacity:.75;margin-bottom:6px;font-weight:600}
+.srcs-b{display:flex;flex-direction:column;gap:8px}
+.src{display:flex;gap:10px;align-items:flex-start;min-width:0}
+.src-img{flex:0 0 76px;height:56px;border-radius:8px;overflow:hidden;background:#0003;display:block}
+.src-img img{width:100%;height:100%;object-fit:cover;display:block}
+.src-t{min-width:0;flex:1}
+.src-l{font-size:13.5px;font-weight:600;color:inherit;text-decoration:underline;text-underline-offset:2px;word-break:break-word}
+.src-h{font-size:11.5px;opacity:.6;margin-top:1px;word-break:break-all}
+.src-s{font-size:12.5px;opacity:.85;margin-top:2px;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+.src-w{font-size:11.5px;margin-top:3px;color:#e5a23c}
+.st-restart{margin-top:6px;padding:6px 12px;border-radius:8px;border:1px solid var(--line,#ffffff33);background:transparent;color:inherit;cursor:pointer}
+@media (max-width:600px){.src-img{flex-basis:64px;height:48px}}
+
+.ans-link{color:inherit;text-decoration:underline;text-underline-offset:2px;word-break:break-word}

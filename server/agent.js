@@ -11,6 +11,7 @@ const DAILY = +process.env.PHOLAMA_DAILY_CREDITS || 1000;
 const COST = { search: 0, fetch: 0, calc: 0, time: 0, mcp: 0, thinking: 25, memory: 0, ghread: 0, ghwrite: 0, cmd: 0, studio: 0 };
 const github = require('./github');
 const studio = require('./studio');
+const sources = require('./sources');
 const power = require('./power');
 
 function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -43,23 +44,48 @@ const stripHtml = h => h.replace(/<script[\s\S]*?<\/script>|<style[\s\S]*?<\/sty
 async function fetchText(url, ms = 12000) {
   const u = new URL(url); if (!/^https?:$/.test(u.protocol)) throw new Error('only http(s) URLs');
   const ac = new AbortController(); const t = setTimeout(() => ac.abort(), ms);
-  try { const r = await fetch(url, { signal: ac.signal, headers: { 'User-Agent': 'Mozilla/5.0 Pholama' } }); return { status: r.status, text: await r.text() }; }
+  // Follow redirects by hand, so a public link can never bounce the AI onto an address inside the user's own network.
+  try {
+    let cur = url;
+    for (let hop = 0; hop < 5; hop++) {
+      if (hop > 0 && !sources.checkLink(cur).ok) throw new Error('a redirect pointed at a private or unsafe address, so I stopped');
+      const r = await fetch(cur, { signal: ac.signal, redirect: 'manual', headers: { 'User-Agent': 'Mozilla/5.0 Pholama' } });
+      if (r.status >= 300 && r.status < 400 && r.headers.get('location')) { cur = new URL(r.headers.get('location'), cur).toString(); continue; }
+      return { status: r.status, text: (await r.text()).slice(0, 400000) };
+    }
+    throw new Error('too many redirects');
+  }
   finally { clearTimeout(t); }
 }
 
-async function webSearch({ query }) {
+async function webSearch({ query }, ctx) {
   if (!query) throw new Error('query required');
   // DuckDuckGo HTML endpoint: no API key, works from a normal PC
   const r = await fetchText('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(query));
-  const out = []; const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g; let m;
+  const out = [], found = []; const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g; let m;
   while ((m = re.exec(r.text)) && out.length < 5) {
     let href = m[1]; const q = /uddg=([^&]+)/.exec(href); if (q) href = decodeURIComponent(q[1]);
-    out.push(`${out.length + 1}. ${stripHtml(m[2])}\n   ${href}\n   ${stripHtml(m[3])}`);
+    const title = stripHtml(m[2]), snippet = stripHtml(m[3]);
+    const c = sources.checkLink(href); if (!c.ok) continue;   // never hand the model (or the user) a link that points inside their own network
+    out.push(`${out.length + 1}. ${title}\n   ${c.url}\n   ${snippet}` + (c.warn.length ? `\n   (careful: ${c.warn.join('; ')})` : ''));
+    found.push({ url: c.url, title, snippet, how: 'search result' });
   }
   if (!out.length) throw new Error('no results (search engine may be blocking this network)');
+  if (ctx && ctx.sources) {
+    // Preview pictures for the first few results, fetched in parallel with a short timeout. A failure just means no picture.
+    await Promise.all(found.map(async (f, k) => {
+      if (k < 3) { try { const pg = await fetchText(f.url, 4500); const meta = sources.pageMeta(pg.text, f.url); f.image = meta.image; if (meta.title && f.title.length < 6) f.title = meta.title; } catch {} }
+    }));
+    found.forEach(f => ctx.sources.add(f));
+  }
   return out.join('\n');
 }
-async function fetchPage({ url }) { const r = await fetchText(url); return stripHtml(r.text).slice(0, 3500); }
+async function fetchPage({ url }, ctx) {
+  const c = sources.checkLink(url); if (!c.ok) throw new Error('I will not open that link: ' + c.why + '.');
+  const r = await fetchText(c.url); const meta = sources.pageMeta(r.text, c.url);
+  if (ctx && ctx.sources) ctx.sources.add({ url: c.url, title: meta.title, snippet: meta.desc, image: meta.image, how: 'opened' });
+  return stripHtml(r.text).slice(0, 3500);
+}
 function calc({ expression }) {
   const e = String(expression || ''); if (!/^[0-9+\-*/().,%\s^eE]*$/.test(e) || e.length > 200) throw new Error('only numbers and + - * / ( ) % ^ are allowed');
   // Small models add stray commas: "15*12," or "1,000*3". Drop trailing ones and thousands separators; any other comma is an error.
@@ -160,11 +186,82 @@ function systemPrompt(tools, thinking, memories, effort) {
 }
 
 // Studio mode: the assistant builds and edits real files. Kept short and concrete so small local models can follow it.
+// Which existing files is the user talking about? Small models skip "look first", so Pholama shows them the file(s) with line numbers.
+const STOP = new Set('the and for that this with from into make instead change edit fix update script code file game does not anything else only please can you want when then have has are was will would should could just like also more less all any its it\'s my our your their adds add set use using used'.split(' '));
+const EDIT_WORDS = /\b(edit|change|fix|update|modify|add|remove|delete|rename|replace|make|set|turn|improve|rewrite|adjust|tweak|my|the)\b/i;
+function studioFocus(files, userText, project, maxChars = 6000) {
+  const text = String(userText || ''), lower = text.toLowerCase(), list = (files || []).filter(f => typeof f.content === 'string');
+  if (!text.trim() || !list.length) return '';
+  const base = n => n.replace(/\.[^.]+$/, '').toLowerCase();
+  let pick = list.filter(f => lower.includes(f.name.toLowerCase()));                                              // "game.js"
+  if (!pick.length) pick = list.filter(f => base(f.name).length >= 3 && new RegExp('\\b' + base(f.name).replace(/[^a-z0-9]/g, '.') + '\\b', 'i').test(text) && !/^(index|style|script)$/.test(base(f.name)));   // "game"
+  if (!pick.length && /\b(script|code|javascript|js|logic|game)\b/i.test(text)) { const js = list.filter(f => /\.(js|mjs|lua|luau|py)$/i.test(f.name)); if (js.length <= 2) pick = js; }
+  if (!pick.length && /\b(page|html|layout|markup)\b/i.test(text)) pick = list.filter(f => /\.html?$/i.test(f.name)).slice(0, 1);
+  if (!pick.length && /\b(style|css|color|colour|font|design|look)\b/i.test(text)) pick = list.filter(f => /\.css$/i.test(f.name)).slice(0, 1);
+  if (!pick.length || !EDIT_WORDS.test(text)) return '';
+  let out = '\n[OPEN FILES] The user is talking about these existing files. Edit them with studio_patch or studio_lines. Line numbers are shown before the | and are not part of the file.\n', left = maxChars;
+  for (const f of pick.slice(0, 3)) {
+    const lines = f.content.replace(/\r\n/g, '\n').split('\n'), w = String(lines.length).length;
+    let body = lines.map((x, k) => String(k + 1).padStart(w) + ' | ' + x).join('\n'), cut = '';
+    if (body.length > left) { body = body.slice(0, Math.max(400, left)); cut = '\n... (file continues, use studio_read_numbered to see the rest)'; }
+    out += '--- ' + f.name + ' ---\n' + body + cut + '\n'; left -= body.length; if (left <= 0) break;
+  }
+  const first = pick[0], ex = bestLine(first.content, text);
+  out += 'HOW TO EDIT (do this, do not write a new file): call ONE tool, for example:\n<tool>{"name":"studio_patch","args":{"project":"' + (project || 'app') + '","file":"' + first.name + '","find":' + JSON.stringify(ex.trim()) + ',"replace":"<that same line with the change you were asked for>"}}</tool>\nThe file to change is ' + first.name + '. Do not create another file.\n';
+  return out;
+}
+
+// Which line of a file does the request point at? Scores lines by the request's words, prefers lines holding a value when numbers are involved.
+function bestLine(content, text) {
+  const ln = String(content).replace(/\r\n/g, '\n').split('\n');
+  const words = [...new Set((String(text).toLowerCase().match(/[a-z_][a-z0-9_]{2,}/g) || []).filter(w => !STOP.has(w)))];
+  const asksNumber = /\d/.test(text) || /\b(points?|speed|score|size|number|count|amount|times|more|less|faster|slower|bigger|smaller)\b/i.test(text);
+  let ex = '', best = 0;
+  for (const x of ln) { const t = x.trim(); if (t.length < 4 || /^(\/\/|\*|\/\*)/.test(t)) continue; let sc = 0; for (const w of words) if (t.toLowerCase().includes(w)) sc += w.length; if (sc && asksNumber && /\d/.test(t)) sc += 6; if (/^(function|def|class|if|for|while|else)\b.*[{:]$/.test(t)) sc -= 2; if (sc > best) { best = sc; ex = t; } }
+  if (ex && asksNumber && /^(function|def|class|const \w+ = \(|async function)\b/.test(ex)) {
+    const at = ln.findIndex(x => x.trim() === ex);
+    for (let k = at + 1; k < Math.min(ln.length, at + 8); k++) { const t = ln[k].trim(); if (/^[})\]]/.test(t) || /^(function|def)\b/.test(t)) break; if (t.length > 3 && /\d|[+\-*\/]=|=/.test(t) && !/^\/\//.test(t)) { ex = t; break; } }
+  }
+  if (!ex) ex = ln.find(x => x.trim().length > 8) || ln[0] || '';
+  const idx = ln.findIndex(x => x.trim() === ex);
+  return Object.assign(String(ex), { lineNo: idx + 1 });
+}
+
+// A small edit to a named file: Pholama finds the line, the model only writes the new version of that one line (small models do this well),
+// and Pholama applies it through the same safe edit tools. Returns null when this is not a small single-file edit.
+function planGuidedEdit(files, userText) {
+  const text = String(userText || ''); if (!text.trim() || text.length > 400) return null;
+  if (/\b(create|build|make me|new (file|game|app|page|project)|from scratch|rewrite (it|the whole|everything)|all (the )?files|every file)\b/i.test(text)) return null;
+  const list = (files || []).filter(f => typeof f.content === 'string'); if (!list.length) return null;
+  const lower = text.toLowerCase();
+  const named = list.filter(f => lower.includes(f.name.toLowerCase()));
+  if (named.length !== 1) return null;
+  if (!/\b(change|set|make|edit|fix|update|replace|rename|increase|decrease|lower|raise|instead|to \d|start)\b/i.test(text)) return null;
+  const f = named[0], target = bestLine(f.content, text); if (!target.trim() || !target.lineNo) return null;
+  const raw = String(f.content).replace(/\r\n/g, '\n').split('\n'), line = raw[target.lineNo - 1];
+  if (raw.filter(x => x.trim() === line.trim()).length !== 1) return null;             // the line must be unique, otherwise a patch would be ambiguous
+  const near = raw.slice(Math.max(0, target.lineNo - 3), target.lineNo + 2).join('\n');
+  const prompt = 'File ' + f.name + ', line ' + target.lineNo + ':\n' + line + '\n\nSurrounding code:\n' + near + '\n\nRequest: ' + text.replace(/\s+/g, ' ') +
+    '\n\nReply with ONLY the new version of line ' + target.lineNo + ', nothing else. Keep the same indentation. One line only.';
+  return { file: f.name, lineNo: target.lineNo, oldLine: line, prompt };
+}
+// Clean up the model's one-line answer; returns '' if it is not a believable single replacement line.
+function cleanGuidedLine(answer, oldLine) {
+  let t = String(answer || '').replace(/<think>[\s\S]*?<\/think>/g, '').replace(/```[a-z]*\n?/gi, '').replace(/^\s*(line \d+\s*[:\-]\s*)/i, '').trim();
+  const lines = t.split('\n').map(x => x.replace(/\s+$/, '')).filter(x => x.trim());
+  if (lines.length !== 1) return '';
+  let out = lines[0].replace(/^\s*\d+\s*\|\s?/, ''); const trimmed = out.trim();
+  if (!trimmed || trimmed.length > oldLine.trim().length * 4 + 60) return '';
+  if (/^(here|sure|okay|the new|new version|i |this |to )/i.test(trimmed)) return '';
+  if (trimmed === oldLine.trim()) return '';                                              // no change
+  return (oldLine.match(/^\s*/) || [''])[0] + trimmed;
+}
+
 function studioPrompt(project, files) {
   const list = (files || []).slice(0, 40).map(f => `- ${f.name} (${f.size} bytes)`).join('\n') || '(no files yet)';
   return '\n[STUDIO] You are working inside the user\'s Studio project "' + (project || 'none') + '". Files now:\n' + list + '\n' +
     'You can build websites, games, tools and small apps with plain HTML, CSS and JavaScript, and you can also do other tasks (write text, explain, calculate, plan).\n' +
-    'RULES: 1) To build or change anything, CALL TOOLS, do not paste big code into the chat. 2) New file: studio_write. Change an existing file: studio_read first, then studio_patch with an exact small piece. 3) Keep files small and split into index.html, style.css, script.js. A new app needs ALL its files: write index.html with every element the script uses (give each an id), then script.js. 4) After building, ALWAYS call studio_check, and if it lists a problem, fix it with a tool and check again. 5) Finish with ONE short sentence saying what you made. 6) Never put passwords or keys in files. 7) Publishing to GitHub needs the user to press Allow, so only do it when asked.\n' +
+    'RULES: 1) To build or change anything, CALL TOOLS, do not paste big code into the chat. 2) New file: studio_write. Change an existing file (including one the user wrote themselves): its current contents are shown below under [OPEN FILES] when the user names it, so edit THAT file. If it is not shown, call studio_read_numbered first. Then change only the needed lines with studio_patch (copy a few exact lines) or studio_lines (by line number). Never rewrite a whole file to change a few lines, never make a new file when the user talks about an existing one, and never remove code you were not asked to change. 3) Keep files small and split into index.html, style.css, script.js. A new app needs ALL its files: write index.html with every element the script uses (give each an id), then script.js. 4) After building, ALWAYS call studio_check, and if it lists a problem, fix it with a tool and check again. 5) Finish with ONE short sentence saying what you made. 6) Never put passwords or keys in files. 7) Publishing to GitHub needs the user to press Allow, so only do it when asked.\n' +
     'You may ALSO write a whole file like this (preferred for big files, no JSON needed):\nFILE: index.html\n```html\n<!doctype html>...\n```\n' +
     'Examples:\nUser: make a button that counts clicks\nAssistant: <tool>{"name":"studio_write","args":{"project":"' + (project || 'app') + '","file":"script.js","content":"let n=0;document.getElementById(\'b\').onclick=()=>{n++;document.getElementById(\'b\').textContent=\'Clicks: \'+n;};"}}</tool>\n';
 }
@@ -196,7 +293,7 @@ async function runTool(tools, name, args, ctx) {
   if (t.kind === 'memory') { const out = BUILTIN[name].run(args || {}); if (!spend(COST.memory)) throw new Error('out of daily credits'); return out; }
   if (!spend(COST[t.kind])) throw new Error('out of daily credits');
   if (t.kind === 'mcp') { const srv = state().mcp.find(x => x.name === t.mcp.server); return mcpCall({ ...srv }, t.mcp.name, args); }
-  return BUILTIN[name].run(args || {});
+  return BUILTIN[name].run(args || {}, ctx);
 }
 
 
@@ -283,4 +380,4 @@ function aboutUserHint(text, memories) {
     : '\n[this question is about the user, and you know nothing about them yet. Reply only: "I don\'t know that about you yet. Tell me and I\'ll remember it." Do not talk about your own preferences or the internet.]\n';
 }
 
-module.exports = { messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+module.exports = { planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

@@ -2,6 +2,7 @@
 //  "browser": WebLLM (WebGPU) runs the model inside this tab, weights cached in browser storage. Works on phones.
 //  "local":   talks to the Pholama server on your PC (llama.cpp / Ollama) using PC RAM/GPU.
 import { Account, cleanName } from './account.js';
+import { sourcesCard } from './sources.js';
 import { llamaLoader, LLAMA_CSS } from './loader.js';
 import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME, setLocalToolAI } from './cloud.js';
 import { planFallback } from './fallback.js';
@@ -74,12 +75,34 @@ function codeBlockEl(code, lang) {
   const c = document.createElement('code'); c.textContent = code;
   pre.append(nums, c); w.append(bar, pre); return w;
 }
+// Put reply text into an element. Web links the AI writes become tappable, but only plain http(s) ones with no login in front and
+// nothing pointing inside the user's own network. Everything else stays plain text. Built from nodes, never from HTML.
+const LINK_RE = /\[([^\]\n]{1,80})\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>"'`)\]]+[^\s<>"'`)\].,;:!?])/g;
+export function linkOk(raw) {
+  let u; try { u = new URL(raw); } catch { return null; }
+  if (!/^https?:$/.test(u.protocol) || u.username || u.password) return null;
+  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
+  if (!h || h === 'localhost' || /\.(local|localhost|internal|lan)$/.test(h) || h === '::1' || /^f[cd]|^fe80/.test(h)) return null;
+  const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h); if (m) { const a = +m[1], b = +m[2]; if (a === 10 || a === 127 || a === 0 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return null; }
+  return u.toString();
+}
+function setText(node, text) {
+  if (node.dataset.raw === text) return; node.dataset.raw = text; node.textContent = '';
+  let last = 0, m; LINK_RE.lastIndex = 0;
+  while ((m = LINK_RE.exec(text))) {
+    const url = linkOk(m[2] || m[3]); if (!url) continue;
+    if (m.index > last) node.append(document.createTextNode(text.slice(last, m.index)));
+    const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer nofollow'; a.className = 'ans-link';
+    a.textContent = m[1] ? m[1] : m[3]; if (m[1]) a.title = url; node.append(a); last = m.index + m[0].length;
+  }
+  if (last < text.length) node.append(document.createTextNode(text.slice(last)));
+}
 function renderAnswer(el, raw) {
   const parts = splitBlocks(raw);
-  if (!parts.some(p => p.type === 'code')) { if (el.dataset.sig) { el.textContent = ''; delete el.dataset.sig; } el.textContent = raw; return; }
+  if (!parts.some(p => p.type === 'code')) { if (el.dataset.sig) { el.textContent = ''; delete el.dataset.sig; delete el.dataset.raw; } setText(el, raw); return; }
   const sig = parts.map(p => p.type === 'code' ? 'c' + p.lang : 't').join('|');
   if (el.dataset.sig !== sig) {                    // the shape changed (new block started): build it again
-    el.dataset.sig = sig; el.textContent = '';
+    el.dataset.sig = sig; el.textContent = ''; delete el.dataset.raw;
     for (const p of parts) {
       if (p.type === 'text') { const d = document.createElement('div'); d.className = 'cbtext'; el.append(d); }
       else el.append(codeBlockEl('', p.lang));
@@ -88,7 +111,7 @@ function renderAnswer(el, raw) {
   // same shape: only refresh the text inside, so scrolling and selection survive while streaming
   parts.forEach((p, k) => {
     const node = el.children[k]; if (!node) return;
-    if (p.type === 'text') { if (node.textContent !== p.text) node.textContent = p.text; return; }
+    if (p.type === 'text') { setText(node, p.text); return; }
     const c = node.querySelector('code'); if (c.textContent !== p.code) {
       c.textContent = p.code; node.querySelector('.cbn').textContent = p.code.split('\n').map((_, i) => i + 1).join('\n');
     }
@@ -114,7 +137,8 @@ function makeMsg() {
   };
   const ans = document.createElement('div'); ans.className = 'ans';
   const use = document.createElement('div'); use.className = 'usage'; use.style.display = 'none';
-  el.append(live, think, ans, use); chatEl.appendChild(el); chatEl.scrollTop = 1e9;
+  const srcs = sourcesCard([]); srcs.el.style.display = 'none';
+  el.append(live, think, ans, srcs.el, use); chatEl.appendChild(el); chatEl.scrollTop = 1e9;
   const lines = live.querySelector('.lines'), sum = live.querySelector('.sum'); let n = 0;
   return {
     el,
@@ -140,6 +164,7 @@ function makeMsg() {
     thought(text, seconds) {   // a finished reasoning text from Agent Max (not streamed)
       if (!text) return; tStop(); showThought(String(text).trim(), false, (+seconds || 0) * 1000); think.open = false;
     },
+    sources(list) { srcs.update(list); chatEl.scrollTop = 1e9; },   // sites the AI visited, with safe links and preview pictures
     usage(u) {            // u = {in, out, estimated, seconds}. Real counts come from the model backend; otherwise flagged as estimates.
       if (!u) return; const tot = (u.in || 0) + (u.out || 0), f = n => (+n).toLocaleString();
       use.textContent = `${u.estimated ? '~' : ''}${f(u.in)} in \u00b7 ${u.estimated ? '~' : ''}${f(u.out)} out \u00b7 ${u.estimated ? '~' : ''}${f(tot)} tokens` + (u.seconds ? ` \u00b7 ${u.seconds}s` : '') + (u.estimated ? ' (estimated)' : '');
@@ -375,6 +400,7 @@ async function pcChat(model, msg, onText) {
       if (j.status) { msg.log('step', j.status); continue; }
       if (j.memory) { const note = await saveMemory(j.memory.text); msg.log(/^Saved/.test(note) ? 'result' : 'error', note); continue; }
       if (j.approve) { (j.approve.type === 'command' ? cmdAsk : ghAsk)(msg, j.approve); continue; }
+      if (j.sources) { msg.sources(j.sources); continue; }
       if (j.tool) { refreshCredits(); continue; }
       if (j.usage) { msg.usage(j.usage); continue; }
       if (j.credits) { refreshCredits(); continue; }
@@ -1255,12 +1281,23 @@ async function paintUpdate() {
   try {
     const r = await fetch('/api/update'); if (!r.ok) return; const u = await r.json();
     $('#updBox').style.display = ''; $('#updAuto').checked = u.auto !== false;
-    $('#updPill').style.display = u.ready ? '' : 'none';
-    $('#updMsg').textContent = u.ready ? `Version ${u.latest} is downloaded. Close Pholama and start it again to use it.`
+    $('#updPill').style.display = u.ready ? '' : 'none'; $('#updRestart').style.display = u.ready ? '' : 'none';
+    $('#updMsg').textContent = u.ready ? `Version ${u.latest} is downloaded. Press Restart now to use it.`
       : u.error ? u.error : u.latest && u.latest !== u.current ? `New version ${u.latest} is available. Turn on automatic updates or press Check now.`
       : `You have the newest version (${u.current}).`;
   } catch {}
 }
+// Ask this PC's server to start a fresh copy of itself, wait for it to come back, then reload the page so the new version is what you see.
+async function restartPholama(btn) {
+  if (btn) { btn.disabled = true; btn.textContent = 'Restarting...'; }
+  try { const r = await fetch('/api/restart', { method: 'POST' }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed'); }
+  catch (e) { if (btn) { btn.disabled = false; btn.textContent = 'Restart now'; } alert('Could not restart from here (' + e.message + '). Close Pholama and open it again.'); return; }
+  await new Promise(r => setTimeout(r, 2500));
+  for (let i = 0; i < 40; i++) { try { const r = await fetch('/api/update', { cache: 'no-store' }); if (r.ok) { location.reload(); return; } } catch {} await new Promise(r => setTimeout(r, 700)); }
+  if (btn) { btn.disabled = false; btn.textContent = 'Restart now'; } alert('Pholama did not come back on its own. Open it again from your Desktop icon.');
+}
+window.restartPholama = restartPholama;
+$('#updRestart').onclick = e => restartPholama(e.currentTarget);
 $('#updCheck').onclick = async () => { $('#updMsg').textContent = 'Checking...'; try { await fetch('/api/update/check', { method: 'POST' }); } catch {} paintUpdate(); };
 $('#updAuto').onchange = async e => { try { await fetch('/api/update/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: e.target.checked }) }); } catch {} paintUpdate(); };
 $('#updPill').onclick = () => { $('#opt').click(); };
