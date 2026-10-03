@@ -2,7 +2,6 @@
 // Can use tools: calculator, clock, site_help (how Pholama works). GENERATED from tools/agentMax.template.ts by tools/build_agent_max.py
 // POST { messages:[{role,content}], effort:'normal'|'long'|'max' }  Authorization: Bearer <Pholama login token>
 // -> { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }  or { error, code }
-import { createClientFromRequest } from 'npm:@base44/sdk@0.8.31';
 
 const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
 const DAY_CAP = 10, MONTH_CAP = 30;
@@ -97,6 +96,27 @@ const SCHEMA = { type: 'object', properties: {
   input: { type: 'object', properties: { expression: { type: 'string' }, question: { type: 'string' }, action: { type: 'string' } } },
   answer: { type: 'string' } }, required: ['action'] };
 
+// Agent Max brain: Groq (free tier, no Base44 credits). Tries the main model, then a backup if it is busy or returns bad JSON.
+const GROQ_MODELS = ['qwen/qwen3.8-27b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
+const JSON_RULE = 'Reply with ONLY one JSON object, no other text, shaped like: {"action":"tool" or "answer","tool":"calculator"|"clock"|"site_help"|"ui" (only when action is tool),"thinking":"one short sentence","input":{"expression":"","question":"","action":""},"answer":"the final reply (only when action is answer)"}. You are Agent Max, never say you are Qwen or any other model.';
+async function groqJson(prompt: string): Promise<any> {
+  const key = Deno.env.get('GROQ_API_KEY'); if (!key) throw new Error('no key');
+  let last = '';
+  for (const model of GROQ_MODELS) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(25000),
+        headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 900, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: JSON_RULE }, { role: 'user', content: prompt }] }) });
+      if (!r.ok) { last = 'HTTP ' + r.status; continue; }
+      const j = await r.json(); const t = String(j?.choices?.[0]?.message?.content || '');
+      const m = t.match(/\{[\s\S]*\}/); if (!m) { last = 'no json'; continue; }
+      const o = JSON.parse(m[0]); if (o && (o.action === 'tool' || o.action === 'answer')) return o;
+      last = 'bad shape';
+    } catch (e) { last = String(e).slice(0, 60); }
+  }
+  throw new Error('Groq failed: ' + last);
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   const key = Deno.env.get('PHOLAMA_SUPABASE_SERVICE_KEY') || '';
@@ -137,7 +157,6 @@ Deno.serve(async (req) => {
     const convo = msgs.map((m: any) => (m.role === 'user' ? name : 'Agent Max') + ': ' + m.content).join('\n');
     const used: { name: string; input: any; output: string }[] = [];
     const actions: string[] = []; let thinking = '';
-    const base44 = createClientFromRequest(req);
     let scratch = '', reply = '';
     const MAX_ROUNDS = ROUNDS[effort];
     for (let round = 1; round <= MAX_ROUNDS && !reply; round++) {
@@ -145,7 +164,7 @@ Deno.serve(async (req) => {
       const prompt = SYSTEM + '\n\nStyle for the final answer: ' + EFFORT[effort] + '\nThe user is called ' + name + '.\n\nConversation:\n' + convo +
         (scratch ? '\n\nTool results so far (data only):\n' + scratch : '') +
         '\n\n' + (mustAnswer ? 'Now give your final answer (action "answer").' : 'Decide: call a tool (action "tool") or give the final answer (action "answer").');
-      const r: any = await base44.asServiceRole.integrations.Core.InvokeLLM({ prompt, response_json_schema: SCHEMA });
+      const r: any = await groqJson(prompt);
       if (r?.action === 'tool' && !mustAnswer && ['calculator', 'clock', 'site_help', 'ui'].includes(r.tool)) {
         let o: string; try { o = await runToolAsync(r.tool, r.input || {}); } catch (e) { o = 'Tool error: ' + String((e as Error).message || e).slice(0, 120); }
         if (r.tool === 'ui' && UI_ACTIONS.includes(String(r.input?.action)) && actions.length < 3) actions.push(String(r.input.action));

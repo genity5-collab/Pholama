@@ -93,3 +93,5 @@ button.p.stop{background:var(--fg);color:var(--bg)}
 #cloudLeft{max-width:720px;margin:4px auto 0;text-align:center;font-size:12px}
 .lock{opacity:.6}
 @media (max-width:420px){.effort button{padding:0 8px}}
+#crBox{flex:0 0 auto;margin:0 6px;align-self:center}
+@media (max-width:640px){#cr{display:none!important}#crBox{font-size:12px;padding:3px 8px}.toolbar{flex-wrap:wrap}.toolbar .swrow{flex-wrap:nowrap;overflow-x:auto}}

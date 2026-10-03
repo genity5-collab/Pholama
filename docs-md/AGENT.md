@@ -76,3 +76,7 @@ Local models that support tools can use GitHub for free (no cloud credits). Publ
 - **Token:** paste a GitHub token in Tools. It stays in your browser on this device and is sent to your own PC only. Clear it any time.
 - Models without tool support are never given these tools.
 - The credits left today show beside the message box.
+
+## Agent Max brain
+
+Agent Max now thinks with Groq (model `qwen/qwen3.8-27b`, backup `openai/gpt-oss-120b`). It no longer uses Base44 integration credits. The key is stored as a server secret, never in the page. The 10/day and 30/month limits still apply.

@@ -324,7 +324,7 @@ const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname;
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*' }); return res.end(); }
   try {
-    if (p === '/api/caps') { const m = u.searchParams.get('model') || ''; const c = await modelCaps(m); return json(res, 200, { ...c, search: c.tools, mcp: c.tools }); }
+    if (p === '/api/caps') { const m = u.searchParams.get('model') || ''; const c = await modelCaps(m); return json(res, 200, { ...c, search: c.tools, mcp: c.tools, github: c.tools }); }
     if (p === '/api/github/approve' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ok: true, text: await agent.github.confirm(String(req.headers['x-github-token'] || ''), String(b.id || ''), b.approve === true) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); } }
     if (p === '/api/credits') return json(res, 200, { ...agent.credits(), allowed: agent.allowed() });
     if (p === '/api/prefs' && req.method === 'POST') return json(res, 200, agent.setPrefs(await body(req)));

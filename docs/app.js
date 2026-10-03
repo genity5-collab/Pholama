@@ -140,7 +140,7 @@ async function refreshCredits() {
   try { cred = await (await fetch('api/credits')).json(); } catch { return; }
   const c = $('#cr'); c.style.display = ''; c.textContent = cred.left; c.title = cred.left + ' of ' + cred.daily + ' daily credits left' + (cred.left === 0 ? '. Search, tools, MCP and thinking are off until tomorrow.' : '. Resets daily.');
   c.className = 'pill' + (cred.left === 0 ? ' zero' : cred.left < cred.daily * 0.2 ? ' low' : '');
-  const cb = $('#crBox'); cb.style.display = ''; cb.textContent = cred.left + ' credits'; cb.className = c.className; cb.title = cred.left + ' of ' + cred.daily + ' credits left today';
+  const cb = $('#crBox'); cb.style.display = ''; cb.textContent = cred.left; cb.className = c.className; cb.title = cred.left + ' of ' + cred.daily + ' credits left today';
 }
 async function openOpts() {
   const off = !server; $('#t_off').style.display = off ? '' : 'none'; $('#t_body').style.display = off ? 'none' : '';
@@ -185,6 +185,7 @@ const ICON = {
   search: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   tools: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>',
   mcp: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M7 8h10v4a5 5 0 0 1-10 0z"/><path d="M12 17v4"/></svg>',
+  github: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4 1.5-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg>',
   thinking: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>',
 };
 const SW = [['github', 'GitHub', 'Search and read GitHub'], ['search', 'Search', 'Live web search'], ['tools', 'Tools', 'Calculator and clock'], ['mcp', 'MCP', 'Tools from your MCP servers'], ['thinking', 'Thinking', 'Reason step by step first']];
@@ -199,14 +200,14 @@ async function paintSwitches() {
     try { const c = await (await fetch('api/caps?model=' + encodeURIComponent(sel.value))).json(); await refreshCredits();   // keeps the master toggles (Tools dialog) in sync
     const mp = (cred && cred.allowed && cred.allowed.prefs) || {};
     let hasMcp = false; try { hasMcp = ((await (await fetch('api/mcp')).json()).servers || []).length > 0; } catch {}
-    swCaps = { search: c.search && mp.search !== false, tools: c.tools && mp.tools !== false, mcp: c.mcp && mp.mcp !== false && hasMcp, thinking: c.thinking && mp.thinking !== false, _src: c.source };
+    swCaps = { github: c.github && mp.github !== false, search: c.search && mp.search !== false, tools: c.tools && mp.tools !== false, mcp: c.mcp && mp.mcp !== false, _hasMcp: hasMcp, thinking: c.thinking && mp.thinking !== false, _src: c.source };
     } catch {}
   }
   row.innerHTML = '';
   const shown = SW.filter(([k]) => swCaps[k]);
   for (const [k, label, tip] of shown) {
     const b = document.createElement('button'); b.className = 'icn' + (swOn(k) ? ' on' : ''); b.innerHTML = ICON[k]; b.title = label + ' (' + tip + '): ' + (swOn(k) ? 'on' : 'off'); b.setAttribute('aria-label', label + (swOn(k) ? ', on' : ', off')); b.setAttribute('aria-pressed', !!swOn(k));
-    b.onclick = () => { const p = swPref(); p[k] = !swOn(k); localStorage.setItem('pholama.sw', JSON.stringify(p)); paintSwitches(); };
+    b.onclick = () => { if (k === 'mcp' && !swCaps._hasMcp) { alert('No MCP servers yet. Open Tools and add one to use this.'); return; } const p = swPref(); p[k] = !swOn(k); localStorage.setItem('pholama.sw', JSON.stringify(p)); paintSwitches(); };
     row.appendChild(b);
   }
   if (!shown.length && server && sel.value && (sel.value.startsWith('ollama:') || sel.value.startsWith('gguf:'))) {
