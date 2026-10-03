@@ -199,7 +199,7 @@ async function streamTurn(model, messages, options, onToken, signal, usage) {
   if (!fs.existsSync(path.join(MODELS_DIR, m.file))) throw new Error('Model not downloaded yet');
   await startLlama(m.file);
   const r = await fetch(`http://127.0.0.1:${LLAMA_PORT}/v1/chat/completions`, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, stream: true, stream_options: { include_usage: true }, temperature: (options || {}).temperature ?? 0.7 }) });
+    body: JSON.stringify({ messages, stream: true, stream_options: { include_usage: true }, temperature: (options || {}).temperature ?? 0.7, ...((options || {}).num_predict ? { max_tokens: options.num_predict } : {}) }) });
   let buf = '', all = '';
   for await (const c of r.body) {
     buf += Buffer.from(c).toString('utf8'); let i;
@@ -249,9 +249,13 @@ async function chat(req, res, b) {
     if (allow.thinking && !thinking) log('error', 'Not enough credits for thinking mode. Answering without it.');
     if (thinking) log('step', 'Thinking mode on (charged only if the model really thinks)');
     let thinkBilled = false, thinkSeen = false;
+    const effort = ['long', 'max'].includes(b.effort) ? b.effort : 'normal';
+    // more room to answer at higher effort (Normal leaves the model's own default alone)
+    const opts = { ...(b.options || {}) }; if (effort !== 'normal') opts.num_predict = effort === 'max' ? 2048 : 1024;
+    if (effort !== 'normal') log('step', 'Think effort: ' + effort + ' (no credits used for local models)');
     const usage = { in: 0, out: 0, got: false }, t1 = Date.now();
     let generated = '';   // everything the model wrote this message (all turns), used only for the estimate
-    const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : []) }, ...(b.messages || []).filter(m => m.role !== 'system')];
+    const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effort) }, ...(b.messages || []).filter(m => m.role !== 'system')];
     // Host-side routing: obvious intents run their tool before the model answers (weak models skip tool calls).
     if (tools.length) {
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
@@ -274,7 +278,7 @@ async function chat(req, res, b) {
       let cut = false;
       const lu = [...messages].reverse().find(m => m.role === 'user'), holdWeb = !tools.length && lu && ASKED_WEB.test(lu.content);   // decide before showing anything
       const flush = () => { if (cut) return; if (leaked(acc)) { cut = true; line({ model, message: { role: 'assistant', content: sent ? '\n' + CANT : CANT }, done: false }); log('step', 'Hid part of the reply that quoted private instructions.'); return; } if (acc.length > sent) { line({ model, message: { role: 'assistant', content: acc.slice(sent) }, done: false }); sent = acc.length; } };
-      const text = await streamTurn(model, messages, b.options, t => {
+      const text = await streamTurn(model, messages, opts, t => {
         acc += t; if (first) { first = false; log('step', 'Model is answering'); }
         if (thinking && !thinkSeen && acc.includes('<think>')) { thinkSeen = true; log('thought', 'Model is thinking...'); if (!thinkBilled && agent.spend(agent.COST.thinking)) { thinkBilled = true; log('step', `Thinking used (-${agent.COST.thinking} credits)`); } }
         if (mode === 'undecided') {

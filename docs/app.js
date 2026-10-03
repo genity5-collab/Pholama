@@ -3,14 +3,27 @@
 //  "local":   talks to the Pholama server on your PC (llama.cpp / Ollama) using PC RAM/GPU.
 import { Account, cleanName } from './account.js';
 import { llamaLoader, LLAMA_CSS } from './loader.js';
+import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME } from './cloud.js';
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
 const chatEl = $('#chat'), inEl = $('#in'), sel = $('#model'), dlg = $('#dlg'), listEl = $('#list');
+const heroEl = $('#hero');   // kept so New session can bring the welcome screen back
 let hasGPU = false;
 let hasF16 = false;
 async function probeGPU() { try { const a = navigator.gpu && await navigator.gpu.requestAdapter(); hasF16 = !!(a && a.features && a.features.has('shader-f16')); return !!a; } catch { return false; } }
 const deviceRam = () => navigator.deviceMemory || 0; // Chrome reports 0.25-8 (rounded). 0 = unknown.
 let catalog = null, server = null, tab = 'browser', engine = null, engineModel = null, history = [], busy = false;
+let stopper = null, stopped = false, sessionId = 1;   // stopper() cancels whatever reply is running right now
+let effort = cleanEffort(localStorage.getItem('pholama.effort'));
+
+// You need an account to chat with any model or to download one. This opens the sign-in box and says why.
+function needLogin(what) {
+  if (what === 'download' ? mayDownload(Account.user()) : mayUse(Account.user())) return false;
+  aMode = 'sign'; $('#a_msg').textContent = ''; paintAcct();
+  $('#a_why').textContent = GATE_MESSAGE; $('#a_why').style.display = '';
+  if (dlg.open) dlg.close();
+  $('#dlg3').showModal(); return true;
+}
 
 // One AI message = live log (actions/steps) + live thinking + answer. Everything updates while it streams.
 function makeMsg() {
@@ -79,9 +92,9 @@ async function refreshSelect() {
     const t = await (await fetch('api/tags')).json();
     for (const m of t.models) sel.add(new Option('💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
   } catch {}
-  const cl = new Option('☁ Cloud models (coming soon)', ''); cl.disabled = true; sel.add(cl);
+  sel.add(new Option('☁ ' + MAX_NAME + ' (cloud, no download)', CLOUD_ID));
   const first = [...sel.options].findIndex(o => !o.disabled); if (first >= 0) sel.selectedIndex = first;
-  paintSwitches();
+  paintSwitches(); paintEffort();
 }
 
 async function ensureEngine(value) {
@@ -106,12 +119,13 @@ async function ensureCpu(id, onProgress) {
     tf.pipeline('text-generation', id, { dtype: 'q8', progress_callback: p => { if (onProgress && p.progress != null) onProgress(p); } }));
   cpuModel = id; markReady('cpu:' + id);
 }
-async function cpuChat(messages, onToken) {
+async function cpuChat(messages, onToken, eff) {
   const tf = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
   let out = ''; const cb = t => { out += t; onToken(t); };
   const streamer2 = new tf.TextStreamer(cpuPipe.tokenizer, { skip_prompt: true, skip_special_tokens: true, callback_function: cb });
   const t0 = performance.now();
-  await cpuPipe(messages, { max_new_tokens: /Qwen3/i.test(cpuModel || '') ? 1024 : 512, do_sample: true, temperature: 0.7, streamer: streamer2 });
+  const stopCrit = new tf.InterruptableStoppingCriteria(); stopper = () => stopCrit.interrupt();   // the Stop button calls this
+  await cpuPipe(messages, { max_new_tokens: effortTokens(/Qwen3/i.test(cpuModel || '') ? 1024 : 512, eff), do_sample: true, temperature: 0.7, streamer: streamer2, stopping_criteria: stopCrit });
   try {   // exact: run the model's own tokenizer over what went in and what came out
     const tk = cpuPipe.tokenizer, n = x => tk.encode(x).length;
     return { in: messages.reduce((a, m) => a + n(m.content) + 4, 0), out: n(out), estimated: false, seconds: +((performance.now() - t0) / 1000).toFixed(1) };
@@ -166,6 +180,12 @@ $('#opt').onclick = openOpts; $('#close2').onclick = () => $('#dlg2').close();
 
 // ----- per-message switches: Search / Tools / MCP / Thinking -----
 // A chip exists only if the selected model can really do it. Capable models start with it ON; a tap is remembered.
+const ICON = {
+  search: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
+  tools: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>',
+  mcp: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M7 8h10v4a5 5 0 0 1-10 0z"/><path d="M12 17v4"/></svg>',
+  thinking: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>',
+};
 const SW = [['search', 'Search', 'Live web search'], ['tools', 'Tools', 'Calculator and clock'], ['mcp', 'MCP', 'Tools from your MCP servers'], ['thinking', 'Thinking', 'Reason step by step first']];
 let swCaps = {};
 const swPref = () => { try { return JSON.parse(localStorage.getItem('pholama.sw') || '{}'); } catch { return {}; } };
@@ -184,7 +204,7 @@ async function paintSwitches() {
   row.innerHTML = '';
   const shown = SW.filter(([k]) => swCaps[k]);
   for (const [k, label, tip] of shown) {
-    const b = document.createElement('button'); b.className = 'chipbtn' + (swOn(k) ? ' on' : ''); b.textContent = label; b.title = tip + (swOn(k) ? ': on' : ': off'); b.setAttribute('aria-pressed', swOn(k));
+    const b = document.createElement('button'); b.className = 'icn' + (swOn(k) ? ' on' : ''); b.innerHTML = ICON[k]; b.title = label + ' (' + tip + '): ' + (swOn(k) ? 'on' : 'off'); b.setAttribute('aria-label', label + (swOn(k) ? ', on' : ', off')); b.setAttribute('aria-pressed', !!swOn(k));
     b.onclick = () => { const p = swPref(); p[k] = !swOn(k); localStorage.setItem('pholama.sw', JSON.stringify(p)); paintSwitches(); };
     row.appendChild(b);
   }
@@ -194,30 +214,94 @@ async function paintSwitches() {
   }
   row.style.display = row.children.length ? '' : 'none';
 }
-sel.addEventListener('change', paintSwitches);
+sel.addEventListener('change', () => { paintSwitches(); paintEffort(); });
 
+// ----- think effort: Normal / Long / Max -----
+// On the cloud model it costs a little more of the daily allowance. On your own models it never costs anything.
+function paintEffort() {
+  const box = $('#effort'); box.innerHTML = '';
+  const cloud = sel.value === CLOUD_ID;
+  for (const k of effortKeys()) {
+    const b = document.createElement('button'); b.textContent = EFFORT[k].label; b.className = k === effort ? 'on' : '';
+    b.title = EFFORT[k].hint + (cloud ? ' (Every ' + MAX_NAME + ' message counts as 1.)' : ' (Free on your own models.)'); b.setAttribute('aria-pressed', k === effort);
+    b.onclick = () => { effort = k; localStorage.setItem('pholama.effort', k); paintEffort(); };
+    box.appendChild(b);
+  }
+}
+// Agent Max can operate the page. The server only returns names from this fixed list; each one does what a tap would do.
+const UI_DO = {
+  open_models: () => { if (!dlg.open) $('#mgr').click(); },
+  open_tools: () => { if (!$('#dlg2').open) $('#opt').click(); },
+  open_account: () => { if (!$('#dlg3').open) $('#acct').click(); },
+  close_dialogs: () => { for (const d of [dlg, $('#dlg2'), $('#dlg3')]) if (d.open) d.close(); refreshSelect(); },
+  new_session: () => newSession(),
+  set_effort_normal: () => setEffortTo('normal'), set_effort_long: () => setEffortTo('long'), set_effort_max: () => setEffortTo('max'),
+  check_limits: () => { for (const d of [dlg, $('#dlg2'), $('#dlg3')]) if (d.open) d.close(); $('#cloudLeft').style.display = ''; $('#cloudLeft').scrollIntoView({ block: 'nearest' }); },
+};
+function setEffortTo(k) { effort = cleanEffort(k); localStorage.setItem('pholama.effort', effort); paintEffort(); }
+function runUiActions(list) {
+  for (const a of (Array.isArray(list) ? list : []).slice(0, 3)) {
+    if (!Object.prototype.hasOwnProperty.call(UI_DO, a)) continue;
+    try { UI_DO[a](); } catch (e) { console.warn('ui action failed', a, e); }
+  }
+}
+function paintCloudLeft(r) {
+  const el = $('#cloudLeft'); if (!r || r.day_used == null) { el.style.display = 'none'; return; }
+  const dl = Math.max(0, r.day_cap - r.day_used), ml = Math.max(0, r.month_cap - r.month_used), n = Math.min(dl, ml);
+  el.textContent = `${MAX_NAME}: ${n} left today \u00b7 ${ml} left this month`; el.style.display = '';
+}
+
+const SEND_ICON = '\u2191', STOP_ICON = '\u25A0';
+function setBusy(on) {
+  busy = on; const b = $('#send');
+  b.innerHTML = on ? STOP_ICON : SEND_ICON; b.title = on ? 'Stop' : 'Send'; b.setAttribute('aria-label', on ? 'Stop' : 'Send'); b.classList.toggle('stop', on);
+  $('#newSess').disabled = false;
+}
+// Stop whatever is running. Safe to call any time, any number of times.
+function stopGen() {
+  if (!busy) return; stopped = true;
+  try { if (stopper) stopper(); } catch {}
+}
 async function send() {
-  const text = inEl.value.trim(); if (!text || busy || !sel.value) { if (!sel.value) add('sys', 'Pick a model first (open Models to download one).'); return; }
-  busy = true; $('#send').disabled = true; inEl.value = '';
+  if (busy) return stopGen();                               // the same button is Send when idle and Stop while a reply runs
+  const text = inEl.value.trim(); if (!text) return;
+  if (needLogin('use')) return;
+  if (!sel.value) { add('sys', 'Pick a model first (open Models to download one).'); return; }
+  const token = Account.token && Account.token();
+  setBusy(true); stopped = false; stopper = null; inEl.value = '';
   hideHero(); history.push({ role: 'user', content: text }); addUser(text);
-  const msg = makeMsg(); let acc = '';
+  const msg = makeMsg(); let acc = ''; let pendingUi = null;
+  const sessionAtStart = sessionId;                          // if the user starts a New session meanwhile, this reply must not land in it
   try {
-    if (!sel.value.startsWith('ollama:') && !sel.value.startsWith('gguf:')) msg.log('step', 'Loading the model on this device...', 0);
+    const isCloud = sel.value === CLOUD_ID;
+    if (!isCloud && !sel.value.startsWith('ollama:') && !sel.value.startsWith('gguf:')) msg.log('step', 'Loading the model on this device...', 0);
     const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');
     if (local) { const ri = rememberIntent(text); if (ri && memOn) msg.log('result', await saveMemory(ri), 0); }
-    await ensureEngine(sel.value);
+    if (!isCloud) await ensureEngine(sel.value);
     const mem = local ? memorySystem() : null, send_ = mem ? [mem, ...history] : history;
-    if (sel.value.startsWith('cpu:')) {
+    if (isCloud) {
+      msg.log('step', `Asking ${MAX_NAME}` + (effort !== 'normal' ? ` (effort: ${EFFORT[effort].label})` : '') + '...', 0);
+      const ac = new AbortController(); stopper = () => ac.abort();
+      const t0 = performance.now();
+      const r = await cloudChat(history, effort, token, ac.signal);
+      acc = r.reply; pendingUi = r.actions; msg.text(acc); if (r.thinking) msg.log('think', r.thinking, +((performance.now() - t0) / 1000));
+      for (const t of (r.tools || [])) msg.log('action', `${t.name}${t.input && (t.input.expression || t.input.question) ? ' ' + (t.input.expression || t.input.question) : ''}`, +((performance.now() - t0) / 1000));
+      msg.log('result', `${MAX_NAME} used ${(r.tools || []).length} tool(s). Today: ${r.day_used}/${r.day_cap}. Month: ${r.month_used}/${r.month_cap}.`, +((performance.now() - t0) / 1000));
+      msg.usage({ in: history.reduce((n, m) => n + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: +((performance.now() - t0) / 1000).toFixed(1) });
+      paintCloudLeft(r);
+    } else if (sel.value.startsWith('cpu:')) {
       msg.log('step', 'Running on your phone CPU. This can be slow.', 0);
-      msg.usage(await cpuChat(send_, t => { acc += t; msg.text(acc); }));
+      msg.usage(await cpuChat(send_, t => { acc += t; msg.text(acc); }, effort));
     } else if (sel.value.startsWith('web:')) {
       msg.log('step', 'Running on your phone GPU.', 0);
-      const t0 = performance.now(), s = await engine.chat.completions.create({ messages: send_, stream: true, stream_options: { include_usage: true } }); let wu = null;
-      for await (const c of s) { acc += c.choices[0]?.delta?.content || ''; if (c.usage) wu = c.usage; msg.text(acc); }
+      stopper = () => { try { engine.interruptGenerate(); } catch {} };
+      const t0 = performance.now(), s = await engine.chat.completions.create({ messages: send_, stream: true, stream_options: { include_usage: true }, max_tokens: effortTokens(1024, effort) }); let wu = null;
+      for await (const c of s) { acc += c.choices[0]?.delta?.content || ''; if (c.usage) wu = c.usage; msg.text(acc); if (stopped) break; }
       const sec = +((performance.now() - t0) / 1000).toFixed(1);
       msg.usage(wu ? { in: wu.prompt_tokens, out: wu.completion_tokens, estimated: false, seconds: sec } : { in: send_.reduce((a, m) => a + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: sec });
     } else {
-      const r = await fetch('api/chat', { method: 'POST', body: JSON.stringify({ model: sel.value, messages: history, agent: true, switches: swState(), memory: memOn, memories: memOn ? memories : [] }) });
+      const ac = new AbortController(); stopper = () => ac.abort();
+      const r = await fetch('api/chat', { method: 'POST', signal: ac.signal, body: JSON.stringify({ model: sel.value, messages: history, agent: true, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [] }) });
       const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
       for (;;) {
         const { done, value } = await rd.read(); if (done) break;
@@ -235,10 +319,27 @@ async function send() {
         }
       }
     }
-    history.push({ role: 'assistant', content: acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim() });
-    msg.finish(true);
-  } catch (e) { msg.fail(e.message); history.pop(); }
-  busy = false; $('#send').disabled = false; inEl.focus();
+    if (sessionAtStart !== sessionId) return;                // a New session began while this ran: drop the late reply
+    const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
+    if (stopped) {                                           // user pressed Stop: keep what was written, say so, no error
+      if (clean) history.push({ role: 'assistant', content: clean }); else history.pop();
+      msg.log('step', clean ? 'Stopped. Kept what was written so far.' : 'Stopped before any answer.'); msg.finish(true);
+    } else { history.push({ role: 'assistant', content: clean }); msg.finish(true); }
+    if (pendingUi && sessionAtStart === sessionId && !stopped) runUiActions(pendingUi);   // after the reply is saved, so new_session cannot eat it
+  } catch (e) {
+    if (sessionAtStart !== sessionId) return;
+    if (e && (e.name === 'AbortError' || stopped)) {         // aborted by Stop, not a failure
+      const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
+      if (clean) history.push({ role: 'assistant', content: clean }); else history.pop();
+      msg.log('step', clean ? 'Stopped. Kept what was written so far.' : 'Stopped before any answer.'); msg.finish(true);
+    } else {
+      history.pop();
+      if (e && e.code === 'login') { msg.fail(e.message); needLogin('use'); }
+      else if (e && (e.code === 'limit-day' || e.code === 'limit-month')) { msg.fail(e.message); if (e.info) paintCloudLeft(e.info); }
+      else msg.fail(e.message);
+    }
+  }
+  if (sessionAtStart === sessionId) { stopper = null; setBusy(false); inEl.focus(); }
 }
 
 // ----- account + memory -----
@@ -343,6 +444,7 @@ function render() {
       const idle = (label, hasFiles) => { r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = false; r.btn.onclick = start; del.style.display = hasFiles ? '' : 'none'; };
       const setReady = () => { ready = true; idle('Ready', true); r.btn.disabled = true; r.loader.done(); r.sub.textContent = 'Ready to chat. Works offline.'; };
       const start = async () => {
+        if (needLogin('download')) return;
         cancelled = false; r.bar.style.display = ''; r.setProgress(0); del.style.display = 'none'; r.sub.textContent = 'Starting...';
         r.btn.textContent = 'Stop'; r.btn.disabled = false;
         r.btn.onclick = async () => { cancelled = true; r.btn.disabled = true; r.sub.textContent = 'Stopping after the current file...'; };
@@ -381,7 +483,7 @@ function render() {
         else if (s.status === 'error') { r.sub.textContent = 'Error: ' + s.error + '  (tap Install to retry)'; r.btn.textContent = 'Install'; r.btn.disabled = false; r.btn.onclick = startInstall; }
         else if (s.status === 'stopped') { r.loader.set(0); r.sub.textContent = 'Stopped. Nothing was installed.'; r.btn.textContent = 'Install'; r.btn.disabled = false; r.btn.onclick = startInstall; }
       };
-      const startInstall = async () => { r.btn.disabled = true; await api('api/install-llama'); watch(); };
+      const startInstall = async () => { if (needLogin('download')) return; r.btn.disabled = true; await api('api/install-llama'); watch(); };
       const watch = () => { clearInterval(window.__instT); window.__instT = setInterval(async () => {
         if (!dlg.open) return clearInterval(window.__instT);
         const s = await (await fetch('api/install-llama/status')).json(); paint(s);
@@ -397,7 +499,7 @@ function render() {
       const del = mini('Delete', async () => { if (!confirm(`Delete ${m.name} from this PC?`)) return; del.disabled = true; await api('api/model?id=' + encodeURIComponent(m.id), 'DELETE'); await refreshModels(); });
       r.btn.parentNode.appendChild(del); del.style.display = 'none';
       const idle = (label, haveFile) => { r.loader.set(haveFile ? 0 : 0); r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = false; r.btn.onclick = start; del.style.display = haveFile ? '' : 'none'; };
-      const start = async () => { r.btn.disabled = true; await api('api/pull', 'POST', { id: m.id }); watchModel(); };
+      const start = async () => { if (needLogin('download')) return; r.btn.disabled = true; await api('api/pull', 'POST', { id: m.id }); watchModel(); };
       const paint = d => {
         if (d && d.status === 'downloading') { r.bar.style.display = ''; r.setProgress(d.total ? d.done / d.total : null); r.sub.textContent = `${mb(d.done)}${d.total ? ' / ' + mb(d.total) : ''} MB${d.speed ? '  ·  ' + (d.speed / 1e6).toFixed(1) + ' MB/s' : ''}`; r.btn.textContent = 'Stop'; r.btn.disabled = false; r.btn.onclick = () => api('api/pull/stop', 'POST', { id: m.id }); del.style.display = 'none'; return; }
         if (d && d.status === 'done') { idle('Downloaded', true); r.loader.done(); r.btn.disabled = true; r.sub.textContent = 'Ready. Pick it in the model menu.'; return; }
@@ -443,5 +545,11 @@ $('#close').onclick = () => { dlg.close(); refreshSelect(); };
 $('#tBrowser').onclick = () => { tab = 'browser'; render(); };
 $('#tLocal').onclick = () => { tab = 'local'; render(); };
 $('#send').onclick = send;
+// New session: stop any running reply, forget this chat, show the welcome screen again. Models and settings stay.
+function newSession() {
+  stopGen(); sessionId++; stopper = null; stopped = false; history = []; setBusy(false);
+  chatEl.innerHTML = ''; chatEl.appendChild(heroEl); inEl.value = ''; paintCloudLeft(null); inEl.focus();
+}
+$('#newSess').onclick = () => { if (history.length && !confirm('Start a new session? This clears the current chat.')) return; newSession(); };
 inEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !/Mobi|Android/i.test(navigator.userAgent)) { e.preventDefault(); send(); } });
 init().then(refreshCredits);

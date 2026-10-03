@@ -28,6 +28,7 @@ function niceError(j, fallback) {
 export const Account = {
   configured: () => !!(C().SUPABASE_URL && C().SUPABASE_ANON_KEY),
   user: () => (session && session.user) || null,
+  token: () => (session && session.access_token) || null,   // sent to the cloud model so it knows who is asking
   name: () => (session && session.user && session.user.user_metadata && session.user.user_metadata.name) || '',
 
   async load() {

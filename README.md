@@ -1,6 +1,6 @@
 # Pholama
 
-Run an AI chat **on your own phone or PC**. Free. An account is optional (only for memory).
+Run an AI chat **on your own phone or PC**. Free. You need a free account (name + password, no email) to chat and download.
 
 ## On your phone (3 taps)
 
@@ -12,10 +12,10 @@ That is all. The first download takes a few minutes. After that it works even of
 
 **Tip:** in Chrome tap the three dots, then **Add to Home screen**, to use it like an app.
 
-### Optional: make a free account for memory
+### Make a free account (required)
 
 Tap **Account**, pick a **name and a password**. No email needed, and you stay logged in on that device.
-Turn **Memory** on, then say things like *"remember that I like short answers"*. Pholama uses what it
+You must be logged in to send a message or download a model. Optionally turn **Memory** on, then say things like *"remember that I like short answers"*. Pholama uses what it
 remembers in later chats. See or delete everything in **Account**. Memory is **off** until you turn it on.
 
 Note: there is no email, so a forgotten password **cannot be reset**. Pick one you will remember.
@@ -33,6 +33,9 @@ Stop a download any time. **Resume** continues from where it stopped, even after
 | Download stops or errors | Tap **Retry** or **Resume**. It continues from the files already saved. Use WiFi. Free up some storage. |
 | Too slow | [Pick a smaller model](docs-md/MODELS.md) |
 | iPhone | Needs iOS 18 or newer, in Safari. Small models only. |
+
+### Agent Max (cloud, nothing to download)
+Pick **Agent Max** in the model list. It can use tools, open and close the app's windows for you, check your limits, and knows how Pholama works. You get **10 messages a day and 30 a month**; the daily 10 restock every day until you hit 30, then it waits for next month. Local models are always free. [Details](docs-md/AGENT.md#agent-max)
 
 ### More for phones
 - [Which model should I pick?](docs-md/MODELS.md) (every model, what it is good at, what phone it fits)

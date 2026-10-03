@@ -77,3 +77,19 @@ input[type=text]:focus,input[type=password]:focus{border-color:var(--mut)}
 .chipbtn{font-size:13px;padding:4px 11px;border-radius:999px;border:1px solid var(--line);background:transparent;color:var(--mut);min-height:30px}
 .chipbtn.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
 .swnote{font-size:12.5px;color:var(--mut)}
+
+/* toolbar: icon switches + think effort + new session, right above the message box */
+.toolbar{max-width:720px;margin:0 auto 6px;display:flex;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap}
+.toolbar .swrow{margin:0;flex:1 1 auto;min-width:0}
+.tbr{display:flex;align-items:center;gap:6px;flex:0 0 auto}
+.ib,.icn{width:34px;height:34px;min-height:34px;padding:0;border-radius:50%;border:1px solid var(--line);background:transparent;color:var(--mut);display:inline-grid;place-items:center;cursor:pointer}
+.icn.on{background:var(--fg);color:var(--bg);border-color:var(--fg)}
+.icn:not(.on) svg{opacity:.75}.ib:hover,.icn:hover{border-color:var(--mut)}
+.icn:focus-visible,.ib:focus-visible,.effort button:focus-visible{outline:2px solid var(--fg);outline-offset:2px}
+.effort{display:inline-flex;border:1px solid var(--line);border-radius:999px;overflow:hidden}
+.effort button{border:0;border-radius:0;background:transparent;color:var(--mut);font-size:12.5px;padding:0 10px;min-height:32px}
+.effort button.on{background:var(--fg);color:var(--bg)}
+button.p.stop{background:var(--fg);color:var(--bg)}
+#cloudLeft{max-width:720px;margin:4px auto 0;text-align:center;font-size:12px}
+.lock{opacity:.6}
+@media (max-width:420px){.effort button{padding:0 8px}}
