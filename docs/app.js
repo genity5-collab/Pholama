@@ -35,11 +35,12 @@ async function refreshSelect() {
     const m = catalog.browser.find(x => x.id === id); if (m) sel.add(new Option('📱 ' + m.name, 'web:' + id));
     const c = (catalog.cpu || []).find(x => 'cpu:' + x.id === id); if (c) sel.add(new Option('📱 ' + c.name, id));
   }
-  const cl = new Option('☁ Cloud models (coming soon)', ''); cl.disabled = true; sel.add(cl);
   if (server) try {
     const t = await (await fetch('api/tags')).json();
     for (const m of t.models) sel.add(new Option('💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
   } catch {}
+  const cl = new Option('☁ Cloud models (coming soon)', ''); cl.disabled = true; sel.add(cl);
+  const first = [...sel.options].findIndex(o => !o.disabled); if (first >= 0) sel.selectedIndex = first;
 }
 
 async function ensureEngine(value) {
