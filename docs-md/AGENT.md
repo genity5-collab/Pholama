@@ -65,3 +65,14 @@ A cloud assistant that needs no download. Sign in, pick **Agent Max** in the mod
 - **Effort:** Long and Max let it think in more steps before answering.
 - It cannot browse the web or see your files.
 - Backend: `functions/pholamaCloud.ts` (rebuild with `python3 tools/build_max_knowledge.py && python3 tools/build_agent_max.py`). The usage table and limit functions live in Supabase.
+
+
+## GitHub tools (any tool-capable model, on your PC)
+
+Local models that support tools can use GitHub for free (no cloud credits). Public repos need no token.
+
+- **Read (10 credits):** search repos, read a file, list issues, repo info.
+- **Write (15 credits):** create an issue, comment, write a file. These never run on their own: the chat shows **Allow / Deny** and nothing happens until you press Allow. Requests expire after 10 minutes and cannot be reused.
+- **Token:** paste a GitHub token in Tools. It stays in your browser on this device and is sent to your own PC only. Clear it any time.
+- Models without tool support are never given these tools.
+- The credits left today show beside the message box.

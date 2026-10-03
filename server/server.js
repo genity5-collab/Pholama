@@ -235,7 +235,7 @@ async function chat(req, res, b) {
     // 1) The model must be able to do it. 2) The per-message switch in the page must be on. 3) Credits (already in `allow`).
     const caps = await modelCaps(model), sw = b.switches || {};
     const canTools = !!caps.tools;
-    for (const k of ['search', 'tools', 'mcp']) { if (!canTools) allow[k] = false; else if (sw[k] === false) allow[k] = false; }
+    for (const k of ['search', 'tools', 'mcp', 'github']) { if (!canTools) allow[k] = false; else if (sw[k] === false) allow[k] = false; }
     if (!caps.thinking || sw.thinking === false) allow.thinking = false;   // a model that cannot think gets no think prompt
     if (b.agent && !canTools) log('step', caps.source === 'unknown' ? 'Could not read this model\'s abilities, so tools are off (plain chat).' : 'This model does not support tools, so it gets a plain prompt. Pick one tagged "tools" to use search and tools.');
     if (b.agent) log('step', allow.credits ? `Credits: ${agent.credits().left} left. On: ${['search','tools','mcp','thinking'].filter(k => allow[k]).join(', ') || 'nothing'}` : 'Credits: 0 left');
@@ -244,6 +244,7 @@ async function chat(req, res, b) {
     const memOn = !!(b.agent && canTools && b.memory === true && allow.credits && agent.credits().left >= agent.COST.memory);
     if (b.agent && b.memory === true && !memOn) log('error', !canTools ? 'Memory is on, but this model cannot use tools, so it cannot save new memories. Saved notes are still used.' : 'Memory is on, but there are not enough credits to save new memories today.');
     const { tools } = await agent.buildTools({ ...allow, memory: memOn });
+    const tctx = { ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), onPending: p => line({ approve: p }) };
     if (tools.length) log('step', `${tools.length} tools ready: ${tools.map(t => t.name).join(', ')}`);
     const thinking = allow.thinking && agent.credits().left >= agent.COST.thinking;
     if (allow.thinking && !thinking) log('error', 'Not enough credits for thinking mode. Answering without it.');
@@ -263,7 +264,7 @@ async function chat(req, res, b) {
       if (r0) {
         log('action', `Request looks like a job for ${r0.name}. Running it first.`);
         log('action', `${r0.name} ${JSON.stringify(r0.args)}`);
-        let result; try { result = String(await agent.runTool(tools, r0.name, r0.args)); } catch (e) { result = 'Tool error: ' + e.message; }
+        let result; try { result = String(await agent.runTool(tools, r0.name, r0.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
         if (r0.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
         log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
         line({ tool: { name: r0.name, args: r0.args, result: result.slice(0, 400) } });
@@ -299,7 +300,7 @@ async function chat(req, res, b) {
         if (shown < text.length) line({ model, message: { role: 'assistant', content: text.slice(shown) }, done: false }); break;
       }
       log('action', `Model asked for ${call.name} ${JSON.stringify(call.args)}`);
-      let result; try { result = String(await agent.runTool(tools, call.name, call.args)); } catch (e) { result = 'Tool error: ' + e.message; }
+      let result; try { result = String(await agent.runTool(tools, call.name, call.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
       if (call.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
       log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
       line({ tool: { name: call.name, args: call.args, result: result.slice(0, 400) } });
@@ -324,6 +325,7 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': '*', 'Access-Control-Allow-Methods': '*' }); return res.end(); }
   try {
     if (p === '/api/caps') { const m = u.searchParams.get('model') || ''; const c = await modelCaps(m); return json(res, 200, { ...c, search: c.tools, mcp: c.tools }); }
+    if (p === '/api/github/approve' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ok: true, text: await agent.github.confirm(String(req.headers['x-github-token'] || ''), String(b.id || ''), b.approve === true) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); } }
     if (p === '/api/credits') return json(res, 200, { ...agent.credits(), allowed: agent.allowed() });
     if (p === '/api/prefs' && req.method === 'POST') return json(res, 200, agent.setPrefs(await body(req)));
     if (p === '/api/mcp' && req.method === 'GET') return json(res, 200, { servers: agent.state().mcp.map(x => ({ name: x.name, url: x.url })), tools: await agent.listMcp() });

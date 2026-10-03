@@ -7,7 +7,8 @@ const FILE = path.join(DIR, 'state.json');
 const DAILY = +process.env.PHOLAMA_DAILY_CREDITS || 1000;
 
 // What each feature costs (credits). Plain local chat is always free.
-const COST = { search: 20, fetch: 10, calc: 1, time: 1, mcp: 15, thinking: 25, memory: 5 };
+const COST = { search: 20, fetch: 10, calc: 1, time: 1, mcp: 15, thinking: 25, memory: 5, ghread: 10, ghwrite: 15 };
+const github = require('./github');
 
 function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function load() { try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { return {}; } }
@@ -15,7 +16,7 @@ function save(s) { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(FILE
 function state() {
   const s = load();
   if (s.day !== today()) { s.day = today(); s.used = 0; }
-  s.mcp = s.mcp || []; s.prefs = s.prefs || { search: true, tools: true, mcp: true, thinking: true };
+  s.mcp = s.mcp || []; s.prefs = s.prefs || { search: true, tools: true, mcp: true, thinking: true }; if (s.prefs.github == null) s.prefs.github = true;
   // One-time migration (v2): capable models now start with Thinking ON. Older saves had it OFF by default. Only runs once, so a later deliberate OFF sticks.
   if (!s.prefsV) { s.prefsV = 2; s.prefs.thinking = true; save(s); }
   return s;
@@ -113,7 +114,7 @@ function setPrefs(p) { const s = state(); s.prefs = { ...s.prefs, ...p }; save(s
 // Which features are allowed right now. When credits hit 0 everything paid is switched off.
 function allowed() {
   const s = state(), ok = hasCredits();
-  return { search: ok && s.prefs.search, tools: ok && s.prefs.tools, mcp: ok && s.prefs.mcp && s.mcp.length > 0, thinking: ok && s.prefs.thinking, prefs: s.prefs, credits: ok };
+  return { github: ok && s.prefs.github, search: ok && s.prefs.search, tools: ok && s.prefs.tools, mcp: ok && s.prefs.mcp && s.mcp.length > 0, thinking: ok && s.prefs.thinking, prefs: s.prefs, credits: ok };
 }
 
 function systemPrompt(tools, thinking, memories, effort) {
@@ -140,13 +141,20 @@ function systemPrompt(tools, thinking, memories, effort) {
 async function buildTools(a) {
   const tools = [];
   for (const [name, t] of Object.entries(BUILTIN)) if (a[t.group]) tools.push({ name, desc: t.desc, kind: t.kind });
+  if (a.github) tools.push(...github.tools());
   const mcp = [];
   if (a.mcp) for (const t of await listMcp()) if (!t.error) { const n = `${t.server}__${t.name}`; mcp.push(t); tools.push({ name: n, desc: `${(t.description || '').slice(0, 160)} args schema: ${JSON.stringify(t.schema || {}).slice(0, 300)}`, kind: 'mcp', mcp: t }); }
   return { tools, mcp };
 }
 
-async function runTool(tools, name, args) {
+async function runTool(tools, name, args, ctx) {
   const t = tools.find(x => x.name === name); if (!t) throw new Error('unknown tool ' + name);
+  if (github.isGithub(name)) {
+    if (!spend(COST[t.kind])) throw new Error('out of daily credits');
+    const r = await github.run(ctx && ctx.ghToken, name, args);
+    if (r.pending && ctx && ctx.onPending) ctx.onPending(r.pending);
+    return r.text;
+  }
   if (t.kind === 'memory') { const out = BUILTIN[name].run(args || {}); if (!spend(COST.memory)) throw new Error('out of daily credits'); return out; }
   if (!spend(COST[t.kind])) throw new Error('out of daily credits');
   if (t.kind === 'mcp') { const srv = state().mcp.find(x => x.name === t.mcp.server); return mcpCall({ ...srv }, t.mcp.name, args); }
@@ -163,6 +171,11 @@ function routeIntent(text, tools) {
     return { name: 'calculator', args: { expression: expr } };
   }
   if (/\b(what(?:'s| is)?\s+(?:the\s+)?(?:date|time|day)|today'?s date|current (?:date|time)|what day is (?:it|today))\b/i.test(t) && has('current_time')) return { name: 'current_time', args: {} };
+  // GitHub first, so "search github for X" is not swallowed by the web-search rule below.
+  const gs = /^(?:please\s+)?(?:search|find|look up|look for)\s+(?:on\s+)?github(?:\s+repos(?:itories)?)?(?:\s+(?:for|about))?\s+(.{3,})/i.exec(t) || /^(?:please\s+)?(?:search|find)\s+(?:github\s+)?(?:repos|repositories)\s+(?:for|about|on)\s+(.{3,})/i.exec(t);
+  if (gs && has('github_search_repos')) return { name: 'github_search_repos', args: { query: gs[1].replace(/[?.!]+$/, '') } };
+  const gr = /https?:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?(?:[\/?#]\S*)?(?=$|\s|[),.;])/i.exec(t);
+  if (gr && has('github_repo_info')) return { name: 'github_repo_info', args: { repo: gr[1] } };
   const se = /^(?:please\s+)?(?:search(?: the web| online)?(?: for)?|look up|google|find (?:out )?(?:about)?|latest|news (?:about|on))\s+(.{3,})/i.exec(t);
   if (se && has('web_search')) return { name: 'web_search', args: { query: se[1].replace(/[?.!]+$/, '') } };
   const rm = /^(?:please\s+)?(?:remember|memorize|don'?t forget)\s+(?:that\s+)?(?!that\b)(\S.{5,})/i.exec(t);
@@ -175,4 +188,4 @@ function routeIntent(text, tools) {
 const TOOL_RE = /<tool>([\s\S]*?)<\/tool>/;
 function parseTool(text) { const m = TOOL_RE.exec(text); if (!m) return null; try { const j = JSON.parse(m[1].trim()); return j.name ? j : null; } catch { return null; } }
 
-module.exports = { credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+module.exports = { github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

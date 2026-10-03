@@ -140,13 +140,14 @@ async function refreshCredits() {
   try { cred = await (await fetch('api/credits')).json(); } catch { return; }
   const c = $('#cr'); c.style.display = ''; c.textContent = cred.left; c.title = cred.left + ' of ' + cred.daily + ' daily credits left' + (cred.left === 0 ? '. Search, tools, MCP and thinking are off until tomorrow.' : '. Resets daily.');
   c.className = 'pill' + (cred.left === 0 ? ' zero' : cred.left < cred.daily * 0.2 ? ' low' : '');
+  const cb = $('#crBox'); cb.style.display = ''; cb.textContent = cred.left + ' credits'; cb.className = c.className; cb.title = cred.left + ' of ' + cred.daily + ' credits left today';
 }
 async function openOpts() {
   const off = !server; $('#t_off').style.display = off ? '' : 'none'; $('#t_body').style.display = off ? 'none' : '';
   if (!off) {
     await refreshCredits();
     $('#t_cr').textContent = cred.left === 0 ? 'Out of credits. Search, tools, MCP and thinking are off until tomorrow. Plain chat still works.' : `${cred.left} of ${cred.daily} credits left today. Resets at midnight.`;
-    const pr = cred.allowed.prefs; for (const k of ['search', 'tools', 'mcp', 'thinking']) $('#p_' + k).checked = !!pr[k];
+    const pr = cred.allowed.prefs; ghPaint(); for (const k of ['github', 'search', 'tools', 'mcp', 'thinking']) $('#p_' + k).checked = !!pr[k];
     await listMcpUI();
   }
   $('#dlg2').showModal();
@@ -166,7 +167,7 @@ async function listMcpInner() {
     box.appendChild(d);
   }
 }
-for (const k of ['search', 'tools', 'mcp', 'thinking']) $('#p_' + k).onchange = e => fetch('api/prefs', { method: 'POST', body: JSON.stringify({ [k]: e.target.checked }) }).then(paintSwitches);
+for (const k of ['github', 'search', 'tools', 'mcp', 'thinking']) $('#p_' + k).onchange = e => fetch('api/prefs', { method: 'POST', body: JSON.stringify({ [k]: e.target.checked }) }).then(paintSwitches);
 $('#mAdd').onclick = async () => {
   const name = $('#mName').value.trim(), url = $('#mUrl').value.trim(), auth = $('#mAuth').value.trim();
   $('#mMsg').textContent = '';
@@ -186,7 +187,7 @@ const ICON = {
   mcp: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M7 8h10v4a5 5 0 0 1-10 0z"/><path d="M12 17v4"/></svg>',
   thinking: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>',
 };
-const SW = [['search', 'Search', 'Live web search'], ['tools', 'Tools', 'Calculator and clock'], ['mcp', 'MCP', 'Tools from your MCP servers'], ['thinking', 'Thinking', 'Reason step by step first']];
+const SW = [['github', 'GitHub', 'Search and read GitHub'], ['search', 'Search', 'Live web search'], ['tools', 'Tools', 'Calculator and clock'], ['mcp', 'MCP', 'Tools from your MCP servers'], ['thinking', 'Thinking', 'Reason step by step first']];
 let swCaps = {};
 const swPref = () => { try { return JSON.parse(localStorage.getItem('pholama.sw') || '{}'); } catch { return {}; } };
 const swOn = k => swCaps[k] && swPref()[k] !== false;           // untouched = ON (for models that can)
@@ -301,7 +302,7 @@ async function send() {
       msg.usage(wu ? { in: wu.prompt_tokens, out: wu.completion_tokens, estimated: false, seconds: sec } : { in: send_.reduce((a, m) => a + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: sec });
     } else {
       const ac = new AbortController(); stopper = () => ac.abort();
-      const r = await fetch('api/chat', { method: 'POST', signal: ac.signal, body: JSON.stringify({ model: sel.value, messages: history, agent: true, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [] }) });
+      const r = await fetch('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model: sel.value, messages: history, agent: true, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [] }) });
       const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
       for (;;) {
         const { done, value } = await rd.read(); if (done) break;
@@ -312,7 +313,8 @@ async function send() {
           if (j.log) { msg.log(j.log.kind, j.log.text, j.log.t); continue; }
           if (j.status) { msg.log('step', j.status); continue; }
           if (j.memory) { const note = await saveMemory(j.memory.text); msg.log(/^Saved/.test(note) ? 'result' : 'error', note); continue; }
-          if (j.tool) continue;
+          if (j.approve) { ghAsk(msg, j.approve); continue; }
+          if (j.tool) { refreshCredits(); continue; }
           if (j.usage) { msg.usage(j.usage); continue; }
           if (j.credits) { refreshCredits(); continue; }
           acc += j.message?.content || ''; msg.text(acc);
@@ -553,3 +555,21 @@ function newSession() {
 $('#newSess').onclick = () => { if (history.length && !confirm('Start a new session? This clears the current chat.')) return; newSession(); };
 inEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !/Mobi|Android/i.test(navigator.userAgent)) { e.preventDefault(); send(); } });
 init().then(refreshCredits);
+
+
+// ----- GitHub: the token lives only in this browser; writes need a click on Allow -----
+const GHK = 'pholama_gh_token';
+const ghToken = () => { try { return localStorage.getItem(GHK) || ''; } catch { return ''; } };
+function ghHeaders() { const t = ghToken(); return t ? { 'x-github-token': t } : {}; }
+function ghPaint() { const t = ghToken(); const el = $('#ghState'); if (el) el.textContent = t ? 'GitHub connected on this device (token saved here only).' : 'Not connected. Reading public repos works without a token.'; }
+$('#ghSave').onclick = () => { const v = $('#ghTok').value.trim(); if (!v) return; try { localStorage.setItem(GHK, v); } catch {} $('#ghTok').value = ''; ghPaint(); };
+$('#ghClear').onclick = () => { try { localStorage.removeItem(GHK); } catch {} ghPaint(); };
+function ghAsk(msg, a) {
+  const box = document.createElement('div'); box.className = 'sys'; box.style.cssText = 'margin:8px 0;padding:8px;border:1px solid var(--line);border-radius:10px';
+  const t = document.createElement('div'); t.textContent = 'Allow this on GitHub? ' + a.summary;
+  const ok = document.createElement('button'), no = document.createElement('button'); ok.textContent = 'Allow'; no.textContent = 'Deny'; ok.className = 'p'; ok.style.marginRight = '6px';
+  const done = txt => { box.textContent = txt; };
+  const go = async yes => { ok.disabled = no.disabled = true; try { const r = await (await fetch('api/github/approve', { method: 'POST', headers: ghHeaders(), body: JSON.stringify({ id: a.id, approve: yes }) })).json(); done((r.ok ? '' : 'Failed: ') + r.text); } catch (e) { done('Failed: ' + e.message); } };
+  ok.onclick = () => go(true); no.onclick = () => go(false);
+  box.append(t, ok, no); msg.el.appendChild(box); chatEl.scrollTop = 1e9;
+}
