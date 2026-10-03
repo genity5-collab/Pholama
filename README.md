@@ -49,7 +49,7 @@ The PC version can also search the web, use tools and show a **live log** of wha
 
 Then read:
 - [Full PC guide](docs-md/PC.md)
-- [Tools, search, credits, live log](docs-md/AGENT.md)
+- [Tools, search, credits, switches, tokens, live log](docs-md/AGENT.md)
 - [All models](docs-md/MODELS.md)
 
 ## For developers

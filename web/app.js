@@ -19,7 +19,8 @@ function makeMsg() {
   live.innerHTML = '<summary><span class="dot"></span><span class="sum">Working...</span></summary><div class="lines"></div>';
   const think = document.createElement('div'); think.className = 'think'; think.style.display = 'none'; think.innerHTML = '<b>Thinking</b><span></span>';
   const ans = document.createElement('div'); ans.className = 'ans';
-  el.append(live, think, ans); chatEl.appendChild(el); chatEl.scrollTop = 1e9;
+  const use = document.createElement('div'); use.className = 'usage'; use.style.display = 'none';
+  el.append(live, think, ans, use); chatEl.appendChild(el); chatEl.scrollTop = 1e9;
   const lines = live.querySelector('.lines'), sum = live.querySelector('.sum'); let n = 0;
   return {
     el,
@@ -37,6 +38,12 @@ function makeMsg() {
       ans.textContent = m ? raw.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim() : raw;
       if (m && m[2]) think.querySelector('b').textContent = 'Thought process';
       chatEl.scrollTop = 1e9;
+    },
+    usage(u) {            // u = {in, out, estimated, seconds}. Real counts come from the model backend; otherwise flagged as estimates.
+      if (!u) return; const tot = (u.in || 0) + (u.out || 0), f = n => (+n).toLocaleString();
+      use.textContent = `${u.estimated ? '~' : ''}${f(u.in)} in \u00b7 ${u.estimated ? '~' : ''}${f(u.out)} out \u00b7 ${u.estimated ? '~' : ''}${f(tot)} tokens` + (u.seconds ? ` \u00b7 ${u.seconds}s` : '') + (u.estimated ? ' (estimated)' : '');
+      use.title = u.estimated ? 'This model did not report exact counts, so this is an estimate (about 4 characters per token).' : 'Exact count reported by the model.';
+      use.style.display = '';
     },
     finish(ok = true) { live.classList.add(ok ? 'done' : 'err'); if (ok) { live.open = false; sum.textContent = `${n} step${n === 1 ? '' : 's'} (tap to see what happened)`; } },
     fail(msg) { ans.textContent = 'Error: ' + msg; this.finish(false); },
@@ -74,6 +81,7 @@ async function refreshSelect() {
   } catch {}
   const cl = new Option('☁ Cloud models (coming soon)', ''); cl.disabled = true; sel.add(cl);
   const first = [...sel.options].findIndex(o => !o.disabled); if (first >= 0) sel.selectedIndex = first;
+  paintSwitches();
 }
 
 async function ensureEngine(value) {
@@ -100,8 +108,14 @@ async function ensureCpu(id, onProgress) {
 }
 async function cpuChat(messages, onToken) {
   const tf = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
-  const streamer = new tf.TextStreamer(cpuPipe.tokenizer, { skip_prompt: true, skip_special_tokens: true, callback_function: onToken });
-  await cpuPipe(messages, { max_new_tokens: /Qwen3/i.test(cpuModel || '') ? 1024 : 512, do_sample: true, temperature: 0.7, streamer });
+  let out = ''; const cb = t => { out += t; onToken(t); };
+  const streamer2 = new tf.TextStreamer(cpuPipe.tokenizer, { skip_prompt: true, skip_special_tokens: true, callback_function: cb });
+  const t0 = performance.now();
+  await cpuPipe(messages, { max_new_tokens: /Qwen3/i.test(cpuModel || '') ? 1024 : 512, do_sample: true, temperature: 0.7, streamer: streamer2 });
+  try {   // exact: run the model's own tokenizer over what went in and what came out
+    const tk = cpuPipe.tokenizer, n = x => tk.encode(x).length;
+    return { in: messages.reduce((a, m) => a + n(m.content) + 4, 0), out: n(out), estimated: false, seconds: +((performance.now() - t0) / 1000).toFixed(1) };
+  } catch { return { in: messages.reduce((a, m) => a + Math.ceil(m.content.length / 4), 0), out: Math.ceil(out.length / 4), estimated: true, seconds: +((performance.now() - t0) / 1000).toFixed(1) }; }
 }
 
 
@@ -123,7 +137,8 @@ async function openOpts() {
   }
   $('#dlg2').showModal();
 }
-async function listMcpUI() {
+async function listMcpUI() { try { await listMcpInner(); } finally { paintSwitches(); } }
+async function listMcpInner() {
   const box = $('#mcpList'); box.innerHTML = '';
   let r; try { r = await (await fetch('api/mcp')).json(); } catch { return; }
   if (!r.servers.length) { box.innerHTML = '<div class="sys" style="text-align:left">No MCP servers yet.</div>'; return; }
@@ -137,7 +152,7 @@ async function listMcpUI() {
     box.appendChild(d);
   }
 }
-for (const k of ['search', 'tools', 'mcp', 'thinking']) $('#p_' + k).onchange = e => fetch('api/prefs', { method: 'POST', body: JSON.stringify({ [k]: e.target.checked }) });
+for (const k of ['search', 'tools', 'mcp', 'thinking']) $('#p_' + k).onchange = e => fetch('api/prefs', { method: 'POST', body: JSON.stringify({ [k]: e.target.checked }) }).then(paintSwitches);
 $('#mAdd').onclick = async () => {
   const name = $('#mName').value.trim(), url = $('#mUrl').value.trim(), auth = $('#mAuth').value.trim();
   $('#mMsg').textContent = '';
@@ -148,6 +163,38 @@ $('#mAdd').onclick = async () => {
   } catch (e) { $('#mMsg').textContent = e.message; }
 };
 $('#opt').onclick = openOpts; $('#close2').onclick = () => $('#dlg2').close();
+
+// ----- per-message switches: Search / Tools / MCP / Thinking -----
+// A chip exists only if the selected model can really do it. Capable models start with it ON; a tap is remembered.
+const SW = [['search', 'Search', 'Live web search'], ['tools', 'Tools', 'Calculator and clock'], ['mcp', 'MCP', 'Tools from your MCP servers'], ['thinking', 'Thinking', 'Reason step by step first']];
+let swCaps = {};
+const swPref = () => { try { return JSON.parse(localStorage.getItem('pholama.sw') || '{}'); } catch { return {}; } };
+const swOn = k => swCaps[k] && swPref()[k] !== false;           // untouched = ON (for models that can)
+function swState() { const o = {}; for (const [k] of SW) o[k] = !!swOn(k); return o; }
+async function paintSwitches() {
+  const row = $('#swrow'); if (!row) return;
+  swCaps = {};
+  if (server && sel.value && (sel.value.startsWith('ollama:') || sel.value.startsWith('gguf:'))) {
+    try { const c = await (await fetch('api/caps?model=' + encodeURIComponent(sel.value))).json(); await refreshCredits();   // keeps the master toggles (Tools dialog) in sync
+    const mp = (cred && cred.allowed && cred.allowed.prefs) || {};
+    let hasMcp = false; try { hasMcp = ((await (await fetch('api/mcp')).json()).servers || []).length > 0; } catch {}
+    swCaps = { search: c.search && mp.search !== false, tools: c.tools && mp.tools !== false, mcp: c.mcp && mp.mcp !== false && hasMcp, thinking: c.thinking && mp.thinking !== false, _src: c.source };
+    } catch {}
+  }
+  row.innerHTML = '';
+  const shown = SW.filter(([k]) => swCaps[k]);
+  for (const [k, label, tip] of shown) {
+    const b = document.createElement('button'); b.className = 'chipbtn' + (swOn(k) ? ' on' : ''); b.textContent = label; b.title = tip + (swOn(k) ? ': on' : ': off'); b.setAttribute('aria-pressed', swOn(k));
+    b.onclick = () => { const p = swPref(); p[k] = !swOn(k); localStorage.setItem('pholama.sw', JSON.stringify(p)); paintSwitches(); };
+    row.appendChild(b);
+  }
+  if (!shown.length && server && sel.value && (sel.value.startsWith('ollama:') || sel.value.startsWith('gguf:'))) {
+    const n = document.createElement('span'); n.className = 'swnote';
+    n.textContent = swCaps._src === 'unknown' ? 'Tools off: could not read this model\'s abilities.' : 'Plain chat: this model does not support tools.'; row.appendChild(n);
+  }
+  row.style.display = row.children.length ? '' : 'none';
+}
+sel.addEventListener('change', paintSwitches);
 
 async function send() {
   const text = inEl.value.trim(); if (!text || busy || !sel.value) { if (!sel.value) add('sys', 'Pick a model first (open Models to download one).'); return; }
@@ -162,13 +209,15 @@ async function send() {
     const mem = local ? memorySystem() : null, send_ = mem ? [mem, ...history] : history;
     if (sel.value.startsWith('cpu:')) {
       msg.log('step', 'Running on your phone CPU. This can be slow.', 0);
-      await cpuChat(send_, t => { acc += t; msg.text(acc); });
+      msg.usage(await cpuChat(send_, t => { acc += t; msg.text(acc); }));
     } else if (sel.value.startsWith('web:')) {
       msg.log('step', 'Running on your phone GPU.', 0);
-      const s = await engine.chat.completions.create({ messages: send_, stream: true });
-      for await (const c of s) { acc += c.choices[0]?.delta?.content || ''; msg.text(acc); }
+      const t0 = performance.now(), s = await engine.chat.completions.create({ messages: send_, stream: true, stream_options: { include_usage: true } }); let wu = null;
+      for await (const c of s) { acc += c.choices[0]?.delta?.content || ''; if (c.usage) wu = c.usage; msg.text(acc); }
+      const sec = +((performance.now() - t0) / 1000).toFixed(1);
+      msg.usage(wu ? { in: wu.prompt_tokens, out: wu.completion_tokens, estimated: false, seconds: sec } : { in: send_.reduce((a, m) => a + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: sec });
     } else {
-      const r = await fetch('api/chat', { method: 'POST', body: JSON.stringify({ model: sel.value, messages: history, agent: true, memory: memOn, memories: memOn ? memories : [] }) });
+      const r = await fetch('api/chat', { method: 'POST', body: JSON.stringify({ model: sel.value, messages: history, agent: true, switches: swState(), memory: memOn, memories: memOn ? memories : [] }) });
       const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
       for (;;) {
         const { done, value } = await rd.read(); if (done) break;
@@ -180,6 +229,7 @@ async function send() {
           if (j.status) { msg.log('step', j.status); continue; }
           if (j.memory) { const note = await saveMemory(j.memory.text); msg.log(/^Saved/.test(note) ? 'result' : 'error', note); continue; }
           if (j.tool) continue;
+          if (j.usage) { msg.usage(j.usage); continue; }
           if (j.credits) { refreshCredits(); continue; }
           acc += j.message?.content || ''; msg.text(acc);
         }
