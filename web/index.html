@@ -1,0 +1,33 @@
+<!doctype html>
+<html lang="en"><head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f1115"><link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icon.svg"><title>Pholama</title>
+<style>
+*{box-sizing:border-box}html,body{height:100%;margin:0}
+body{background:#0f1115;color:#e6e8ee;font:15px/1.5 system-ui,sans-serif;display:flex;flex-direction:column}
+header{display:flex;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid #22262f;padding-top:max(10px,env(safe-area-inset-top))}
+header b{font-size:17px}.sp{flex:1}
+select,button,textarea{font:inherit;color:inherit;background:#1a1d25;border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px}
+button{cursor:pointer}button.p{background:#5b7cff;border-color:#5b7cff;color:#fff}button:disabled{opacity:.5}
+#chat{flex:1;overflow:auto;padding:14px 12px}
+.m{max-width:760px;margin:0 auto 12px;padding:10px 13px;border-radius:14px;white-space:pre-wrap;word-wrap:break-word}
+.u{background:#243056;margin-left:auto;width:fit-content}.a{background:#1a1d25}
+.sys{max-width:760px;margin:10px auto;color:#8a90a0;font-size:13px;text-align:center}
+footer{display:flex;gap:8px;padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));border-top:1px solid #22262f}
+textarea{flex:1;resize:none;max-height:140px}
+dialog{background:#15181f;color:#e6e8ee;border:1px solid #2a2f3a;border-radius:16px;max-width:560px;width:92%;padding:16px}
+dialog::backdrop{background:#000a}
+.row{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #22262f}
+.row small{color:#8a90a0;display:block}.row .sp{min-width:0}
+.bar{height:5px;background:#22262f;border-radius:3px;margin-top:5px;overflow:hidden}.bar i{display:block;height:100%;background:#5b7cff;width:0}
+.tabs{display:flex;gap:6px;margin-bottom:8px}.tabs button.on{background:#5b7cff;border-color:#5b7cff}
+</style></head><body>
+<header><b>Pholama</b><span class="sp"></span>
+<select id="model"></select><button id="mgr">Models</button></header>
+<div id="chat"></div>
+<footer><textarea id="in" rows="1" placeholder="Message..."></textarea><button class="p" id="send">Send</button></footer>
+<dialog id="dlg"><div class="tabs"><button id="tBrowser">In this browser</button><button id="tLocal">On this PC</button></div>
+<div id="hw" class="sys"></div><div id="list"></div><p style="text-align:right"><button id="close">Close</button></p></dialog>
+<script src="app.js" type="module"></script>
+</body></html>
