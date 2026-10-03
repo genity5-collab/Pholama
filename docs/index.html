@@ -1,47 +1,14 @@
 <!doctype html>
 <html lang="en"><head>
 <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
-<meta name="theme-color" content="#0f1115"><link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#111111"><link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg"><title>Pholama</title>
-<style>
-*{box-sizing:border-box}html,body{height:100%;margin:0}
-body{background:#0f1115;color:#e6e8ee;font:15px/1.5 system-ui,sans-serif;display:flex;flex-direction:column}
-header{display:flex;gap:8px;align-items:center;padding:10px 12px;border-bottom:1px solid #22262f;padding-top:max(10px,env(safe-area-inset-top))}
-header b{font-size:17px}.sp{flex:1}
-select,button,textarea{font:inherit;color:inherit;background:#1a1d25;border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px}
-button{cursor:pointer}button.p{background:#5b7cff;border-color:#5b7cff;color:#fff}button:disabled{opacity:.5}
-#chat{flex:1;overflow:auto;padding:14px 12px}
-.m{max-width:760px;margin:0 auto 12px;padding:10px 13px;border-radius:14px;white-space:pre-wrap;word-wrap:break-word}
-.u{background:#243056;margin-left:auto;width:fit-content}.a{background:#1a1d25}
-.sys{max-width:760px;margin:10px auto;color:#8a90a0;font-size:13px;text-align:center}
-footer{display:flex;gap:8px;padding:10px 12px;padding-bottom:max(10px,env(safe-area-inset-bottom));border-top:1px solid #22262f}
-textarea{flex:1;resize:none;max-height:140px}
-dialog{background:#15181f;color:#e6e8ee;border:1px solid #2a2f3a;border-radius:16px;max-width:560px;width:92%;padding:16px}
-dialog::backdrop{background:#000a}
-.row{display:flex;gap:10px;align-items:center;padding:9px 0;border-bottom:1px solid #22262f}
-.row small{color:#8a90a0;display:block}.row .sp{min-width:0}
-.bar{height:5px;background:#22262f;border-radius:3px;margin-top:5px;overflow:hidden}.bar i{display:block;height:100%;background:#5b7cff;width:0}
-.pill{font-size:12px;padding:4px 9px;border-radius:999px;background:#1a1d25;border:1px solid #2a2f3a;white-space:nowrap}.pill.low{border-color:#d9a441;color:#d9a441}.pill.zero{border-color:#e5584f;color:#e5584f}
-.tool{max-width:760px;margin:0 auto 10px;padding:7px 11px;border-left:3px solid #5b7cff;background:#141720;border-radius:8px;font-size:13px;color:#aab1c3;white-space:pre-wrap;word-break:break-word}
-.tool b{color:#e6e8ee}.sw{display:flex;align-items:center;gap:8px;padding:7px 0}.sw input{width:18px;height:18px}
-.sw span{flex:1}.sw small{color:#8a90a0;display:block}input[type=text]{width:100%;font:inherit;color:inherit;background:#1a1d25;border:1px solid #2a2f3a;border-radius:10px;padding:8px 10px;margin:4px 0}
-h4{margin:14px 0 4px}
-.live{margin:0 0 8px;border:1px solid #2a2f3a;border-radius:10px;background:#12151c;overflow:hidden;font-size:12.5px}
-.live summary{cursor:pointer;padding:6px 10px;color:#aab1c3;list-style:none;display:flex;gap:8px;align-items:center}
-.live summary::-webkit-details-marker{display:none}
-.live .dot{width:8px;height:8px;border-radius:50%;background:#5b7cff;animation:pulse 1s infinite}.live.done .dot{animation:none;background:#4caf7a}.live.err .dot{animation:none;background:#e5584f}
-@keyframes pulse{50%{opacity:.25}}
-.live .lines{max-height:150px;overflow:auto;padding:4px 10px 8px;font-family:ui-monospace,Consolas,monospace;white-space:pre-wrap;word-break:break-word}
-.lines div{padding:1px 0;color:#8a90a0}.lines .t{color:#5f6675;margin-right:6px}
-.lines .action{color:#8fb0ff}.lines .result{color:#7fd3a1}.lines .error{color:#ff8a80}.lines .thought{color:#c9a7ff;font-style:italic}
-.think{color:#b9a3e6;font-size:13px;border-left:3px solid #6b4fb3;padding-left:9px;margin:0 0 8px;max-height:140px;overflow:auto;white-space:pre-wrap}
-.think b{display:block;font-size:11px;letter-spacing:.06em;text-transform:uppercase;color:#8d75c9;margin-bottom:2px}
-.ans:empty{display:none}.tabs{display:flex;gap:6px;margin-bottom:8px}.tabs button.on{background:#5b7cff;border-color:#5b7cff}
-</style></head><body>
-<header><b>Pholama</b><span class="sp"></span><span class="pill" id="cr" title="Daily credits"></span>
-<select id="model"></select><button id="mgr">Models</button><button id="opt" title="Tools and credits">Tools</button></header>
-<div id="chat"></div>
-<footer><textarea id="in" rows="1" placeholder="Message..."></textarea><button class="p" id="send">Send</button></footer>
+<link rel="stylesheet" href="style.css">
+</head><body>
+<header><div class="brand"><svg viewBox="0 0 100 120" fill="none" stroke="currentColor" stroke-width="7" stroke-linecap="round" stroke-linejoin="round"><path d="M30 6 C28 15 29 22 33 28 M70 6 C72 15 71 22 67 28"/><path d="M33 28 C26 32 25 42 29 48 C31 52 36 55 40 56 C40 70 38 82 32 92 C28 99 27 106 28 114 L72 114 C73 106 72 99 68 92 C62 82 60 70 60 56 C64 55 69 52 71 48 C75 42 74 32 67 28 C60 24 40 24 33 28 Z"/><circle cx="42" cy="38" r="4" fill="currentColor" stroke="none"/><circle cx="58" cy="38" r="4" fill="currentColor" stroke="none"/><path d="M46 47 C48 50 52 50 54 47"/></svg><span>Pholama</span></div><span class="sp"></span><span class="pill" id="cr" title="Daily credits"></span>
+<select id="model" title="Model"></select><button id="mgr">Models</button><button id="opt" title="Tools and credits">Tools</button><button id="acct" title="Account">Account</button></header>
+<div id="chat"><div id="hero"><div id="heroLogo"></div><h1>Chat with a model on your own device</h1><p>Free. Private. No cloud needed.</p><div class="chips" id="heroChips"></div></div></div>
+<footer><div class="composer"><textarea id="in" rows="1" placeholder="Message Pholama..."></textarea><button class="p" id="send" title="Send" aria-label="Send">&#8593;</button></div></footer>
 <dialog id="dlg"><div class="tabs"><button id="tBrowser">In this browser</button><button id="tLocal">On this PC</button></div>
 <div id="hw" class="sys"></div><div id="list"></div><p style="text-align:right"><button id="close">Close</button></p></dialog>
 <dialog id="dlg2"><h3 style="margin:0 0 6px">Tools and credits</h3>
@@ -56,5 +23,23 @@ h4{margin:14px 0 4px}
 <button id="mAdd">Add server</button> <span id="mMsg" class="sys"></span>
 <h4>Cloud models</h4><div class="sys" style="text-align:left">Cloud models are coming soon. Everything runs locally for now.</div></div>
 <p style="text-align:right"><button id="close2">Close</button></p></dialog>
+<dialog id="dlg3"><h3>Account</h3>
+<div id="a_out">
+  <p class="sys" style="text-align:left;margin:4px 0 8px;font-size:14.5px;color:var(--fg)"><b>Unlock Pholama's true potential: memory and more.</b><br><span style="color:var(--mut)">Just a name and a password. No email. You stay logged in on this device.</span></p>
+  <div class="tabs"><button id="a_tLogin" class="on">Log in</button><button id="a_tSign">Create account</button></div>
+  <input type="text" id="a_name" placeholder="Name" autocomplete="username" maxlength="30">
+  <input type="password" id="a_pass" placeholder="Password (8+ characters)" autocomplete="current-password">
+  <button class="p" id="a_go" style="width:100%;margin-top:8px">Log in</button>
+  <div id="a_msg" class="err-t"></div>
+  <div class="sys" id="a_warn" style="text-align:left;display:none">There is no email, so a forgotten password cannot be reset. Pick one you will remember.</div>
+</div>
+<div id="a_in" style="display:none">
+  <div class="sys" style="text-align:left;font-size:15px">Logged in as <b id="a_who"></b></div>
+  <label class="sw"><input type="checkbox" id="a_mem"><span>Memory<small id="a_memNote">Pholama remembers facts you ask it to. Off by default.</small></span></label>
+  <h4>What Pholama remembers</h4><div id="a_list"></div>
+  <p style="display:flex;gap:8px;flex-wrap:wrap"><button id="a_wipe" class="danger">Forget everything</button><button id="a_outBtn">Log out</button></p>
+</div>
+<p style="text-align:right;margin:14px 0 0"><button id="close3">Close</button></p></dialog>
+<script src="config.js"></script>
 <script src="app.js" type="module"></script>
 </body></html>

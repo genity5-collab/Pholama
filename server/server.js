@@ -29,7 +29,7 @@ function hardware() {
 }
 function recommend(h) {
   const budget = h.vramGB && h.vramGB > 2 ? Math.max(h.vramGB, h.ramGB * 0.6) : h.ramGB;
-  return CATALOG.map(m => ({ ...m, fits: budget >= m.minRamGB, downloaded: fs.existsSync(path.join(MODELS_DIR, m.file)) }));
+  return CATALOG.map(m => ({ ...m, fits: budget >= m.minRamGB, downloaded: fs.existsSync(path.join(MODELS_DIR, m.file)), partial: fs.existsSync(path.join(MODELS_DIR, m.file) + '.part'), progress: dl[m.id] || partialInfo(m) }));
 }
 
 // ---------- backends ----------
@@ -42,6 +42,11 @@ function findLlamaServer() {
   const dirs = [process.env.LLAMA_SERVER_DIR, path.join(ROOT, 'bin'), path.join(os.homedir(), '.pholama', 'bin'), ...(process.env.PATH || '').split(path.delimiter)].filter(Boolean);
   for (const d of dirs) for (const n of names) { const p = path.join(d, n); if (fs.existsSync(p)) return p; }
   return null;
+}
+async function stopLlama(onlyFile) {
+  if (!llama || (onlyFile && llamaModel !== onlyFile)) return;
+  const p = llama; llama = null; llamaModel = null; p.kill();
+  await new Promise(r => { p.once('exit', r); setTimeout(r, 2500); }); // wait so Windows releases the file lock
 }
 async function startLlama(file) {
   if (llama && llamaModel === file) return;
@@ -56,28 +61,50 @@ async function startLlama(file) {
 }
 
 // ---------- downloads ----------
-const dl = {}; // id -> {done,total,status,error}
+const dl = {}; // id -> {done,total,status,error,speed}
+const dlReq = {}; // id -> active request (so Stop can abort it)
 function download(m) {
   const dest = path.join(MODELS_DIR, m.file), tmp = dest + '.part';
-  dl[m.id] = { done: 0, total: 0, status: 'downloading' };
+  fs.mkdirSync(MODELS_DIR, { recursive: true });
+  const have = fs.existsSync(tmp) ? fs.statSync(tmp).size : 0; // resume from a stopped download
+  dl[m.id] = { done: have, total: 0, status: 'downloading', speed: 0, error: null };
+  let last = Date.now(), lastDone = have;
+  const tick = setInterval(() => { const d = dl[m.id]; if (!d || d.status !== 'downloading') return clearInterval(tick); const now = Date.now(); d.speed = Math.round((d.done - lastDone) / ((now - last) / 1000)); last = now; lastDone = d.done; }, 1000);
+  const fail = msg0 => { const msg = /aborted|ECONNRESET|socket hang up|ETIMEDOUT|ENOTFOUND|EAI_AGAIN/i.test(String(msg0)) ? 'Connection lost. Press Download to continue where it stopped.' : msg0; clearInterval(tick); if (dl[m.id] && dl[m.id].status !== 'stopped') dl[m.id] = { ...dl[m.id], status: 'error', error: msg, speed: 0 }; };
   const go = (url, hops = 0) => {
-    if (hops > 6) { dl[m.id] = { status: 'error', error: 'too many redirects' }; return; }
-    https.get(url, { headers: { 'User-Agent': 'pholama' } }, r => {
-      if ([301, 302, 303, 307, 308].includes(r.statusCode)) return go(new URL(r.headers.location, url).href, hops + 1);
-      if (r.statusCode !== 200) { dl[m.id] = { status: 'error', error: 'HTTP ' + r.statusCode }; return; }
-      dl[m.id].total = +r.headers['content-length'] || 0;
-      const f = fs.createWriteStream(tmp);
-      r.on('data', c => dl[m.id].done += c.length); r.pipe(f);
-      f.on('finish', () => { fs.renameSync(tmp, dest); dl[m.id].status = 'done'; });
-      r.on('error', e => dl[m.id] = { status: 'error', error: e.message });
-    }).on('error', e => dl[m.id] = { status: 'error', error: e.message });
+    if (hops > 6) return fail('too many redirects');
+    const headers = { 'User-Agent': 'pholama' }; if (have) headers.Range = 'bytes=' + have + '-';
+    const req = (url.startsWith('http://') ? http : https).get(url, { headers }, r => {
+      if ([301, 302, 303, 307, 308].includes(r.statusCode)) { r.resume(); return go(new URL(r.headers.location, url).href, hops + 1); }
+      if (r.statusCode === 416) { try { fs.renameSync(tmp, dest); } catch {} clearInterval(tick); dl[m.id].status = 'done'; return; } // already complete
+      if (r.statusCode !== 200 && r.statusCode !== 206) { r.resume(); return fail('HTTP ' + r.statusCode); }
+      const resumed = r.statusCode === 206; if (!resumed) dl[m.id].done = 0; // server ignored Range: start over
+      dl[m.id].total = (+r.headers['content-length'] || 0) + (resumed ? have : 0);
+      try { fs.writeFileSync(tmp + '.size', String(dl[m.id].total)); } catch {}
+      const f = fs.createWriteStream(tmp, { flags: resumed ? 'a' : 'w' });
+      r.on('data', c => { if (dl[m.id]) dl[m.id].done += c.length; }); r.pipe(f);
+      f.on('finish', () => { if (!dl[m.id] || dl[m.id].status !== 'downloading') return; if (dl[m.id].total && dl[m.id].done < dl[m.id].total) return fail('Connection dropped. Press Download to resume.'); fs.renameSync(tmp, dest); try { fs.unlinkSync(tmp + '.size'); } catch {} clearInterval(tick); dl[m.id].status = 'done'; dl[m.id].speed = 0; });
+      r.on('error', e => fail(e.message)); r.on('aborted', () => fail('Connection dropped. Press Download to resume.'));
+    });
+    req.on('error', e => fail(e.message)); dlReq[m.id] = req;
   };
   go(m.url);
 }
-
+function stopDownload(id) { const d = dl[id]; if (d && d.status === 'downloading') { d.status = 'stopped'; d.speed = 0; } if (dlReq[id]) { dlReq[id].destroy(); delete dlReq[id]; } }
+function partialInfo(m) {
+  const tmp = path.join(MODELS_DIR, m.file) + '.part'; if (!fs.existsSync(tmp)) return null;
+  let total = 0; try { total = +fs.readFileSync(tmp + '.size', 'utf8') || 0; } catch {}
+  return { status: 'stopped', done: fs.statSync(tmp).size, total, speed: 0, error: null };
+}
+async function deleteModel(m) {
+  stopDownload(m.id); delete dl[m.id];
+  await stopLlama(m.file);
+  for (const f of [path.join(MODELS_DIR, m.file), path.join(MODELS_DIR, m.file) + '.part', path.join(MODELS_DIR, m.file) + '.part.size']) try { fs.unlinkSync(f); } catch {}
+}
 
 // ---------- llama.cpp auto-install ----------
-const inst = { status: 'idle', error: null };
+const inst = { status: 'idle', error: null, step: '', done: 0, total: 0, speed: 0 };
+let instAbort = null;
 function assetPattern(h) {
   const arm = os.arch() === 'arm64';
   if (process.platform === 'win32') return h.gpu && /nvidia/i.test(h.gpu) ? /bin-win-cuda-12\.4-x64\.zip$/ : /bin-win-cpu-x64\.zip$/;
@@ -85,34 +112,50 @@ function assetPattern(h) {
   if (arm) return /bin-ubuntu-arm64\.tar\.gz$/;
   return h.gpu && /nvidia/i.test(h.gpu) ? /bin-ubuntu-cuda-12\.8-x64\.tar\.gz$/ : /bin-ubuntu-x64\.tar\.gz$/;
 }
+function stopInstall() { if (instAbort) instAbort.abort(); }
 async function installLlama() {
   if (inst.status === 'installing') return;
-  inst.status = 'installing'; inst.error = null;
+  Object.assign(inst, { status: 'installing', error: null, step: 'Finding the right build for your PC...', done: 0, total: 0, speed: 0 });
+  instAbort = new AbortController(); const signal = instAbort.signal;
+  const dir = path.join(os.homedir(), '.pholama', 'bin'); fs.mkdirSync(dir, { recursive: true });
+  let arc = null;
   try {
-    const dir = path.join(os.homedir(), '.pholama', 'bin'); fs.mkdirSync(dir, { recursive: true });
     // /releases/latest can point at a stub release with no binaries, so scan recent releases instead
-    const rels = await (await fetch('https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=10', { headers: { 'User-Agent': 'pholama' } })).json();
+    const rels = await (await fetch('https://api.github.com/repos/ggml-org/llama.cpp/releases?per_page=10', { headers: { 'User-Agent': 'pholama' }, signal })).json();
     if (!Array.isArray(rels)) throw new Error('Could not reach GitHub (rate limited?). Try again in a minute.');
     const pat = assetPattern(hardware());
     let a = null;
     for (const r of rels) { a = (r.assets || []).find(x => pat.test(x.name) && !x.name.startsWith('cudart')); if (a) break; }
     if (!a) throw new Error('No llama.cpp build found for this system');
-    const buf = Buffer.from(await (await fetch(a.browser_download_url)).arrayBuffer());
-    const arc = path.join(dir, a.name); fs.writeFileSync(arc, buf);
+    inst.step = `Downloading ${a.name}`; inst.total = a.size || 0;
+    arc = path.join(dir, a.name);
+    const r = await fetch(a.browser_download_url, { signal, headers: { 'User-Agent': 'pholama' } });
+    if (!r.ok) throw new Error('Download failed: HTTP ' + r.status);
+    inst.total = +r.headers.get('content-length') || inst.total;
+    const f = fs.createWriteStream(arc); let last = Date.now(), lastDone = 0;
+    for await (const c of r.body) { if (!f.write(c)) await new Promise(ok => f.once('drain', ok)); inst.done += c.length; const now = Date.now(); if (now - last >= 1000) { inst.speed = Math.round((inst.done - lastDone) / ((now - last) / 1000)); last = now; lastDone = inst.done; } }
+    await new Promise((ok, no) => f.end(e => e ? no(e) : ok()));
+    inst.step = 'Unpacking...'; inst.speed = 0;
     // tar ships with Windows 10+, macOS and Linux and extracts both .tar.gz and .zip
     execSync(`tar -xf "${arc}" -C "${dir}" --strip-components=1`, { stdio: 'ignore' });
     if (!findLlamaServer()) execSync(`tar -xf "${arc}" -C "${dir}"`, { stdio: 'ignore' });
-    fs.unlinkSync(arc);
+    fs.unlinkSync(arc); arc = null;
     if (!findLlamaServer()) {
       const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
-      const f = walk(dir).find(x => /llama-server(\.exe)?$/.test(x));
-      if (f) process.env.LLAMA_SERVER_DIR = path.dirname(f);
+      const f2 = walk(dir).find(x => /llama-server(\.exe)?$/.test(x));
+      if (f2) process.env.LLAMA_SERVER_DIR = path.dirname(f2);
     }
     if (process.platform !== 'win32') try { execSync(`chmod +x "${dir}"/llama-server 2>/dev/null || true`); } catch {}
     if (!findLlamaServer()) throw new Error('Installed, but llama-server was not found');
-    inst.status = 'done';
-  } catch (e) { inst.status = 'error'; inst.error = e.message; }
+    inst.status = 'done'; inst.step = 'Installed';
+  } catch (e) {
+    if (arc) try { fs.unlinkSync(arc); } catch {}
+    if (signal.aborted) { inst.status = 'stopped'; inst.error = null; inst.step = 'Stopped'; }
+    else { inst.status = 'error'; inst.error = e.message; }
+  }
+  inst.speed = 0; instAbort = null;
 }
+async function uninstallLlama() { stopInstall(); await stopLlama(); try { fs.rmSync(path.join(os.homedir(), '.pholama', 'bin'), { recursive: true, force: true }); } catch {} Object.assign(inst, { status: 'idle', error: null, step: '', done: 0, total: 0 }); }
 
 // ---------- http helpers ----------
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }); res.end(JSON.stringify(obj)); };
@@ -161,13 +204,16 @@ async function chat(req, res, b) {
     const allow = b.agent ? agent.allowed() : { search: false, tools: false, mcp: false, thinking: false };
     if (b.agent) log('step', allow.credits ? `Credits: ${agent.credits().left} left. On: ${['search','tools','mcp','thinking'].filter(k => allow[k]).join(', ') || 'nothing'}` : 'Credits: 0 left');
     if (b.agent && !allow.credits) line({ status: 'Daily credits used up: search, tools, MCP and thinking are off. Plain local chat still works.' });
-    const { tools } = await agent.buildTools(allow);
+    // Memory is its own switch (set by the signed-in user in the browser). It costs credits, so it is off at 0 credits.
+    const memOn = !!(b.agent && b.memory === true && allow.credits && agent.credits().left >= agent.COST.memory);
+    if (b.agent && b.memory === true && !memOn) log('error', 'Memory is on, but there are not enough credits to save new memories today.');
+    const { tools } = await agent.buildTools({ ...allow, memory: memOn });
     if (tools.length) log('step', `${tools.length} tools ready: ${tools.map(t => t.name).join(', ')}`);
     const thinking = allow.thinking && agent.credits().left >= agent.COST.thinking;
     if (allow.thinking && !thinking) log('error', 'Not enough credits for thinking mode. Answering without it.');
     if (thinking) log('step', 'Thinking mode on (charged only if the model really thinks)');
     let thinkBilled = false, thinkSeen = false;
-    const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking) }, ...(b.messages || []).filter(m => m.role !== 'system')];
+    const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : []) }, ...(b.messages || []).filter(m => m.role !== 'system')];
     // Host-side routing: obvious intents run their tool before the model answers (weak models skip tool calls).
     if (tools.length) {
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
@@ -176,6 +222,7 @@ async function chat(req, res, b) {
         log('action', `Request looks like a job for ${r0.name}. Running it first.`);
         log('action', `${r0.name} ${JSON.stringify(r0.args)}`);
         let result; try { result = String(await agent.runTool(tools, r0.name, r0.args)); } catch (e) { result = 'Tool error: ' + e.message; }
+        if (r0.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
         log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
         line({ tool: { name: r0.name, args: r0.args, result: result.slice(0, 400) } });
         messages.push({ role: 'assistant', content: `<tool>${JSON.stringify(r0)}</tool>` }, { role: 'user', content: `Tool result for ${r0.name}:\n${result}\n\nNow answer the user's question using this result. Be brief.` });
@@ -202,6 +249,7 @@ async function chat(req, res, b) {
       if (!call) { if (shown < text.length) line({ model, message: { role: 'assistant', content: text.slice(shown) }, done: false }); break; }
       log('action', `Model asked for ${call.name} ${JSON.stringify(call.args)}`);
       let result; try { result = String(await agent.runTool(tools, call.name, call.args)); } catch (e) { result = 'Tool error: ' + e.message; }
+      if (call.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
       log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
       line({ tool: { name: call.name, args: call.args, result: result.slice(0, 400) } });
       messages.push({ role: 'assistant', content: text }, { role: 'user', content: `Tool result for ${call.name}:\n${result}\n\nNow answer the user using this result. Do not call another tool unless you must.` });
@@ -232,6 +280,10 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/pull' && req.method === 'POST') { const b = await body(req); const m = CATALOG.find(x => x.id === b.id); if (!m) return json(res, 404, { error: 'unknown model' }); if (!dl[m.id] || dl[m.id].status !== 'downloading') download(m); return json(res, 200, { ok: true }); }
     if (p === '/api/install-llama' && req.method === 'POST') { installLlama(); return json(res, 200, { ok: true }); }
     if (p === '/api/install-llama/status') return json(res, 200, inst);
+    if (p === '/api/install-llama/stop' && req.method === 'POST') { stopInstall(); return json(res, 200, { ok: true }); }
+    if (p === '/api/install-llama' && req.method === 'DELETE') { await uninstallLlama(); return json(res, 200, { ok: true }); }
+    if (p === '/api/pull/stop' && req.method === 'POST') { const b = await body(req); stopDownload(b.id); return json(res, 200, { ok: true }); }
+    if (p === '/api/model' && req.method === 'DELETE') { const m = CATALOG.find(x => x.id === new URL(req.url, 'http://x').searchParams.get('id')); if (!m) return json(res, 404, { error: 'unknown model' }); await deleteModel(m); return json(res, 200, { ok: true }); }
     if (p === '/api/pull/status') return json(res, 200, dl);
     if (p === '/api/chat' && req.method === 'POST') return chat(req, res, await body(req));
     if (p === '/api/generate' && req.method === 'POST') { // Ollama-compatible generate -> chat
