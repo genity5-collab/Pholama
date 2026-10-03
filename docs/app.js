@@ -21,7 +21,10 @@ async function init() {
 
 async function refreshSelect() {
   sel.innerHTML = '';
-  for (const id of saved()) { const m = catalog.browser.find(x => x.id === id); if (m) sel.add(new Option('📱 ' + m.name, 'web:' + id)); }
+  for (const id of saved()) {
+    const m = catalog.browser.find(x => x.id === id); if (m) sel.add(new Option('📱 ' + m.name, 'web:' + id));
+    const c = (catalog.cpu || []).find(x => 'cpu:' + x.id === id); if (c) sel.add(new Option('📱 ' + c.name, id));
+  }
   if (server) try {
     const t = await (await fetch('api/tags')).json();
     for (const m of t.models) sel.add(new Option('💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
@@ -29,14 +32,31 @@ async function refreshSelect() {
 }
 
 async function ensureEngine(value) {
+  if (value.startsWith('cpu:')) return ensureCpu(value.slice(4));
   if (!value.startsWith('web:')) return;
   const id = value.slice(4);
   if (engine && engineModel === id) return;
-  if (!navigator.gpu) throw new Error('This browser has no WebGPU. Use Chrome on Android 121+, or Chrome/Edge on desktop.');
+  if (!navigator.gpu) throw new Error('No WebGPU in this browser. Open Models and pick a CPU model.');
   const note = add('sys', 'Loading model...');
   const webllm = await import('https://esm.run/@mlc-ai/web-llm');
   engine = await webllm.CreateMLCEngine(id, { initProgressCallback: p => note.textContent = p.text });
   engineModel = id; note.textContent = 'Model ready.'; markReady(id);
+}
+
+
+// CPU/WASM fallback (transformers.js) for browsers without WebGPU
+let cpuPipe = null, cpuModel = null;
+async function ensureCpu(id, onProgress) {
+  if (cpuPipe && cpuModel === id) return;
+  const tf = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+  cpuPipe = await tf.pipeline('text-generation', id, { dtype: 'q4', progress_callback: p => { if (onProgress && p.progress != null) onProgress(p); } }).catch(async () =>
+    tf.pipeline('text-generation', id, { dtype: 'q8', progress_callback: p => { if (onProgress && p.progress != null) onProgress(p); } }));
+  cpuModel = id; markReady('cpu:' + id);
+}
+async function cpuChat(messages, onToken) {
+  const tf = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+  const streamer = new tf.TextStreamer(cpuPipe.tokenizer, { skip_prompt: true, skip_special_tokens: true, callback_function: onToken });
+  await cpuPipe(messages, { max_new_tokens: 512, do_sample: true, temperature: 0.7, streamer });
 }
 
 async function send() {
@@ -46,7 +66,9 @@ async function send() {
   const out = add('m a', '...'); let acc = '';
   try {
     await ensureEngine(sel.value);
-    if (sel.value.startsWith('web:')) {
+    if (sel.value.startsWith('cpu:')) {
+      await cpuChat(history, t => { acc += t; out.textContent = acc; chatEl.scrollTop = 1e9; });
+    } else if (sel.value.startsWith('web:')) {
       const s = await engine.chat.completions.create({ messages: history, stream: true });
       for await (const c of s) { acc += c.choices[0]?.delta?.content || ''; out.textContent = acc; chatEl.scrollTop = 1e9; }
     } else {
@@ -73,10 +95,19 @@ function render() {
   $('#tBrowser').classList.toggle('on', tab === 'browser'); $('#tLocal').classList.toggle('on', tab === 'local');
   listEl.innerHTML = '';
   if (tab === 'browser') {
-    $('#hw').textContent = navigator.gpu ? 'Models run inside this browser and are cached after the first download.' : 'WebGPU not available here. Try Chrome on Android 121+ or desktop Chrome/Edge.';
-    for (const m of catalog.browser) {
-      const ready = saved().includes(m.id), r = row(m.name, `${m.size} · ${m.note}`, ready ? 'Ready' : 'Download');
-      r.btn.disabled = ready; r.btn.onclick = async () => { r.btn.disabled = true; r.btn.textContent = '...'; try { sel.add(new Option('📱 ' + m.name, 'web:' + m.id)); sel.value = 'web:' + m.id; await ensureEngineWithBar(m.id, r); r.btn.textContent = 'Ready'; } catch (e) { r.sub.textContent = 'Error: ' + e.message; r.btn.disabled = false; r.btn.textContent = 'Retry'; } };
+    $('#hw').textContent = navigator.gpu ? 'Models run inside this browser on your GPU and are cached after the first download.' : 'No WebGPU here, so small models run on the CPU (slower). Chrome on Android 121+ gives full speed.';
+    const gpu = !!navigator.gpu;
+    for (const m of (gpu ? catalog.browser : catalog.cpu || [])) {
+      const key = gpu ? m.id : 'cpu:' + m.id, ready = saved().includes(key), r = row(m.name, `${m.size} · ${m.note}`, ready ? 'Ready' : 'Download');
+      r.btn.disabled = ready;
+      r.btn.onclick = async () => {
+        r.btn.disabled = true; r.btn.textContent = '...'; r.bar.style.display = '';
+        try {
+          if (gpu) await ensureEngineWithBar(m.id, r);
+          else await ensureCpu(m.id, p => { r.fill.style.width = Math.round(p.progress) + '%'; r.sub.textContent = (p.file || 'downloading').slice(-40); });
+          r.btn.textContent = 'Ready'; await refreshSelect(); sel.value = gpu ? 'web:' + m.id : key; r.sub.textContent = 'Ready to chat. Close this window.';
+        } catch (e) { r.sub.textContent = 'Error: ' + e.message.slice(0, 160); r.btn.disabled = false; r.btn.textContent = 'Retry'; }
+      };
     }
   } else {
     const h = server.hardware;

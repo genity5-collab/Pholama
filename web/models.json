@@ -1,19 +1,112 @@
 {
   "browser": [
-    {"id": "SmolLM2-360M-Instruct-q4f16_1-MLC", "name": "SmolLM2 360M", "size": "~0.3 GB", "note": "Fastest, any phone"},
-    {"id": "Qwen2.5-0.5B-Instruct-q4f16_1-MLC", "name": "Qwen2.5 0.5B", "size": "~0.4 GB", "note": "Tiny and quick"},
-    {"id": "Qwen2.5-1.5B-Instruct-q4f16_1-MLC", "name": "Qwen2.5 1.5B", "size": "~1 GB", "note": "Good balance"},
-    {"id": "Llama-3.2-1B-Instruct-q4f16_1-MLC", "name": "Llama 3.2 1B", "size": "~0.9 GB", "note": "Good balance"},
-    {"id": "gemma-2-2b-it-q4f16_1-MLC", "name": "Gemma 2 2B", "size": "~1.6 GB", "note": "Better quality, needs 6GB+ RAM phone"},
-    {"id": "Llama-3.2-3B-Instruct-q4f16_1-MLC", "name": "Llama 3.2 3B", "size": "~2.3 GB", "note": "High-end phones only"}
+    {
+      "id": "SmolLM2-360M-Instruct-q4f16_1-MLC",
+      "name": "SmolLM2 360M",
+      "size": "~0.3 GB",
+      "note": "Fastest, any phone"
+    },
+    {
+      "id": "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
+      "name": "Qwen2.5 0.5B",
+      "size": "~0.4 GB",
+      "note": "Tiny and quick"
+    },
+    {
+      "id": "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
+      "name": "Qwen2.5 1.5B",
+      "size": "~1 GB",
+      "note": "Good balance"
+    },
+    {
+      "id": "Llama-3.2-1B-Instruct-q4f16_1-MLC",
+      "name": "Llama 3.2 1B",
+      "size": "~0.9 GB",
+      "note": "Good balance"
+    },
+    {
+      "id": "gemma-2-2b-it-q4f16_1-MLC",
+      "name": "Gemma 2 2B",
+      "size": "~1.6 GB",
+      "note": "Better quality, needs 6GB+ RAM phone"
+    },
+    {
+      "id": "Llama-3.2-3B-Instruct-q4f16_1-MLC",
+      "name": "Llama 3.2 3B",
+      "size": "~2.3 GB",
+      "note": "High-end phones only"
+    }
   ],
   "local": [
-    {"id": "qwen2.5-0.5b", "name": "Qwen2.5 0.5B", "minRamGB": 2, "sizeGB": 0.4, "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf", "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf"},
-    {"id": "llama3.2-1b", "name": "Llama 3.2 1B", "minRamGB": 4, "sizeGB": 0.8, "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf", "file": "Llama-3.2-1B-Instruct-Q4_K_M.gguf"},
-    {"id": "qwen2.5-1.5b", "name": "Qwen2.5 1.5B", "minRamGB": 4, "sizeGB": 1.1, "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf", "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf"},
-    {"id": "llama3.2-3b", "name": "Llama 3.2 3B", "minRamGB": 8, "sizeGB": 2.0, "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf", "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf"},
-    {"id": "qwen2.5-7b", "name": "Qwen2.5 7B", "minRamGB": 12, "sizeGB": 4.7, "url": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf", "file": "qwen2.5-7b-instruct-q4_k_m.gguf"},
-    {"id": "llama3.1-8b", "name": "Llama 3.1 8B", "minRamGB": 12, "sizeGB": 4.9, "url": "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf", "file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"},
-    {"id": "qwen2.5-14b", "name": "Qwen2.5 14B", "minRamGB": 24, "sizeGB": 9.0, "url": "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-14b-instruct-q4_k_m.gguf", "file": "qwen2.5-14b-instruct-q4_k_m.gguf"}
+    {
+      "id": "qwen2.5-0.5b",
+      "name": "Qwen2.5 0.5B",
+      "minRamGB": 2,
+      "sizeGB": 0.4,
+      "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+      "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf"
+    },
+    {
+      "id": "llama3.2-1b",
+      "name": "Llama 3.2 1B",
+      "minRamGB": 4,
+      "sizeGB": 0.8,
+      "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+      "file": "Llama-3.2-1B-Instruct-Q4_K_M.gguf"
+    },
+    {
+      "id": "qwen2.5-1.5b",
+      "name": "Qwen2.5 1.5B",
+      "minRamGB": 4,
+      "sizeGB": 1.1,
+      "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+      "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf"
+    },
+    {
+      "id": "llama3.2-3b",
+      "name": "Llama 3.2 3B",
+      "minRamGB": 8,
+      "sizeGB": 2.0,
+      "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+      "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf"
+    },
+    {
+      "id": "qwen2.5-7b",
+      "name": "Qwen2.5 7B",
+      "minRamGB": 12,
+      "sizeGB": 4.7,
+      "url": "https://huggingface.co/Qwen/Qwen2.5-7B-Instruct-GGUF/resolve/main/qwen2.5-7b-instruct-q4_k_m.gguf",
+      "file": "qwen2.5-7b-instruct-q4_k_m.gguf"
+    },
+    {
+      "id": "llama3.1-8b",
+      "name": "Llama 3.1 8B",
+      "minRamGB": 12,
+      "sizeGB": 4.9,
+      "url": "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+      "file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf"
+    },
+    {
+      "id": "qwen2.5-14b",
+      "name": "Qwen2.5 14B",
+      "minRamGB": 24,
+      "sizeGB": 9.0,
+      "url": "https://huggingface.co/Qwen/Qwen2.5-14B-Instruct-GGUF/resolve/main/qwen2.5-14b-instruct-q4_k_m.gguf",
+      "file": "qwen2.5-14b-instruct-q4_k_m.gguf"
+    }
+  ],
+  "cpu": [
+    {
+      "id": "onnx-community/Qwen2.5-0.5B-Instruct",
+      "name": "Qwen2.5 0.5B (CPU)",
+      "size": "~0.5 GB",
+      "note": "Works without WebGPU, slower"
+    },
+    {
+      "id": "HuggingFaceTB/SmolLM2-360M-Instruct",
+      "name": "SmolLM2 360M (CPU)",
+      "size": "~0.4 GB",
+      "note": "Works without WebGPU, slower"
+    }
   ]
 }
