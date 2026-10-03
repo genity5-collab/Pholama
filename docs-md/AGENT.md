@@ -4,17 +4,16 @@
 
 
 
-When you run the host on a PC, chat can use tools. They cost **daily credits** (1000 per day, resets at local midnight):
+When you run the host on a PC, chat can use tools. **All tools are free.** Only thinking mode uses **daily credits** (1000 per day, resets at local midnight):
 
 | Feature | Cost |
 |---|---|
-| Live web search | 20 per search |
-| Read a web page | 10 |
-| Calculator / clock | 1 |
-| MCP tool call | 15 |
+| Live web search, read a page | Free |
+| Calculator, clock, memory | Free |
+| MCP tools, GitHub, run a command | Free |
 | Thinking mode | 25 per message |
 
-Plain local chat is always free. **When credits hit 0, search, tools, MCP and thinking switch off** and the model answers on its own (so it can be wrong on math or recent facts). The meter is in the header; **Tools** opens the toggles.
+Plain local chat is always free. **When credits hit 0, only thinking mode switches off.** Search, tools, MCP, GitHub and commands keep working. The meter is in the header; **Tools** opens the toggles.
 
 - **Search:** uses DuckDuckGo's HTML page, no API key. It may be blocked on some networks.
 - **MCP:** add HTTP (streamable) MCP servers in Tools. stdio MCP servers are not supported yet.
@@ -71,8 +70,8 @@ A cloud assistant that needs no download. Sign in, pick **Agent Max** in the mod
 
 Local models that support tools can use GitHub for free (no cloud credits). Public repos need no token.
 
-- **Read (10 credits):** search repos, read a file, list issues, repo info.
-- **Write (15 credits):** create an issue, comment, write a file. These never run on their own: the chat shows **Allow / Deny** and nothing happens until you press Allow. Requests expire after 10 minutes and cannot be reused.
+- **Read (free):** search repos, read a file, list issues, repo info.
+- **Write (free):** create an issue, comment, write a file. These never run on their own: the chat shows **Allow / Deny** and nothing happens until you press Allow. Requests expire after 10 minutes and cannot be reused.
 - **Token:** paste a GitHub token in Tools. It stays in your browser on this device and is sent to your own PC only. Clear it any time.
 - Models without tool support are never given these tools.
 - The credits left today show beside the message box.

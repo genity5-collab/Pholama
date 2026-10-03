@@ -45,15 +45,82 @@ Pick **Agent Max** in the model list. It can use tools, open and close the app's
 
 The PC version can also search the web, use tools and show a **live log** of what the AI is doing.
 
-1. [Install Node.js](https://nodejs.org) (click the big green button).
-2. [Download Pholama](https://github.com/genity5-collab/Pholama/archive/refs/heads/main.zip) and unzip it.
-3. Double-click **start.bat** (Windows) or run `./start.sh` (Mac/Linux).
-4. Open **http://localhost:11435**, tap **Models**, then **Install**, then **Download** a model.
+You need [Node.js 18+](https://nodejs.org) once. Then pick one way:
+
+**A. One command (nothing to download by hand)**
+```
+npx github:genity5-collab/Pholama
+```
+
+**B. Installer (saves Pholama in a `Pholama` folder in your home folder, then starts it)**
+
+Windows (PowerShell):
+```
+irm https://raw.githubusercontent.com/genity5-collab/Pholama/main/install/install.ps1 | iex
+```
+Mac / Linux (Terminal):
+```
+curl -fsSL https://raw.githubusercontent.com/genity5-collab/Pholama/main/install/install.sh | bash
+```
+
+**C. Zip file:** [download](https://github.com/genity5-collab/Pholama/archive/refs/heads/main.zip), unzip, then double-click **start.bat** (Windows) or run `./start.sh` (Mac/Linux).
+
+Then open **http://localhost:11435**, tap **Models**, then **Install**, then **Download** a model.
+
+To reach your PC from your phone or away from home, see "Use your PC's AI from anywhere" in [docs-md/AGENT.md](docs-md/AGENT.md).
 
 Then read:
 - [Full PC guide](docs-md/PC.md)
 - [Tools, search, credits, switches, tokens, live log](docs-md/AGENT.md)
 - [All models](docs-md/MODELS.md)
+
+## Add your own tools for the AI to run (PC only)
+
+The AI can only use tools on the **PC version**, with a model tagged **tools**. All tools are free. There are three ways to give it more.
+
+### 1. Let it run programs on your PC (any platform)
+Open **Tools** and turn on **Terminal**. The AI can then suggest one command at a time. Nothing runs until you press **Allow**. Commands work the same on Windows, Mac and Linux, so install the program you want once and the AI can call it:
+
+| You want the AI to use | Install it once | Then ask |
+|---|---|---|
+| Python scripts | [python.org](https://python.org) | "Run my script in C:\\Users\\me\\tools\\clean.py" |
+| Git | [git-scm.com](https://git-scm.com) | "Show the last 5 commits in this folder" |
+| Node tools | [nodejs.org](https://nodejs.org) | "Run npm test in my project" |
+| Your own script | save it anywhere | "Run backup.bat" (Windows) or "Run ./backup.sh" (Mac/Linux) |
+
+Each command stops by itself after 60 seconds, output is capped, and dangerous commands (wipe, format, shutdown, admin rights) are blocked. Press **Stop** to end one early. Every command is listed in **Tools > Edit log**.
+
+### 2. Add an MCP server (the "plugin" way)
+MCP servers give the AI ready-made tools (files, databases, calendars, your own apps). Pholama supports **HTTP(S) MCP servers**.
+
+1. Start or find an MCP server that has a web address, for example `http://localhost:3000/mcp`.
+2. Open **Tools > MCP tools**, give it a name, paste the address, and add a header only if the server needs a key.
+3. Pick a model tagged **tools**. The AI sees the server's tools on the next message and uses them when they help.
+
+Or add one from the command line of the running app:
+```
+curl -X POST http://localhost:11435/api/mcp -H "Content-Type: application/json" ^
+  -d "{\"name\":\"mytools\",\"url\":\"http://localhost:3000/mcp\"}"
+```
+(On Mac/Linux use `\` instead of `^` at the end of the line.) Remove it with `DELETE /api/mcp?name=mytools`. Servers that only run as a local program (stdio) are not supported yet. Put a small HTTP wrapper in front of them, or use route 1.
+
+### 3. Build a tool yourself (developers)
+Write a tiny MCP server in any language that answers `tools/list` and `tools/call` over HTTP, then add it as in route 2. Or edit `server/agent.js` and add an entry to `BUILTIN` with a `desc`, a `run` function and a `kind`. Built-in tools need an update-safe copy: `pholama update` replaces program files, so keep your own tools in an MCP server instead.
+
+### Keep it safe
+- Only add servers you trust. A tool can do whatever its server can do.
+- Writing to GitHub and every command always asks you first.
+- Phones and other devices that connect with a key get plain chat only. They can never run tools or commands on your PC.
+
+## Updates without reinstalling (PC only)
+
+The PC app checks GitHub a few seconds after it starts and then every 6 hours. If there is a new version it downloads it quietly, and shows **Update ready** at the top. Close Pholama and start it again to use it. The web part (the screens) changes the next time you reload the page.
+
+- **Your models, accounts, keys, credits and settings are never touched.** They live in `~/.pholama`, outside the program folder.
+- A copy of the old version is kept in `~/.pholama/previous-version` in case you want to go back.
+- Turn it off in **Tools > Updates**, or press **Check now** to look right away.
+- Prefer the command line? `pholama update` does the same thing.
+- Nothing updates if GitHub cannot be reached. Your current version keeps working.
 
 ## For developers
 

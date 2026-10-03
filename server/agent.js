@@ -7,8 +7,10 @@ const FILE = path.join(DIR, 'state.json');
 const DAILY = +process.env.PHOLAMA_DAILY_CREDITS || 1000;
 
 // What each feature costs (credits). Plain local chat is always free.
-const COST = { search: 20, fetch: 10, calc: 1, time: 1, mcp: 15, thinking: 25, memory: 5, ghread: 10, ghwrite: 15 };
+// Tools are free. Only thinking mode uses credits.
+const COST = { search: 0, fetch: 0, calc: 0, time: 0, mcp: 0, thinking: 25, memory: 0, ghread: 0, ghwrite: 0, cmd: 0 };
 const github = require('./github');
+const power = require('./power');
 
 function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function load() { try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { return {}; } }
@@ -16,14 +18,15 @@ function save(s) { fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(FILE
 function state() {
   const s = load();
   if (s.day !== today()) { s.day = today(); s.used = 0; }
-  s.mcp = s.mcp || []; s.prefs = s.prefs || { search: true, tools: true, mcp: true, thinking: true }; if (s.prefs.github == null) s.prefs.github = true;
+  s.mcp = s.mcp || []; s.prefs = s.prefs || { search: true, tools: true, mcp: true, thinking: true }; if (s.prefs.github == null) s.prefs.github = true; if (s.prefs.terminal == null) s.prefs.terminal = false;
   // One-time migration (v2): capable models now start with Thinking ON. Older saves had it OFF by default. Only runs once, so a later deliberate OFF sticks.
   if (!s.prefsV) { s.prefsV = 2; s.prefs.thinking = true; save(s); }
   return s;
 }
-const credits = () => { const s = state(); return { daily: DAILY, used: s.used, left: Math.max(0, DAILY - s.used), day: s.day, cost: COST }; };
+const dailyNow = () => DAILY + power.bonusTotal();
+const credits = () => { const s = state(), d = dailyNow(); return { daily: d, used: s.used, left: Math.max(0, d - s.used), day: s.day, cost: COST, bonus: power.bonusTotal() }; };
 // Try to spend. Returns false (and spends nothing) if there is not enough left.
-function spend(n) { const s = state(); if (s.used + n > DAILY) return false; s.used += n; save(s); return true; }
+function spend(n) { const s = state(); if (s.used + n > dailyNow()) return false; s.used += n; save(s); return true; }
 const hasCredits = () => credits().left > 0;
 
 // ---------- tools ----------
@@ -114,7 +117,8 @@ function setPrefs(p) { const s = state(); s.prefs = { ...s.prefs, ...p }; save(s
 // Which features are allowed right now. When credits hit 0 everything paid is switched off.
 function allowed() {
   const s = state(), ok = hasCredits();
-  return { github: ok && s.prefs.github, search: ok && s.prefs.search, tools: ok && s.prefs.tools, mcp: ok && s.prefs.mcp && s.mcp.length > 0, thinking: ok && s.prefs.thinking, prefs: s.prefs, credits: ok };
+  return { terminal: s.prefs.terminal === true,   // free: works even at 0 credits
+     github: s.prefs.github, search: s.prefs.search, tools: s.prefs.tools, mcp: s.prefs.mcp && s.mcp.length > 0, thinking: ok && s.prefs.thinking, prefs: s.prefs, credits: ok };   // tools are free; only thinking needs credits
 }
 
 function systemPrompt(tools, thinking, memories, effort) {
@@ -142,6 +146,7 @@ async function buildTools(a) {
   const tools = [];
   for (const [name, t] of Object.entries(BUILTIN)) if (a[t.group]) tools.push({ name, desc: t.desc, kind: t.kind });
   if (a.github) tools.push(...github.tools());
+  if (a.terminal) tools.push({ name: 'run_command', desc: 'Run ONE shell command on the user\'s PC. The user must click Allow first; nothing runs until they do. args: {"command": string, "cwd": string (optional folder inside the home folder), "why": string (one short sentence for the user)}', kind: 'cmd' });
   const mcp = [];
   if (a.mcp) for (const t of await listMcp()) if (!t.error) { const n = `${t.server}__${t.name}`; mcp.push(t); tools.push({ name: n, desc: `${(t.description || '').slice(0, 160)} args schema: ${JSON.stringify(t.schema || {}).slice(0, 300)}`, kind: 'mcp', mcp: t }); }
   return { tools, mcp };
@@ -149,6 +154,9 @@ async function buildTools(a) {
 
 async function runTool(tools, name, args, ctx) {
   const t = tools.find(x => x.name === name); if (!t) throw new Error('unknown tool ' + name);
+  if (name === 'run_command') {
+    return power.propose(args || {}, ctx);
+  }
   if (github.isGithub(name)) {
     if (!spend(COST[t.kind])) throw new Error('out of daily credits');
     const r = await github.run(ctx && ctx.ghToken, name, args);
@@ -188,4 +196,4 @@ function routeIntent(text, tools) {
 const TOOL_RE = /<tool>([\s\S]*?)<\/tool>/;
 function parseTool(text) { const m = TOOL_RE.exec(text); if (!m) return null; try { const j = JSON.parse(m[1].trim()); return j.name ? j : null; } catch { return null; } }
 
-module.exports = { github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+module.exports = { power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

@@ -101,6 +101,7 @@ async function init() {
   catalog = await (await fetch('models.json')).json();
   try { const r = await api('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json(); } catch {}
   tab = server ? 'local' : 'browser';
+  if (server) { const tb = $('#tBrowser'); if (tb) tb.style.display = 'none'; const tl = $('#tLocal'); if (tl) tl.textContent = 'Models on this PC'; }   // PC build: phone models are never offered
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) navigator.serviceWorker.register('sw.js').catch(() => {});
   await refreshSelect();
   { const L = llamaLoader(84); $('#heroLogo').appendChild(L.el); L.done(); L.el.classList.remove('ok'); L.el.style.color = 'var(--fg)';
@@ -173,8 +174,9 @@ async function openOpts() {
   const off = !server; $('#t_off').style.display = off ? '' : 'none';
   if (!off) {
     await refreshCredits();
-    $('#t_cr').textContent = cred.left === 0 ? 'Out of credits. Search, tools, MCP and thinking are off until tomorrow. Plain chat still works.' : `${cred.left} of ${cred.daily} credits left today. Resets at midnight.`;
-    const pr = cred.allowed.prefs; ghPaint(); for (const k of ['github', 'search', 'tools', 'mcp', 'thinking']) $('#p_' + k).checked = !!pr[k];
+    $('#t_cr').textContent = cred.left === 0 ? 'Out of credits. Thinking mode is off until tomorrow. Tools and chat still work.' : `${cred.left} of ${cred.daily} credits left today` + (cred.bonus ? ` (includes ${cred.bonus} bonus from logging in).` : '.') + ' Resets at midnight.';
+    const pr = cred.allowed.prefs; ghPaint(); for (const k of ['terminal', 'github', 'search', 'tools', 'mcp', 'thinking']) $('#p_' + k).checked = !!pr[k];
+    paintEditLog();
     await listMcpUI();
   } else {
     ghPaint();
@@ -195,7 +197,7 @@ async function listMcpInner() {
     box.appendChild(d);
   }
 }
-for (const k of ['github', 'search', 'tools', 'mcp', 'thinking']) $('#p_' + k).onchange = e => api('api/prefs', { method: 'POST', body: JSON.stringify({ [k]: e.target.checked }) }).then(paintSwitches);
+for (const k of ['terminal', 'github', 'search', 'tools', 'mcp', 'thinking']) $('#p_' + k).onchange = e => api('api/prefs', { method: 'POST', body: JSON.stringify({ [k]: e.target.checked }) }).then(paintSwitches);
 $('#mAdd').onclick = async () => {
   const name = $('#mName').value.trim(), url = $('#mUrl').value.trim(), auth = $('#mAuth').value.trim();
   $('#mMsg').textContent = '';
@@ -208,13 +210,14 @@ $('#mAdd').onclick = async () => {
 
 // ----- per-message switches: Search / Tools / MCP / Thinking -----
 const ICON = {
+  terminal: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 17 10 11 4 5"/><line x1="12" y1="19" x2="20" y2="19"/></svg>',
   search: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>',
   tools: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a4 4 0 0 0-5.4 5.4L3 18l3 3 6.3-6.3a4 4 0 0 0 5.4-5.4l-2.6 2.6-2.4-.6-.6-2.4z"/></svg>',
   mcp: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 3v5M15 3v5M7 8h10v4a5 5 0 0 1-10 0z"/><path d="M12 17v4"/></svg>',
   github: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 19c-4 1.5-4-2-6-2.5M15 21v-3.5c0-1 .1-1.4-.5-2 2.8-.3 5.5-1.4 5.5-6a4.6 4.6 0 0 0-1.3-3.2 4.2 4.2 0 0 0-.1-3.2s-1.1-.3-3.5 1.3a12 12 0 0 0-6.2 0C6.5 2.8 5.4 3.1 5.4 3.1a4.2 4.2 0 0 0-.1 3.2A4.6 4.6 0 0 0 4 9.5c0 4.6 2.7 5.7 5.5 6-.6.6-.6 1.2-.5 2V21"/></svg>',
   thinking: '<svg viewBox="0 0 24 24" width="17" height="17" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2.1h5c0-.9.4-1.6 1-2.1A6 6 0 0 0 12 3z"/></svg>',
 };
-const SW = [['github', 'GitHub', 'Search and read GitHub'], ['search', 'Search', 'Live web search'], ['tools', 'Tools', 'Calculator and clock'], ['mcp', 'MCP', 'Tools from your MCP servers'], ['thinking', 'Thinking', 'Reason step by step first']];
+const SW = [['terminal', 'Terminal', 'Let the AI propose PC commands (you approve each)'], ['github', 'GitHub', 'Search and read GitHub'], ['search', 'Search', 'Live web search'], ['tools', 'Tools', 'Calculator and clock'], ['mcp', 'MCP', 'Tools from your MCP servers'], ['thinking', 'Thinking', 'Reason step by step first']];
 let swCaps = {};
 const swPref = () => { try { return JSON.parse(localStorage.getItem('pholama.sw') || '{}'); } catch { return {}; } };
 const swOn = k => swCaps[k] && swPref()[k] !== false;           // untouched = ON (for models that can)
@@ -226,7 +229,7 @@ async function paintSwitches() {
     try { const c = await (await api('api/caps?model=' + encodeURIComponent(sel.value))).json(); await refreshCredits();
     const mp = (cred && cred.allowed && cred.allowed.prefs) || {};
     let hasMcp = false; try { hasMcp = ((await (await api('api/mcp')).json()).servers || []).length > 0; } catch {}
-    swCaps = { github: c.github && mp.github !== false, search: c.search && mp.search !== false, tools: c.tools && mp.tools !== false, mcp: c.mcp && mp.mcp !== false, _hasMcp: hasMcp, thinking: c.thinking && mp.thinking !== false, _src: c.source };
+    swCaps = { terminal: c.tools && mp.terminal === true, github: c.github && mp.github !== false, search: c.search && mp.search !== false, tools: c.tools && mp.tools !== false, mcp: c.mcp && mp.mcp !== false, _hasMcp: hasMcp, thinking: c.thinking && mp.thinking !== false, _src: c.source };
     } catch {}
   }
   row.innerHTML = '';
@@ -345,7 +348,7 @@ async function send() {
           if (j.log) { msg.log(j.log.kind, j.log.text, j.log.t); continue; }
           if (j.status) { msg.log('step', j.status); continue; }
           if (j.memory) { const note = await saveMemory(j.memory.text); msg.log(/^Saved/.test(note) ? 'result' : 'error', note); continue; }
-          if (j.approve) { ghAsk(msg, j.approve); continue; }
+          if (j.approve) { (j.approve.type === 'command' ? cmdAsk : ghAsk)(msg, j.approve); continue; }
           if (j.tool) { refreshCredits(); continue; }
           if (j.usage) { msg.usage(j.usage); continue; }
           if (j.credits) { refreshCredits(); continue; }
@@ -383,6 +386,7 @@ let memOn = false, memories = [];
 async function afterAuth() {
   const u = Account.user();
   memOn = false; memories = [];
+  if (u) claimBonus();
   if (u) { try { memOn = await Account.memoryOn(); if (memOn) memories = (await Account.list()).map(m => m.content); } catch {} }
 }
 let aMode = 'login';
@@ -496,29 +500,66 @@ function render() {
       if (gpu) cachedOnDevice(useId).then(isCached => { if (isCached && !ready) { markReady(useId); idle('Ready', true); } });
     }
   } else {
-    const ram = server.ramGB || 0;
-    $('#hw').textContent = `${server.os || 'PC'} · ${server.cpu || 'CPU'}${server.gpu ? ' · ' + server.gpu : ''} · ${ram ? ram + ' GB RAM' : ''}`;
-    for (const m of catalog.pc || []) {
-      const mb = n => (n / 1024 / 1024).toFixed(0);
-      const r = row(m.name, `${m.sizeGB} GB · ${m.fits ? 'fits your PC' : 'may be too big for your RAM'} · ${(m.caps || []).map(c => (catalog.capLabels || {})[c] || c).join(', ')}`, 'Download');
-      const del = mini('Delete', async () => { if (!confirm(`Delete ${m.name} from this PC?`)) return; del.disabled = true; await api('api/model?id=' + encodeURIComponent(m.id), 'DELETE'); await refreshModels(); });
-      r.btn.parentNode.appendChild(del); del.style.display = 'none';
-      const idle = (label, haveFile) => { r.loader.set(haveFile ? 0 : 0); r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = false; r.btn.onclick = start; del.style.display = haveFile ? '' : 'none'; };
-      const start = async () => { if (needLogin('download')) return; r.btn.disabled = true; await api('api/pull', 'POST', { id: m.id }); watchModel(); };
-      const paint = d => {
-        if (d && d.status === 'downloading') { r.bar.style.display = ''; r.setProgress(d.total ? d.done / d.total : null); r.sub.textContent = `${mb(d.done)}${d.total ? ' / ' + mb(d.total) : ''} MB${d.speed ? '  ·  ' + (d.speed / 1e6).toFixed(1) + ' MB/s' : ''}`; r.btn.textContent = 'Stop'; r.btn.disabled = false; r.btn.onclick = () => api('api/pull/stop', 'POST', { id: m.id }); del.style.display = 'none'; return; }
-        if (d && d.status === 'done') { idle('Downloaded', true); r.loader.done(); r.btn.disabled = true; r.sub.textContent = 'Ready. Pick it in the model menu.'; return; }
-        if (d && d.status === 'stopped') { idle('Resume', true); r.loader.set(d.total ? d.done / d.total : 0); r.sub.textContent = `Stopped at ${mb(d.done)} MB. Tap Resume to continue, or Delete to discard.`; return; }
-        if (d && d.status === 'error') { idle('Retry', true); r.sub.textContent = 'Error: ' + d.error; return; }
-        if (m.downloaded) { idle('Downloaded', true); r.loader.done(); r.btn.disabled = true; } else { idle('Download', !!m.partial); if (m.partial) r.sub.textContent = 'Partly downloaded. Tap Download to continue where it stopped.'; }
-      };
-      const watchModel = () => { clearInterval(r.t); r.t = setInterval(async () => {
-        if (!dlg.open) return clearInterval(r.t);
-        const all = await (await api('api/pull/status')).json(); const d = all[m.id]; paint(d);
-        if (d && d.status === 'done') { clearInterval(r.t); await refreshModels(); }
-      }, 700); };
-      paint(m.progress); if (m.progress && m.progress.status === 'downloading') watchModel();
-    }
+    renderPC();
+  }
+}
+// ---- PC models: every row shows size, categories and the exact command. Phone models never appear here. ----
+const PC_CATS = [['all', 'All'], ['tools', 'Tool running'], ['reasoning', 'Reasoning'], ['fast', 'Fast'], ['slow', 'Slow']];
+let pcCat = 'all', pcFam = 'all', pcInstalled = false;
+function fmtMB(n) { return n >= 1073741824 ? (n / 1073741824).toFixed(2) + ' GB' : (n / 1048576).toFixed(0) + ' MB'; }
+function renderPC() {
+  const hw = server.hardware || {}, models = server.models || [];
+  $('#hw').textContent = `${hw.platform || 'PC'} · ${hw.cpu || 'CPU'}${hw.gpu ? ' · ' + hw.gpu : ''} · ${hw.ramGB ? hw.ramGB + ' GB RAM' : ''}${server.llamaServer ? '' : ' · engine installs on first chat'}`;
+  const bar = document.createElement('div'); bar.className = 'pcfilters';
+  const mk = (label, on, fn) => { const b = document.createElement('button'); b.type = 'button'; b.textContent = label; b.className = 'chipbtn' + (on ? ' on' : ''); b.onclick = fn; return b; };
+  for (const [k, l] of PC_CATS) bar.appendChild(mk(l, pcCat === k, () => { pcCat = k; render(); }));
+  const fams = ['all', ...new Set(models.map(m => m.family).filter(Boolean))];
+  const fr = document.createElement('div'); fr.className = 'pcfilters';
+  for (const f of fams) fr.appendChild(mk(f === 'all' ? 'All makers' : f, pcFam === f, () => { pcFam = f; render(); }));
+  fr.appendChild(mk('Installed only', pcInstalled, () => { pcInstalled = !pcInstalled; render(); }));
+  listEl.appendChild(bar); listEl.appendChild(fr);
+  const hint = document.createElement('div'); hint.className = 'sys'; hint.style.textAlign = 'left';
+  hint.innerHTML = 'Terminal: <code>pholama pull NAME</code> downloads, <code>pholama chat NAME</code> chats, <code>pholama serve NAME</code> shares it with your apps on this PC, <code>pholama rm NAME</code> removes it. Or use the buttons here.';
+  listEl.appendChild(hint);
+  const shown = models.filter(m => (pcCat === 'all' || (m.categories || []).includes(pcCat)) && (pcFam === 'all' || m.family === pcFam) && (!pcInstalled || m.downloaded || m.partial));
+  if (!shown.length) { const e = document.createElement('div'); e.className = 'sys'; e.textContent = 'No models match these filters.'; listEl.appendChild(e); }
+  for (const m of shown) {
+    const bytes = m.bytes || m.sizeGB * 1073741824;
+    const r = row(m.name, '', 'Download');
+    const catTxt = (m.categories || []).map(c => (PC_CATS.find(x => x[0] === c) || [0, c])[1]).join(' · ');
+    const base = `${fmtMB(bytes)} · needs about ${m.minRamGB} GB RAM · ${m.fits ? 'fits your PC' : 'may be too big for your PC'}${catTxt ? ' · ' + catTxt : ''}`;
+    r.sub.textContent = base;
+    if (m.blurb) { const bl = document.createElement('small'); bl.textContent = m.blurb; r.sub.parentNode.insertBefore(bl, r.bar); }
+    const cmd = document.createElement('div'); cmd.className = 'cmdrow';
+    const code = document.createElement('code'); code.textContent = m.command || ('pholama pull ' + m.id);
+    const cp = document.createElement('button'); cp.type = 'button'; cp.textContent = 'Copy';
+    cp.onclick = async () => { try { await navigator.clipboard.writeText(code.textContent); cp.textContent = 'Copied'; } catch { cp.textContent = 'Select it'; } setTimeout(() => cp.textContent = 'Copy', 1600); };
+    cmd.appendChild(code); cmd.appendChild(cp); r.sub.parentNode.insertBefore(cmd, r.bar);
+    const stopB = mini('Stop', async () => { stopB.disabled = true; await api('api/pull/stop', 'POST', { id: m.id }); });
+    const del = mini('Delete', async () => { if (!confirm(`Delete ${m.name} and all its files from this PC?`)) return; del.disabled = true; await api('api/model?id=' + encodeURIComponent(m.id), 'DELETE'); await refreshModels(); });
+    r.actions.appendChild(stopB); r.actions.appendChild(del); stopB.style.display = 'none'; del.style.display = 'none';
+    const idle = (label, haveFile, dis) => { r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = !!dis; r.btn.onclick = start; stopB.style.display = 'none'; stopB.disabled = false; del.style.display = haveFile ? '' : 'none'; };
+    const start = async () => { if (needLogin('download')) return; r.btn.disabled = true; await api('api/pull', 'POST', { id: m.id }); watchModel(); };
+    const paint = d => {
+      if (d && d.status === 'downloading') {
+        r.bar.style.display = ''; const tot = d.total || bytes; r.setProgress(tot ? d.done / tot : null);
+        const pct = tot ? Math.min(100, d.done / tot * 100).toFixed(1) : '?';
+        r.sub.textContent = `${pct}%  ·  ${fmtMB(d.done)} / ${fmtMB(tot)}${d.speed ? '  ·  ' + fmtMB(d.speed) + '/s' : ''}`;
+        r.btn.textContent = pct + '%'; r.btn.disabled = true; stopB.style.display = ''; del.style.display = 'none'; return;
+      }
+      if (d && d.status === 'done') { idle('Downloaded', true, true); r.loader.done(); r.sub.textContent = base + ' · ready, pick it in the model menu'; return; }
+      if (d && d.status === 'stopped') { idle('Resume', true); r.loader.set(d.total ? d.done / d.total : 0); r.sub.textContent = `Stopped at ${fmtMB(d.done)} of ${fmtMB(d.total || bytes)}. Resume, or Delete to discard.`; return; }
+      if (d && d.status === 'error') { idle('Retry', true); r.sub.textContent = 'Error: ' + d.error; return; }
+      if (m.downloaded) { idle('Downloaded', true, true); r.loader.done(); r.sub.textContent = base + ' · installed'; }
+      else { idle(m.partial ? 'Resume' : 'Download', !!m.partial); if (m.partial) r.sub.textContent = base + ' · partly downloaded'; }
+    };
+    const watchModel = () => { clearInterval(r.t); r.t = setInterval(async () => {
+      if (!dlg.open) return clearInterval(r.t);
+      let all = {}; try { all = await (await api('api/pull/status')).json(); } catch {}
+      const d = all[m.id]; paint(d);
+      if (d && (d.status === 'done' || d.status === 'stopped' || d.status === 'error')) { clearInterval(r.t); if (d.status === 'done') await refreshModels(); }
+    }, 600); };
+    paint(m.progress); if (m.progress && m.progress.status === 'downloading') watchModel();
   }
 }
 function mini(txt, fn) { const b = document.createElement('button'); b.textContent = txt; b.className = 'ghost'; b.style.cssText = 'padding:4px 8px;font-size:12.5px;color:var(--mut)'; b.onclick = fn; return b; }
@@ -858,6 +899,57 @@ $('#clearHistBtn').onclick = () => {
 
 init().then(refreshCredits);
 
+// ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----
+async function claimBonus() {
+  if (!server || remoteBase()) return;   // only on the PC itself
+  try { const t = Account.token(); if (!t) return; const r = await (await api('api/bonus', { method: 'POST', body: JSON.stringify({ token: t }) })).json(); if (r && r.granted) { await refreshCredits(); } } catch {}
+}
+
+// ----- Terminal: the AI proposes, you decide. Everything is set with textContent so a command can never inject markup. -----
+function cmdAsk(msg, a) {
+  const box = document.createElement('div'); box.className = 'sys cmdcard';
+  const h = document.createElement('b'); h.textContent = 'Run this command on your PC?';
+  const why = document.createElement('div'); why.className = 'cmdwhy'; why.textContent = a.why ? 'Reason: ' + a.why : '';
+  const code = document.createElement('pre'); code.className = 'cmdcode'; code.textContent = a.command;
+  const where = document.createElement('small'); where.textContent = 'In folder: ' + a.folder + '. It stops by itself after 60 seconds.';
+  const row = document.createElement('div'), ok = document.createElement('button'), no = document.createElement('button'), stop = document.createElement('button');
+  ok.textContent = 'Allow'; ok.className = 'p'; no.textContent = 'Deny'; stop.textContent = 'Stop'; stop.style.display = 'none';
+  row.className = 'cmdrow'; row.append(ok, no, stop);
+  const out = document.createElement('pre'); out.className = 'cmdout'; out.style.display = 'none';
+  const settle = (label, text) => { row.remove(); h.textContent = label; if (text) { out.textContent = text; out.style.display = ''; } chatEl.scrollTop = 1e9; };
+  no.onclick = async () => { ok.disabled = no.disabled = true; try { await api('api/cmd/approve', { method: 'POST', body: JSON.stringify({ id: a.id, approve: false }) }); } catch {} settle('Denied. Nothing ran.'); };
+  ok.onclick = async () => {
+    ok.disabled = no.disabled = true; stop.style.display = ''; h.textContent = 'Running...';
+    stop.onclick = () => { api('api/cmd/stop', { method: 'POST' }).catch(() => {}); };
+    try { const r = await (await api('api/cmd/approve', { method: 'POST', body: JSON.stringify({ id: a.id, approve: true }) })).json(); settle(r.ok ? 'Done' : (r.stoppedBy ? 'Stopped' : 'Failed'), r.text); }
+    catch (e) { settle('Failed', e.message); }
+    refreshCredits(); paintEditLog();
+  };
+  box.append(h, why, code, where, row, out); msg.el.appendChild(box); chatEl.scrollTop = 1e9;
+}
+
+// ----- Edit log: every command the AI proposed, what you decided, and how it ended -----
+const LOGWORD = { proposed: 'Waiting for you', ok: 'Done', failed: 'Failed', stopped: 'Stopped', denied: 'Denied', refused: 'Blocked for safety', expired: 'Expired', granted: 'Bonus added', 'already-granted': 'Bonus already added', error: 'Error' };
+async function paintEditLog() {
+  const box = $('#editLog'); if (!box) return;
+  if (!server || remoteBase()) { box.textContent = 'The edit log lives on the PC. Open Pholama on the PC to see it.'; return; }
+  let list = []; try { list = (await (await api('api/editlog?n=60')).json()).entries || []; } catch {}
+  box.textContent = '';
+  if (!list.length) { box.textContent = 'Nothing yet. Commands the AI proposes will be listed here.'; return; }
+  for (const e of list) {
+    if (e.kind === 'command' && e.status === 'proposed' && list.some(x => x.id === e.id && x.status !== 'proposed')) continue;   // show only the final outcome of each command
+    const d = document.createElement('div'); d.className = 'row logrow';
+    const sp = document.createElement('div'); sp.className = 'sp';
+    const b = document.createElement('b'); b.textContent = (LOGWORD[e.status] || e.status) + (e.kind === 'bonus' ? ' (+' + e.credits + ')' : '');
+    const sm = document.createElement('small'); sm.textContent = new Date(e.t).toLocaleString() + (e.ms != null ? ' · ' + (e.ms / 1000).toFixed(1) + 's' : '') + (e.reason ? ' · ' + e.reason : '');
+    sp.append(b, sm);
+    if (e.cmd) { const c = document.createElement('code'); c.textContent = e.cmd.slice(0, 200); sp.append(c); }
+    d.append(sp); box.append(d);
+  }
+}
+$('#logRefresh').onclick = paintEditLog;
+$('#logClear').onclick = async () => { if (!confirm('Clear the edit log? This cannot be undone.')) return; try { await api('api/editlog', { method: 'DELETE' }); } catch {} paintEditLog(); };
+
 // ----- GitHub: the token lives only in this browser; writes need a click on Allow -----
 const GHK = 'pholama_gh_token';
 const ghToken = () => { try { return localStorage.getItem(GHK) || ''; } catch { return ''; } };
@@ -907,3 +999,34 @@ $('#keyMake') && ($('#keyMake').onclick = async () => {
   n.append(p, c, document.createElement('br'), cp); $('#keyLabel').value = ''; loadKeys();
 });
 $('#s_tab_remote') && $('#s_tab_remote').addEventListener('click', loadKeys);
+
+// copy buttons for the PC install commands
+document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click', async () => {
+  try { await navigator.clipboard.writeText(b.dataset.copy); b.textContent = 'Copied'; } catch { b.textContent = 'Select and copy'; }
+  setTimeout(() => { b.textContent = 'Copy'; }, 1800);
+}));
+
+// PC install help is for computers only. Phones and tablets never see the install commands, so nobody installs the PC app by accident.
+(() => {
+  const box = document.getElementById('pcInstall'); if (!box) return;
+  const ua = navigator.userAgent || '';
+  const phone = /Android|iPhone|iPad|iPod|Mobile|Silk|Kindle/i.test(ua) || (navigator.maxTouchPoints > 1 && /Macintosh/.test(ua)) || (window.matchMedia && matchMedia('(pointer:coarse)').matches && Math.min(screen.width, screen.height) < 900);
+  if (phone) { box.innerHTML = '<h4 style="margin:0 0 6px">Pholama for PC</h4><div class="sys" style="text-align:left">The PC app is for Windows, Mac and Linux computers. Open this page on your computer to see how to install it. You do not need it on your phone.</div>'; }
+})();
+
+
+// ---------- updates (PC app only; the server says if it is the PC app) ----------
+async function paintUpdate() {
+  try {
+    const r = await fetch('/api/update'); if (!r.ok) return; const u = await r.json();
+    $('#updBox').style.display = ''; $('#updAuto').checked = u.auto !== false;
+    $('#updPill').style.display = u.ready ? '' : 'none';
+    $('#updMsg').textContent = u.ready ? `Version ${u.latest} is downloaded. Close Pholama and start it again to use it.`
+      : u.error ? u.error : u.latest && u.latest !== u.current ? `New version ${u.latest} is available. Turn on automatic updates or press Check now.`
+      : `You have the newest version (${u.current}).`;
+  } catch {}
+}
+$('#updCheck').onclick = async () => { $('#updMsg').textContent = 'Checking...'; try { await fetch('/api/update/check', { method: 'POST' }); } catch {} paintUpdate(); };
+$('#updAuto').onchange = async e => { try { await fetch('/api/update/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: e.target.checked }) }); } catch {} paintUpdate(); };
+$('#updPill').onclick = () => { $('#opt').click(); };
+paintUpdate(); setInterval(paintUpdate, 10 * 60 * 1000);

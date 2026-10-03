@@ -1,0 +1,1060 @@
+[
+ {
+  "id": "smollm2-135m",
+  "name": "SmolLM2 135M Instruct",
+  "family": "SmolLM",
+  "params": "0.1B",
+  "url": "https://huggingface.co/unsloth/SmolLM2-135M-Instruct-GGUF/resolve/main/SmolLM2-135M-Instruct-Q8_0.gguf",
+  "file": "SmolLM2-135M-Instruct-Q8_0.gguf",
+  "bytes": 144811072,
+  "sizeGB": 0.13,
+  "minRamGB": 2,
+  "ctx": 2048,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Lightweight 135M model ideal for embedded devices, ultra-fast generation, and basic chat.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull smollm2-135m"
+ },
+ {
+  "id": "smollm2-360m",
+  "name": "SmolLM2 360M Instruct",
+  "family": "SmolLM",
+  "params": "0.4B",
+  "url": "https://huggingface.co/bartowski/SmolLM2-360M-Instruct-GGUF/resolve/main/SmolLM2-360M-Instruct-Q8_0.gguf",
+  "file": "SmolLM2-360M-Instruct-Q8_0.gguf",
+  "bytes": 386405280,
+  "sizeGB": 0.36,
+  "minRamGB": 2,
+  "ctx": 2048,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Compact 360M instruction model for low-latency lightweight text processing.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull smollm2-360m"
+ },
+ {
+  "id": "qwen2.5-0.5b",
+  "name": "Qwen2.5 0.5B Instruct",
+  "family": "Qwen",
+  "params": "0.5B",
+  "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q4_k_m.gguf",
+  "file": "qwen2.5-0.5b-instruct-q4_k_m.gguf",
+  "bytes": 491400032,
+  "sizeGB": 0.46,
+  "minRamGB": 3,
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Ultra-compact Qwen2.5 model for fast multilingual chat and lightweight tasks.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull qwen2.5-0.5b"
+ },
+ {
+  "id": "qwen2.5-coder-0.5b",
+  "name": "Qwen2.5-Coder 0.5B Instruct",
+  "family": "Qwen",
+  "params": "0.5B",
+  "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+  "file": "qwen2.5-coder-0.5b-instruct-q4_k_m.gguf",
+  "bytes": 491400064,
+  "sizeGB": 0.46,
+  "minRamGB": 3,
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Tiny coding assistant optimized for code generation and snippet editing on low RAM.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "fast",
+   "code"
+  ],
+  "command": "pholama pull qwen2.5-coder-0.5b"
+ },
+ {
+  "id": "gemma3-1b",
+  "name": "Gemma 3 1B Instruct",
+  "family": "Gemma",
+  "params": "1B",
+  "url": "https://huggingface.co/unsloth/gemma-3-1b-it-GGUF/resolve/main/gemma-3-1b-it-Q4_K_M.gguf",
+  "file": "gemma-3-1b-it-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Google Gemma 3 1B ultra-lightweight instruct model for fast mobile and local generation.",
+  "license": "Gemma",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull gemma3-1b",
+  "bytes": 806058272,
+  "sizeGB": 0.75,
+  "minRamGB": 3
+ },
+ {
+  "id": "llama3.2-1b",
+  "name": "Llama 3.2 1B Instruct",
+  "family": "Llama",
+  "params": "1B",
+  "url": "https://huggingface.co/bartowski/Llama-3.2-1B-Instruct-GGUF/resolve/main/Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+  "file": "Llama-3.2-1B-Instruct-Q4_K_M.gguf",
+  "bytes": 807694464,
+  "sizeGB": 0.75,
+  "minRamGB": 3,
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Meta's 1B lightweight model optimized for fast instruction following and summarization.",
+  "license": "Llama 3.2 Community",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull llama3.2-1b"
+ },
+ {
+  "id": "granite3-1b",
+  "name": "Granite 3.0 1B-A400M Instruct (MoE)",
+  "family": "Granite",
+  "params": "1B (MoE)",
+  "url": "https://huggingface.co/bartowski/granite-3.0-1b-a400m-instruct-GGUF/resolve/main/granite-3.0-1b-a400m-instruct-Q4_K_M.gguf",
+  "file": "granite-3.0-1b-a400m-instruct-Q4_K_M.gguf",
+  "bytes": 821845024,
+  "sizeGB": 0.77,
+  "minRamGB": 3,
+  "ctx": 4096,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "IBM Granite lightweight enterprise model optimized for low-latency tasks.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull granite3-1b"
+ },
+ {
+  "id": "smollm2-1.7b",
+  "name": "SmolLM2 1.7B Instruct",
+  "family": "SmolLM",
+  "params": "1.7B",
+  "url": "https://huggingface.co/bartowski/SmolLM2-1.7B-Instruct-GGUF/resolve/main/SmolLM2-1.7B-Instruct-Q4_K_M.gguf",
+  "file": "SmolLM2-1.7B-Instruct-Q4_K_M.gguf",
+  "bytes": 1055609824,
+  "sizeGB": 0.98,
+  "minRamGB": 3,
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Compact 1.7B parameter model designed for fast everyday conversation and summarization.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull smollm2-1.7b"
+ },
+ {
+  "id": "qwen3-1.7b",
+  "name": "Qwen3 1.7B Instruct",
+  "family": "Qwen",
+  "params": "1.7B",
+  "url": "https://huggingface.co/unsloth/Qwen3-1.7B-GGUF/resolve/main/Qwen3-1.7B-Q4_K_M.gguf",
+  "file": "Qwen3-1.7B-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "reasoning",
+   "fast"
+  ],
+  "blurb": "Lightweight Qwen3 thinking model with fast step-by-step reasoning capabilities.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "reasoning",
+   "fast",
+   "thinking"
+  ],
+  "command": "pholama pull qwen3-1.7b",
+  "bytes": 1107409472,
+  "sizeGB": 1.03,
+  "minRamGB": 3
+ },
+ {
+  "id": "qwen2.5-1.5b",
+  "name": "Qwen2.5 1.5B Instruct",
+  "family": "Qwen",
+  "params": "1.5B",
+  "url": "https://huggingface.co/Qwen/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/qwen2.5-1.5b-instruct-q4_k_m.gguf",
+  "file": "qwen2.5-1.5b-instruct-q4_k_m.gguf",
+  "bytes": 1117320736,
+  "sizeGB": 1.04,
+  "minRamGB": 3,
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Strong 1.5B multilingual instruct model balancing fast speed and general capability.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull qwen2.5-1.5b"
+ },
+ {
+  "id": "qwen2.5-coder-1.5b",
+  "name": "Qwen2.5-Coder 1.5B Instruct",
+  "family": "Qwen",
+  "params": "1.5B",
+  "url": "https://huggingface.co/Qwen/Qwen2.5-Coder-1.5B-Instruct-GGUF/resolve/main/qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+  "file": "qwen2.5-coder-1.5b-instruct-q4_k_m.gguf",
+  "bytes": 1117320768,
+  "sizeGB": 1.04,
+  "minRamGB": 3,
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Fast lightweight coding model capable of code generation and explainability.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "fast",
+   "code"
+  ],
+  "command": "pholama pull qwen2.5-coder-1.5b"
+ },
+ {
+  "id": "deepseek-r1-1.5b",
+  "name": "DeepSeek-R1 Distill Qwen 1.5B",
+  "family": "DeepSeek",
+  "params": "1.5B",
+  "url": "https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-1.5B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
+  "file": "DeepSeek-R1-Distill-Qwen-1.5B-Q4_K_M.gguf",
+  "bytes": 1117321312,
+  "sizeGB": 1.04,
+  "minRamGB": 3,
+  "ctx": 8192,
+  "categories": [
+   "reasoning",
+   "fast"
+  ],
+  "blurb": "Lightweight reasoning model distilled from DeepSeek-R1 with chain-of-thought capabilities.",
+  "license": "MIT",
+  "caps": [
+   "chat",
+   "reasoning",
+   "fast",
+   "thinking"
+  ],
+  "command": "pholama pull deepseek-r1-1.5b"
+ },
+ {
+  "id": "codegemma-2b",
+  "name": "CodeGemma 2B Instruct",
+  "family": "CodeGemma",
+  "params": "2B",
+  "url": "https://huggingface.co/lmstudio-community/codegemma-2b-GGUF/resolve/main/codegemma-2b-Q4_K_M.gguf",
+  "file": "codegemma-2b-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Google CodeGemma 2B: code completion and short code snippets, not a general chat model.",
+  "license": "Gemma",
+  "caps": [
+   "chat",
+   "fast",
+   "code"
+  ],
+  "command": "pholama pull codegemma-2b",
+  "bytes": 1630262400,
+  "sizeGB": 1.52,
+  "minRamGB": 4
+ },
+ {
+  "id": "gemma2-2b",
+  "name": "Gemma 2 2B Instruct",
+  "family": "Gemma",
+  "params": "2B",
+  "url": "https://huggingface.co/bartowski/gemma-2-2b-it-GGUF/resolve/main/gemma-2-2b-it-Q4_K_M.gguf",
+  "file": "gemma-2-2b-it-Q4_K_M.gguf",
+  "bytes": 1708582752,
+  "sizeGB": 1.59,
+  "minRamGB": 4,
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Google Gemma 2 2B instruct model with high performance for its size class.",
+  "license": "Gemma",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull gemma2-2b"
+ },
+ {
+  "id": "smollm3-3b",
+  "name": "SmolLM3 3B Instruct",
+  "family": "SmolLM",
+  "params": "3B",
+  "url": "https://huggingface.co/unsloth/SmolLM3-3B-GGUF/resolve/main/SmolLM3-3B-Q4_K_M.gguf",
+  "file": "SmolLM3-3B-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Hugging Face SmolLM3 3B compact model for low-resource devices and quick text processing.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull smollm3-3b",
+  "bytes": 1915306528,
+  "sizeGB": 1.78,
+  "minRamGB": 4
+ },
+ {
+  "id": "llama3.2-3b",
+  "name": "Llama 3.2 3B Instruct",
+  "family": "Llama",
+  "params": "3B",
+  "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+  "file": "Llama-3.2-3B-Instruct-Q4_K_M.gguf",
+  "bytes": 2019377696,
+  "sizeGB": 1.88,
+  "minRamGB": 4,
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "fast"
+  ],
+  "blurb": "Meta Llama 3.2 3B instruct model with strong tool calling and prompt execution capabilities.",
+  "license": "Llama 3.2 Community",
+  "caps": [
+   "chat",
+   "tools",
+   "fast"
+  ],
+  "command": "pholama pull llama3.2-3b"
+ },
+ {
+  "id": "qwen2.5-3b",
+  "name": "Qwen2.5 3B Instruct",
+  "family": "Qwen",
+  "params": "3B",
+  "url": "https://huggingface.co/Qwen/Qwen2.5-3B-Instruct-GGUF/resolve/main/qwen2.5-3b-instruct-q4_k_m.gguf",
+  "file": "qwen2.5-3b-instruct-q4_k_m.gguf",
+  "bytes": 2104932768,
+  "sizeGB": 1.96,
+  "minRamGB": 5,
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "fast"
+  ],
+  "blurb": "Capable 3B model with function calling and strong instruction following.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "fast"
+  ],
+  "command": "pholama pull qwen2.5-3b"
+ },
+ {
+  "id": "granite4.2-3b",
+  "name": "Granite 4.2 3B Instruct",
+  "family": "Granite",
+  "params": "3B",
+  "url": "https://huggingface.co/bartowski/granite-4.2-3b-GGUF/resolve/main/granite-4.2-3b-Q4_K_M.gguf",
+  "file": "granite-4.2-3b-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "fast"
+  ],
+  "blurb": "IBM Granite 4.2 3B lightweight enterprise model with fast function execution.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "fast"
+  ],
+  "command": "pholama pull granite4.2-3b",
+  "bytes": 2317126048,
+  "sizeGB": 2.16,
+  "minRamGB": 5
+ },
+ {
+  "id": "phi3.5-mini",
+  "name": "Phi-3.5 Mini Instruct",
+  "family": "Phi",
+  "params": "3.8B",
+  "url": "https://huggingface.co/bartowski/Phi-3.5-mini-instruct-GGUF/resolve/main/Phi-3.5-mini-instruct-Q4_K_M.gguf",
+  "file": "Phi-3.5-mini-instruct-Q4_K_M.gguf",
+  "bytes": 2393232672,
+  "sizeGB": 2.23,
+  "minRamGB": 5,
+  "ctx": 4096,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Microsoft Phi-3.5 mini with high reasoning capability in a compact parameter size.",
+  "license": "MIT",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull phi3.5-mini"
+ },
+ {
+  "id": "gemma3-4b",
+  "name": "Gemma 3 4B Instruct",
+  "family": "Gemma",
+  "params": "4B",
+  "url": "https://huggingface.co/unsloth/gemma-3-4b-it-GGUF/resolve/main/gemma-3-4b-it-Q4_K_M.gguf",
+  "file": "gemma-3-4b-it-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Google Gemma 3 4B instruct model balancing compact size and high conversational quality.",
+  "license": "Gemma",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull gemma3-4b",
+  "bytes": 2489894016,
+  "sizeGB": 2.32,
+  "minRamGB": 5
+ },
+ {
+  "id": "phi4-mini",
+  "name": "Phi-4 Mini 3.8B Instruct",
+  "family": "Phi",
+  "params": "3.8B",
+  "url": "https://huggingface.co/unsloth/Phi-4-mini-instruct-GGUF/resolve/main/Phi-4-mini-instruct-Q4_K_M.gguf",
+  "file": "Phi-4-mini-instruct-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "fast"
+  ],
+  "blurb": "Microsoft Phi-4 mini lightweight model with built-in tool calling and strong reasoning.",
+  "license": "MIT",
+  "caps": [
+   "chat",
+   "tools",
+   "fast"
+  ],
+  "command": "pholama pull phi4-mini",
+  "bytes": 2491874272,
+  "sizeGB": 2.32,
+  "minRamGB": 5
+ },
+ {
+  "id": "mistral-7b",
+  "name": "Mistral 7B Instruct v0.3",
+  "family": "Mistral",
+  "params": "7B",
+  "url": "https://huggingface.co/bartowski/Mistral-7B-Instruct-v0.3-GGUF/resolve/main/Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+  "file": "Mistral-7B-Instruct-v0.3-Q4_K_M.gguf",
+  "bytes": 4372812000,
+  "sizeGB": 4.07,
+  "minRamGB": 7,
+  "ctx": 8192,
+  "categories": [
+   "tools"
+  ],
+  "blurb": "Mistral 7B v0.3 with native function calling, tool use, and long-context capabilities.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools"
+  ],
+  "command": "pholama pull mistral-7b"
+ },
+ {
+  "id": "olmo2-7b",
+  "name": "OLMo 2 7B Instruct",
+  "family": "OLMo",
+  "params": "7B",
+  "url": "https://huggingface.co/bartowski/OLMo-2-1124-7B-Instruct-GGUF/resolve/main/OLMo-2-1124-7B-Instruct-Q4_K_M.gguf",
+  "file": "OLMo-2-1124-7B-Instruct-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [],
+  "blurb": "Allen Institute's open OLMo 2 7B instruct model built for research and transparent chat.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat"
+  ],
+  "command": "pholama pull olmo2-7b",
+  "bytes": 4472020544,
+  "sizeGB": 4.16,
+  "minRamGB": 7
+ },
+ {
+  "id": "deepseek-r1-7b",
+  "name": "DeepSeek-R1 Distill Qwen 7B",
+  "family": "DeepSeek",
+  "params": "7B",
+  "url": "https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-7B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+  "file": "DeepSeek-R1-Distill-Qwen-7B-Q4_K_M.gguf",
+  "bytes": 4683073248,
+  "sizeGB": 4.36,
+  "minRamGB": 8,
+  "ctx": 8192,
+  "categories": [
+   "reasoning"
+  ],
+  "blurb": "DeepSeek R1 reasoning model distilled into Qwen-7B for step-by-step logical problem solving.",
+  "license": "MIT",
+  "caps": [
+   "chat",
+   "reasoning",
+   "thinking"
+  ],
+  "command": "pholama pull deepseek-r1-7b"
+ },
+ {
+  "id": "qwen2.5-7b",
+  "name": "Qwen2.5 7B Instruct",
+  "family": "Qwen",
+  "params": "7B",
+  "url": "https://huggingface.co/bartowski/Qwen2.5-7B-Instruct-GGUF/resolve/main/Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+  "file": "Qwen2.5-7B-Instruct-Q4_K_M.gguf",
+  "bytes": 4683074240,
+  "sizeGB": 4.36,
+  "minRamGB": 8,
+  "ctx": 8192,
+  "categories": [
+   "tools"
+  ],
+  "blurb": "Versatile 7B instruct model with top-tier reasoning, coding, and tool calling skills.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools"
+  ],
+  "command": "pholama pull qwen2.5-7b"
+ },
+ {
+  "id": "qwen2.5-coder-7b",
+  "name": "Qwen2.5-Coder 7B Instruct",
+  "family": "Qwen",
+  "params": "7B",
+  "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf",
+  "file": "Qwen2.5-Coder-7B-Instruct-Q4_K_M.gguf",
+  "bytes": 4683074336,
+  "sizeGB": 4.36,
+  "minRamGB": 8,
+  "ctx": 8192,
+  "categories": [],
+  "blurb": "Powerful 7B coding model optimized for full-stack software development and refactoring.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "code"
+  ],
+  "command": "pholama pull qwen2.5-coder-7b"
+ },
+ {
+  "id": "internlm2.5-7b",
+  "name": "InternLM 2.5 7B Chat",
+  "family": "InternLM",
+  "params": "7B",
+  "url": "https://huggingface.co/bartowski/internlm2_5-7b-chat-GGUF/resolve/main/internlm2_5-7b-chat-Q4_K_M.gguf",
+  "file": "internlm2_5-7b-chat-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [],
+  "blurb": "InternLM 2.5 7B open model with extended context reasoning and high multi-turn fluency.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat"
+  ],
+  "command": "pholama pull internlm2.5-7b",
+  "bytes": 4712768640,
+  "sizeGB": 4.39,
+  "minRamGB": 8
+ },
+ {
+  "id": "exaone3.5-7.8b",
+  "name": "EXAONE 3.5 7.8B Instruct",
+  "family": "EXAONE",
+  "params": "7.8B",
+  "url": "https://huggingface.co/bartowski/EXAONE-3.5-7.8B-Instruct-GGUF/resolve/main/EXAONE-3.5-7.8B-Instruct-Q4_K_M.gguf",
+  "file": "EXAONE-3.5-7.8B-Instruct-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [],
+  "blurb": "LG AI Research EXAONE 3.5 7.8B model for bilingual English and Korean understanding.",
+  "license": "EXAONE",
+  "caps": [
+   "chat"
+  ],
+  "command": "pholama pull exaone3.5-7.8b",
+  "bytes": 4770650304,
+  "sizeGB": 4.44,
+  "minRamGB": 8
+ },
+ {
+  "id": "ministral-8b",
+  "name": "Ministral 8B Instruct",
+  "family": "Mistral",
+  "params": "8B",
+  "url": "https://huggingface.co/bartowski/Ministral-8B-Instruct-2410-GGUF/resolve/main/Ministral-8B-Instruct-2410-Q4_K_M.gguf",
+  "file": "Ministral-8B-Instruct-2410-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "tools"
+  ],
+  "blurb": "Mistral AI edge-optimized 8B model with powerful function calling and multi-turn chat.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools"
+  ],
+  "command": "pholama pull ministral-8b",
+  "bytes": 4911500096,
+  "sizeGB": 4.57,
+  "minRamGB": 8
+ },
+ {
+  "id": "hermes3-8b",
+  "name": "Hermes 3 Llama 3.1 8B",
+  "family": "Hermes",
+  "params": "8B",
+  "url": "https://huggingface.co/bartowski/Hermes-3-Llama-3.1-8B-GGUF/resolve/main/Hermes-3-Llama-3.1-8B-Q4_K_M.gguf",
+  "file": "Hermes-3-Llama-3.1-8B-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "tools"
+  ],
+  "blurb": "NousResearch Hermes 3 8B model with advanced function calling and structured prompt handling.",
+  "license": "Llama-3.1",
+  "caps": [
+   "chat",
+   "tools"
+  ],
+  "command": "pholama pull hermes3-8b",
+  "bytes": 4920734624,
+  "sizeGB": 4.58,
+  "minRamGB": 8
+ },
+ {
+  "id": "deepseek-r1-8b",
+  "name": "DeepSeek-R1 Distill Llama 8B",
+  "family": "DeepSeek",
+  "params": "8B",
+  "url": "https://huggingface.co/unsloth/DeepSeek-R1-Distill-Llama-8B-GGUF/resolve/main/DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf",
+  "file": "DeepSeek-R1-Distill-Llama-8B-Q4_K_M.gguf",
+  "bytes": 4920737216,
+  "sizeGB": 4.58,
+  "minRamGB": 8,
+  "ctx": 8192,
+  "categories": [
+   "reasoning"
+  ],
+  "blurb": "DeepSeek R1 reasoning model distilled into Llama-8B with advanced chain-of-thought prompt execution.",
+  "license": "MIT",
+  "caps": [
+   "chat",
+   "reasoning",
+   "thinking"
+  ],
+  "command": "pholama pull deepseek-r1-8b"
+ },
+ {
+  "id": "llama3.1-8b",
+  "name": "Llama 3.1 8B Instruct",
+  "family": "Llama",
+  "params": "8B",
+  "url": "https://huggingface.co/bartowski/Meta-Llama-3.1-8B-Instruct-GGUF/resolve/main/Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+  "file": "Meta-Llama-3.1-8B-Instruct-Q4_K_M.gguf",
+  "bytes": 4920739232,
+  "sizeGB": 4.58,
+  "minRamGB": 8,
+  "ctx": 8192,
+  "categories": [
+   "tools"
+  ],
+  "blurb": "Meta's flagship 8B model with excellent tool calling, function execution, and multi-turn chat.",
+  "license": "Llama 3.1 Community",
+  "caps": [
+   "chat",
+   "tools"
+  ],
+  "command": "pholama pull llama3.1-8b"
+ },
+ {
+  "id": "granite3-8b",
+  "name": "Granite 3.0 8B Instruct",
+  "family": "Granite",
+  "params": "8B",
+  "url": "https://huggingface.co/bartowski/granite-3.0-8b-instruct-GGUF/resolve/main/granite-3.0-8b-instruct-Q4_K_M.gguf",
+  "file": "granite-3.0-8b-instruct-Q4_K_M.gguf",
+  "bytes": 4942856416,
+  "sizeGB": 4.6,
+  "minRamGB": 8,
+  "ctx": 4096,
+  "categories": [
+   "tools"
+  ],
+  "blurb": "IBM Granite 8B enterprise instruct model built for function calling and work tasks.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools"
+  ],
+  "command": "pholama pull granite3-8b"
+ },
+ {
+  "id": "granite3.1-8b",
+  "name": "Granite 3.1 8B Instruct",
+  "family": "Granite",
+  "params": "8B",
+  "url": "https://huggingface.co/bartowski/granite-3.1-8b-instruct-GGUF/resolve/main/granite-3.1-8b-instruct-Q4_K_M.gguf",
+  "file": "granite-3.1-8b-instruct-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "tools"
+  ],
+  "blurb": "IBM Granite 3.1 8B enterprise model optimized for function calling and business workflows.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools"
+  ],
+  "command": "pholama pull granite3.1-8b",
+  "bytes": 4942858720,
+  "sizeGB": 4.6,
+  "minRamGB": 8
+ },
+ {
+  "id": "qwen3-8b",
+  "name": "Qwen3 8B Instruct",
+  "family": "Qwen",
+  "params": "8B",
+  "url": "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf",
+  "file": "Qwen3-8B-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "reasoning"
+  ],
+  "blurb": "Advanced Qwen3 8B model combining chain-of-thought reasoning and robust tool calling.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "reasoning",
+   "thinking"
+  ],
+  "command": "pholama pull qwen3-8b",
+  "bytes": 5027783488,
+  "sizeGB": 4.68,
+  "minRamGB": 8
+ },
+ {
+  "id": "yi1.5-9b",
+  "name": "Yi 1.5 9B Chat",
+  "family": "Yi",
+  "params": "9B",
+  "url": "https://huggingface.co/bartowski/Yi-1.5-9B-Chat-GGUF/resolve/main/Yi-1.5-9B-Chat-Q4_K_M.gguf",
+  "file": "Yi-1.5-9B-Chat-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [],
+  "blurb": "01.AI Yi 1.5 9B chat model with strong multilingual reasoning and text generation.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat"
+  ],
+  "command": "pholama pull yi1.5-9b",
+  "bytes": 5328957952,
+  "sizeGB": 4.96,
+  "minRamGB": 8
+ },
+ {
+  "id": "gemma2-9b",
+  "name": "Gemma 2 9B Instruct",
+  "family": "Gemma",
+  "params": "9B",
+  "url": "https://huggingface.co/bartowski/gemma-2-9b-it-GGUF/resolve/main/gemma-2-9b-it-Q4_K_M.gguf",
+  "file": "gemma-2-9b-it-Q4_K_M.gguf",
+  "bytes": 5761057728,
+  "sizeGB": 5.37,
+  "minRamGB": 9,
+  "ctx": 8192,
+  "categories": [],
+  "blurb": "Google Gemma 2 9B model offering state-of-the-art accuracy and language capabilities.",
+  "license": "Gemma",
+  "caps": [
+   "chat"
+  ],
+  "command": "pholama pull gemma2-9b"
+ },
+ {
+  "id": "gemma3-12b",
+  "name": "Gemma 3 12B Instruct",
+  "family": "Gemma",
+  "params": "12B",
+  "url": "https://huggingface.co/unsloth/gemma-3-12b-it-GGUF/resolve/main/gemma-3-12b-it-Q4_K_M.gguf",
+  "file": "gemma-3-12b-it-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "slow"
+  ],
+  "blurb": "Google Gemma 3 12B instruct model with state-of-the-art language and reasoning performance.",
+  "license": "Gemma",
+  "caps": [
+   "chat",
+   "slow"
+  ],
+  "command": "pholama pull gemma3-12b",
+  "bytes": 7300778336,
+  "sizeGB": 6.8,
+  "minRamGB": 11
+ },
+ {
+  "id": "mistral-nemo-12b",
+  "name": "Mistral Nemo Instruct 12B",
+  "family": "Mistral",
+  "params": "12B",
+  "url": "https://huggingface.co/bartowski/Mistral-Nemo-Instruct-2407-GGUF/resolve/main/Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
+  "file": "Mistral-Nemo-Instruct-2407-Q4_K_M.gguf",
+  "bytes": 7477208192,
+  "sizeGB": 6.96,
+  "minRamGB": 11,
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "slow"
+  ],
+  "blurb": "12B collaboration model by Mistral and NVIDIA with 128k context and function calling.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "slow"
+  ],
+  "command": "pholama pull mistral-nemo-12b"
+ },
+ {
+  "id": "deepseek-r1-14b",
+  "name": "DeepSeek-R1 Distill Qwen 14B",
+  "family": "DeepSeek",
+  "params": "14B",
+  "url": "https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-14B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf",
+  "file": "DeepSeek-R1-Distill-Qwen-14B-Q4_K_M.gguf",
+  "bytes": 8988109984,
+  "sizeGB": 8.37,
+  "minRamGB": 13,
+  "ctx": 8192,
+  "categories": [
+   "reasoning",
+   "slow"
+  ],
+  "blurb": "14B DeepSeek R1 distilled reasoning model delivering high precision on math and logic.",
+  "license": "MIT",
+  "caps": [
+   "chat",
+   "reasoning",
+   "slow",
+   "thinking"
+  ],
+  "command": "pholama pull deepseek-r1-14b"
+ },
+ {
+  "id": "qwen2.5-14b",
+  "name": "Qwen2.5 14B Instruct",
+  "family": "Qwen",
+  "params": "14B",
+  "url": "https://huggingface.co/bartowski/Qwen2.5-14B-Instruct-GGUF/resolve/main/Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+  "file": "Qwen2.5-14B-Instruct-Q4_K_M.gguf",
+  "bytes": 8988110976,
+  "sizeGB": 8.37,
+  "minRamGB": 13,
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "slow"
+  ],
+  "blurb": "High-performing 14B model excelling at complex reasoning, coding, and tool execution.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "slow"
+  ],
+  "command": "pholama pull qwen2.5-14b"
+ },
+ {
+  "id": "qwen2.5-coder-14b",
+  "name": "Qwen2.5-Coder 14B Instruct",
+  "family": "Qwen",
+  "params": "14B",
+  "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-14B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-14B-Instruct-Q4_K_M.gguf",
+  "file": "Qwen2.5-Coder-14B-Instruct-Q4_K_M.gguf",
+  "bytes": 8988111072,
+  "sizeGB": 8.37,
+  "minRamGB": 13,
+  "ctx": 8192,
+  "categories": [
+   "slow"
+  ],
+  "blurb": "State-of-the-art 14B code intelligence model for full-stack engineering and multi-file coding.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "slow",
+   "code"
+  ],
+  "command": "pholama pull qwen2.5-coder-14b"
+ },
+ {
+  "id": "phi4-14b",
+  "name": "Phi-4 14B Instruct",
+  "family": "Phi",
+  "params": "14B",
+  "url": "https://huggingface.co/bartowski/phi-4-GGUF/resolve/main/phi-4-Q4_K_M.gguf",
+  "file": "phi-4-Q4_K_M.gguf",
+  "bytes": 9053114816,
+  "sizeGB": 8.43,
+  "minRamGB": 13,
+  "ctx": 4096,
+  "categories": [
+   "slow"
+  ],
+  "blurb": "Microsoft Phi-4: strong general model for writing, maths and analysis.",
+  "license": "MIT",
+  "caps": [
+   "chat",
+   "slow"
+  ],
+  "command": "pholama pull phi4-14b"
+ },
+ {
+  "id": "gpt-oss-20b",
+  "name": "OpenAI GPT-OSS 20B",
+  "family": "OpenAI",
+  "params": "20B",
+  "url": "https://huggingface.co/unsloth/gpt-oss-20b-GGUF/resolve/main/gpt-oss-20b-Q4_K_M.gguf",
+  "file": "gpt-oss-20b-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "reasoning",
+   "slow"
+  ],
+  "blurb": "OpenAI open weights 20B model featuring chain-of-thought reasoning and native tool use.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "reasoning",
+   "slow",
+   "thinking"
+  ],
+  "command": "pholama pull gpt-oss-20b",
+  "bytes": 11624759488,
+  "sizeGB": 10.83,
+  "minRamGB": 16
+ },
+ {
+  "id": "deepseek-r1-32b",
+  "name": "DeepSeek-R1 Distill Qwen 32B",
+  "family": "DeepSeek",
+  "params": "32B",
+  "url": "https://huggingface.co/unsloth/DeepSeek-R1-Distill-Qwen-32B-GGUF/resolve/main/DeepSeek-R1-Distill-Qwen-32B-Q2_K.gguf",
+  "file": "DeepSeek-R1-Distill-Qwen-32B-Q2_K.gguf",
+  "bytes": 12313098144,
+  "sizeGB": 11.47,
+  "minRamGB": 17,
+  "ctx": 8192,
+  "categories": [
+   "reasoning",
+   "slow"
+  ],
+  "blurb": "DeepSeek R1 distilled 32B model providing expert-level reasoning and scientific logic.",
+  "license": "MIT",
+  "caps": [
+   "chat",
+   "reasoning",
+   "slow",
+   "thinking"
+  ],
+  "command": "pholama pull deepseek-r1-32b"
+ },
+ {
+  "id": "qwen2.5-coder-32b",
+  "name": "Qwen2.5-Coder 32B Instruct",
+  "family": "Qwen",
+  "params": "32B",
+  "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-32B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-32B-Instruct-Q2_K.gguf",
+  "file": "Qwen2.5-Coder-32B-Instruct-Q2_K.gguf",
+  "bytes": 12313099232,
+  "sizeGB": 11.47,
+  "minRamGB": 17,
+  "ctx": 8192,
+  "categories": [
+   "slow"
+  ],
+  "blurb": "Flagship 32B coding model offering top-tier software engineering intelligence.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "slow",
+   "code"
+  ],
+  "command": "pholama pull qwen2.5-coder-32b"
+ },
+ {
+  "id": "mistral-small-24b",
+  "name": "Mistral Small 3 24B Instruct",
+  "family": "Mistral",
+  "params": "24B",
+  "url": "https://huggingface.co/bartowski/mistralai_Mistral-Small-3.1-24B-Instruct-2503-GGUF/resolve/main/mistralai_Mistral-Small-3.1-24B-Instruct-2503-Q4_K_M.gguf",
+  "file": "mistralai_Mistral-Small-3.1-24B-Instruct-2503-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "slow"
+  ],
+  "blurb": "Mistral Small 3 enterprise model with native tool execution and long-context understanding.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "slow"
+  ],
+  "command": "pholama pull mistral-small-24b",
+  "bytes": 14333910496,
+  "sizeGB": 13.35,
+  "minRamGB": 19
+ }
+]

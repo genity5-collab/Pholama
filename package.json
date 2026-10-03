@@ -1,1 +1,17 @@
-{"name":"pholama","version":"0.1.0","description":"Ollama-style local AI for PCs and phones. Phones run models in the browser; PCs use their own RAM/GPU.","bin":{"pholama":"server/server.js"},"scripts":{"start":"node server/server.js"},"engines":{"node":">=18"},"license":"MIT"}
+{
+ "name": "pholama",
+ "version": "0.3.0",
+ "description": "Pholama: run AI models on your own PC. CLI: pholama pull | chat | serve | rm | update.",
+ "bin": {
+  "pholama": "server/cli.js",
+  "phollama": "server/cli.js",
+  "pholama-server": "server/server.js"
+ },
+ "scripts": {
+  "start": "node server/server.js"
+ },
+ "engines": {
+  "node": ">=18"
+ },
+ "license": "MIT"
+}

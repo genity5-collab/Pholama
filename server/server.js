@@ -14,7 +14,8 @@ const LLAMA_PORT = 11436;
 const ROOT = path.join(__dirname, '..');
 const WEB = path.join(ROOT, 'web');
 const MODELS_DIR = process.env.PHOLAMA_MODELS || path.join(os.homedir(), '.pholama', 'models');
-const CATALOG = JSON.parse(fs.readFileSync(path.join(ROOT, 'models.json'), 'utf8')).local;
+const CATALOG = JSON.parse(fs.readFileSync(path.join(ROOT, 'models.pc.json'), 'utf8'));   // PC-only list: no phone models here
+for (const m of CATALOG) { m.command = 'pholama pull ' + m.id; m.caps = [...new Set([...(m.caps || []), ...(m.categories || [])])]; }   // one place for the install command
 fs.mkdirSync(MODELS_DIR, { recursive: true });
 
 // ---------- hardware ----------
@@ -37,7 +38,7 @@ function recommend(h) {
 const get = (url) => new Promise((res, rej) => { http.get(url, r => { let d = ''; r.on('data', c => d += c); r.on('end', () => res({ status: r.statusCode, body: d })); }).on('error', rej); });
 async function ollamaUp() { try { return (await get(OLLAMA + '/api/tags')).status === 200; } catch { return false; } }
 
-let llama = null, llamaModel = null;
+let llama = null, llamaModel = null, served = null;
 function findLlamaServer() {
   const names = process.platform === 'win32' ? ['llama-server.exe'] : ['llama-server'];
   const dirs = [process.env.LLAMA_SERVER_DIR, path.join(ROOT, 'bin'), path.join(os.homedir(), '.pholama', 'bin'), ...(process.env.PATH || '').split(path.delimiter)].filter(Boolean);
@@ -101,6 +102,8 @@ async function deleteModel(m) {
   stopDownload(m.id); delete dl[m.id];
   await stopLlama(m.file);
   for (const f of [path.join(MODELS_DIR, m.file), path.join(MODELS_DIR, m.file) + '.part', path.join(MODELS_DIR, m.file) + '.part.size']) try { fs.unlinkSync(f); } catch {}
+  try { fs.rmSync(path.join(MODELS_DIR, m.id), { recursive: true, force: true }); } catch {}   // any per-model folder
+  delete capCache['gguf:' + m.id];
 }
 
 // ---------- llama.cpp auto-install ----------
@@ -236,13 +239,13 @@ async function chat(req, res, b) {
     // 1) The model must be able to do it. 2) The per-message switch in the page must be on. 3) Credits (already in `allow`).
     const caps = await modelCaps(model), sw = b.switches || {};
     const canTools = !!caps.tools;
-    for (const k of ['search', 'tools', 'mcp', 'github']) { if (!canTools) allow[k] = false; else if (sw[k] === false) allow[k] = false; }
+    for (const k of ['search', 'tools', 'mcp', 'github', 'terminal']) { if (!canTools) allow[k] = false; else if (sw[k] === false) allow[k] = false; }
     if (!caps.thinking || sw.thinking === false) allow.thinking = false;   // a model that cannot think gets no think prompt
     if (b.agent && !canTools) log('step', caps.source === 'unknown' ? 'Could not read this model\'s abilities, so tools are off (plain chat).' : 'This model does not support tools, so it gets a plain prompt. Pick one tagged "tools" to use search and tools.');
-    if (b.agent) log('step', allow.credits ? `Credits: ${agent.credits().left} left. On: ${['search','tools','mcp','thinking'].filter(k => allow[k]).join(', ') || 'nothing'}` : 'Credits: 0 left');
-    if (b.agent && !allow.credits) line({ status: 'Daily credits used up: search, tools, MCP and thinking are off. Plain local chat still works.' });
+    if (b.agent) log('step', allow.credits ? `Credits: ${agent.credits().left} left. On: ${['search','tools','mcp','terminal','thinking'].filter(k => allow[k]).join(', ') || 'nothing'}` : 'Credits: 0 left');
+    if (b.agent && !allow.credits) line({ status: 'Daily credits used up: thinking mode is off. Tools and chat still work.' });
     // Memory is its own switch (set by the signed-in user in the browser). It costs credits, so it is off at 0 credits.
-    const memOn = !!(b.agent && canTools && b.memory === true && allow.credits && agent.credits().left >= agent.COST.memory);
+    const memOn = !!(b.agent && canTools && b.memory === true && true);
     if (b.agent && b.memory === true && !memOn) log('error', !canTools ? 'Memory is on, but this model cannot use tools, so it cannot save new memories. Saved notes are still used.' : 'Memory is on, but there are not enough credits to save new memories today.');
     const { tools } = await agent.buildTools({ ...allow, memory: memOn });
     const tctx = { ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), onPending: p => line({ approve: p }) };
@@ -363,7 +366,23 @@ const server = http.createServer(async (req, res) => {
       const a = sec.authorize(req);
       if (!a.ok) return json(res, a.status, { error: a.error, hint: a.hint });
       req.who = a.who;
+      // A remote API key is for plain chat only: the OpenAI-style /v1 routes and reading credits. Everything else
+      // (settings, the agent and its tools, commands, GitHub approvals, downloads, logs) answers to this PC alone.
+      const REMOTE_OK = p.startsWith('/v1/') || ['/api/credits', '/api/chat', '/api/tags', '/api/caps'].includes(p);
+      if (req.who !== 'local' && !REMOTE_OK) return json(res, 403, { error: 'This can only be done on the PC itself.' });
     }
+    // serve / shutdown: only from this PC
+    if (p === '/api/serve' && req.method === 'POST') {
+      if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can start serving.' });
+      const b = await body(req), m = CATALOG.find(x => x.id === b.id);
+      if (!m) return json(res, 404, { error: 'unknown model' });
+      if (!fs.existsSync(path.join(MODELS_DIR, m.file))) return json(res, 409, { error: 'Not installed. Run: ' + m.command });
+      served = m.id; try { await startLlama(m.file); } catch (e) { served = null; return json(res, 500, { error: e.message }); }
+      return json(res, 200, { ok: true, model: 'gguf:' + m.id, url: `http://127.0.0.1:${PORT}/v1` });
+    }
+    if (p === '/api/serve/stop' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); served = null; await stopLlama(); return json(res, 200, { ok: true }); }
+    if (p === '/api/serve' && req.method === 'GET') return json(res, 200, { model: served ? 'gguf:' + served : null });
+    if (p === '/api/shutdown' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); json(res, 200, { ok: true }); setTimeout(() => { llama && llama.kill(); process.exit(0); }, 200); return; }
     // API keys are managed only from this PC, never remotely
     if (p === '/api/keys') {
       if (req.who !== 'local') return json(res, 403, { error: 'Keys can only be managed on the PC itself.' });
@@ -376,11 +395,32 @@ const server = http.createServer(async (req, res) => {
     if (p === '/v1/chat/completions' && req.method === 'POST') return openaiChat(req, res, await body(req));
     if (p === '/api/caps') { const m = u.searchParams.get('model') || ''; const c = await modelCaps(m); return json(res, 200, { ...c, search: c.tools, mcp: c.tools, github: c.tools }); }
     if (p === '/api/github/approve' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ok: true, text: await agent.github.confirm(String(req.headers['x-github-token'] || ''), String(b.id || ''), b.approve === true) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); } }
+    // ---- commands the AI proposes: run only after the user clicks Allow, only from this PC's own page ----
+    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/bonus') {
+      if (req.who !== 'local') return json(res, 403, { error: 'This can only be done on the PC itself.' });
+      const o = req.headers.origin;   // the public website is allowed to chat with this PC, but never to approve or stop commands
+      if (o && !new RegExp('^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\]):' + PORT + '$').test(o)) return json(res, 403, { error: 'Approve commands in the Pholama window on this PC.' });
+      if (p === '/api/cmd/list') return json(res, 200, { pending: agent.power.list() });
+      if (p === '/api/cmd/approve' && req.method === 'POST') {
+        const b = await body(req), id = String(b.id || '');
+        if (b.approve !== true) return json(res, 200, { ok: agent.power.reject(id), text: 'Denied. Nothing ran.' });
+        try { const r = await agent.power.approve(id); return json(res, 200, { ok: r.ok, text: r.text, code: r.code, ms: r.ms, stoppedBy: r.stoppedBy }); }
+        catch (e) { return json(res, 200, { ok: false, text: e.message }); }
+      }
+      if (p === '/api/cmd/stop' && req.method === 'POST') return json(res, 200, { ok: agent.power.stopRunning() });
+      if (p === '/api/editlog' && req.method === 'GET') return json(res, 200, { entries: agent.power.readLog(+u.searchParams.get('n') || 100) });
+      if (p === '/api/editlog' && req.method === 'DELETE') return json(res, 200, { ok: agent.power.clearLog() });
+      if (p === '/api/bonus' && req.method === 'POST') { try { return json(res, 200, await agent.power.claimBonus(String((await body(req)).token || ''))); } catch (e) { return json(res, 200, { error: e.message, bonus: agent.power.bonusTotal() }); } }
+      if (p === '/api/bonus' && req.method === 'GET') return json(res, 200, { bonus: agent.power.bonusTotal() });
+    }
     if (p === '/api/credits') return json(res, 200, { ...agent.credits(), allowed: agent.allowed() });
     if (p === '/api/prefs' && req.method === 'POST') return json(res, 200, agent.setPrefs(await body(req)));
     if (p === '/api/mcp' && req.method === 'GET') return json(res, 200, { servers: agent.state().mcp.map(x => ({ name: x.name, url: x.url })), tools: await agent.listMcp() });
     if (p === '/api/mcp' && req.method === 'POST') return json(res, 200, { servers: agent.addMcp(await body(req)) });
     if (p === '/api/mcp' && req.method === 'DELETE') { agent.removeMcp(u.searchParams.get('name')); return json(res, 200, { ok: true }); }
+    if (p === '/api/update' && req.method === 'GET') return json(res, 200, require('./update').status());
+    if (p === '/api/update/check' && req.method === 'POST') return json(res, 200, await require('./update').backgroundCheck());
+    if (p === '/api/update/auto' && req.method === 'POST') { const b = await body(req); return json(res, 200, require('./update').setAuto(b.auto !== false)); }
     if (p === '/api/hardware') { const h = hardware(); return json(res, 200, { hardware: h, ollama: await ollamaUp(), llamaServer: !!findLlamaServer(), models: recommend(h) }); }
     if (p === '/api/tags') return json(res, 200, { models: await listModels() });
     if (p === '/api/pull' && req.method === 'POST') { const b = await body(req); const m = CATALOG.find(x => x.id === b.id); if (!m) return json(res, 404, { error: 'unknown model' }); if (!dl[m.id] || dl[m.id].status !== 'downloading') download(m); return json(res, 200, { ok: true }); }
@@ -391,7 +431,12 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/pull/stop' && req.method === 'POST') { const b = await body(req); stopDownload(b.id); return json(res, 200, { ok: true }); }
     if (p === '/api/model' && req.method === 'DELETE') { const m = CATALOG.find(x => x.id === new URL(req.url, 'http://x').searchParams.get('id')); if (!m) return json(res, 404, { error: 'unknown model' }); await deleteModel(m); return json(res, 200, { ok: true }); }
     if (p === '/api/pull/status') return json(res, 200, dl);
-    if (p === '/api/chat' && req.method === 'POST') return chat(req, res, await body(req));
+    if (p === '/api/chat' && req.method === 'POST') {
+      const cb = await body(req);
+      // Remote callers get plain chat only: the tools, terminal, GitHub and memory never run for a key holder.
+      if (req.who !== 'local') { cb.agent = false; cb.memory = false; delete cb.switches; delete cb.tools; }
+      return chat(req, res, cb);
+    }
     if (p === '/api/generate' && req.method === 'POST') { // Ollama-compatible generate -> chat
       const b = await body(req); b.messages = [{ role: 'user', content: b.prompt || '' }];
       return chat(req, res, b);
@@ -405,6 +450,7 @@ const server = http.createServer(async (req, res) => {
 server.listen(PORT, HOST, () => {
   const h = hardware();
   console.log(`\n  Pholama running\n  Chat UI:  http://localhost:${PORT}\n  RAM: ${h.ramGB} GB${h.gpu ? '  GPU: ' + h.gpu + (h.vramGB ? ' (' + h.vramGB + ' GB)' : '') : ''}\n  Models folder: ${MODELS_DIR}\n`);
+  try { require('./update').startBackground(); } catch {}
   if (HOST !== '127.0.0.1') console.log('  Reachable on your network. Open http://<this-PC-IP>:' + PORT + ' on your phone.\n');
 });
 process.on('exit', () => llama && llama.kill()); process.on('SIGINT', () => { llama && llama.kill(); process.exit(); });
