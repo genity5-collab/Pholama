@@ -3,6 +3,8 @@
 //  "local":   talks to the Pholama server on your PC (llama.cpp / Ollama) using PC RAM/GPU.
 const $ = s => document.querySelector(s);
 const chatEl = $('#chat'), inEl = $('#in'), sel = $('#model'), dlg = $('#dlg'), listEl = $('#list');
+let hasGPU = false;
+async function probeGPU() { try { return !!(navigator.gpu && await navigator.gpu.requestAdapter()); } catch { return false; } }
 let catalog = null, server = null, tab = 'browser', engine = null, engineModel = null, history = [], busy = false;
 
 const add = (cls, txt) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; chatEl.appendChild(d); chatEl.scrollTop = 1e9; return d; };
@@ -10,6 +12,7 @@ const saved = () => JSON.parse(localStorage.getItem('pholama.ready') || '[]');
 const markReady = id => { const s = new Set(saved()); s.add(id); localStorage.setItem('pholama.ready', JSON.stringify([...s])); };
 
 async function init() {
+  hasGPU = await probeGPU();
   catalog = await (await fetch('models.json')).json();
   try { const r = await fetch('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json(); } catch {}
   tab = server ? 'local' : 'browser';
@@ -36,7 +39,7 @@ async function ensureEngine(value) {
   if (!value.startsWith('web:')) return;
   const id = value.slice(4);
   if (engine && engineModel === id) return;
-  if (!navigator.gpu) throw new Error('No WebGPU in this browser. Open Models and pick a CPU model.');
+  if (!hasGPU) throw new Error('No usable WebGPU in this browser. Open Models and pick a CPU model.');
   const note = add('sys', 'Loading model...');
   const webllm = await import('https://esm.run/@mlc-ai/web-llm');
   engine = await webllm.CreateMLCEngine(id, { initProgressCallback: p => note.textContent = p.text });
@@ -95,8 +98,8 @@ function render() {
   $('#tBrowser').classList.toggle('on', tab === 'browser'); $('#tLocal').classList.toggle('on', tab === 'local');
   listEl.innerHTML = '';
   if (tab === 'browser') {
-    $('#hw').textContent = navigator.gpu ? 'Models run inside this browser on your GPU and are cached after the first download.' : 'No WebGPU here, so small models run on the CPU (slower). Chrome on Android 121+ gives full speed.';
-    const gpu = !!navigator.gpu;
+    $('#hw').textContent = hasGPU ? 'Models run inside this browser on your GPU and are cached after the first download.' : 'No WebGPU here, so small models run on the CPU (slower). Chrome on Android 121+ gives full speed.';
+    const gpu = hasGPU;
     for (const m of (gpu ? catalog.browser : catalog.cpu || [])) {
       const key = gpu ? m.id : 'cpu:' + m.id, ready = saved().includes(key), r = row(m.name, `${m.size} · ${m.note}`, ready ? 'Ready' : 'Download');
       r.btn.disabled = ready;
@@ -137,7 +140,7 @@ function row(title, sub, btn) {
 }
 async function ensureEngineWithBar(id, r) {
   r.bar.style.display = '';
-  if (!navigator.gpu) throw new Error('No WebGPU in this browser');
+  if (!hasGPU) throw new Error('No usable WebGPU in this browser');
   const webllm = await import('https://esm.run/@mlc-ai/web-llm');
   engine = await webllm.CreateMLCEngine(id, { initProgressCallback: p => { r.fill.style.width = Math.round(p.progress * 100) + '%'; r.sub.textContent = p.text.slice(0, 70); } });
   engineModel = id; markReady(id);
