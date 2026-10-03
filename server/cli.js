@@ -240,7 +240,7 @@ Categories: tool running, reasoning, fast, slow.  Example:  ${cyan('pholama pull
 async function cmdWeb() {
   await ensureServer();
   const u = BASE, cmd = process.platform === 'win32' ? `start "" "${u}"` : process.platform === 'darwin' ? `open "${u}"` : `xdg-open "${u}"`;
-  try { execSync(cmd, { stdio: 'ignore' }); } catch {}
+  try { execSync(cmd, { stdio: 'ignore', windowsHide: true }); } catch {}
   console.log('Open ' + cyan(u));
 }
 

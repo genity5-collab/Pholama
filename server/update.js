@@ -61,7 +61,7 @@ async function update({ log = console.log, color = {}, force = false } = {}) {
   try {
     const tgz = path.join(tmp, 'p.tgz');
     await getFile(ARCHIVE, tgz);
-    execSync(`tar -xzf "${tgz}" -C "${tmp}"`, { stdio: 'ignore' });
+    execSync(`tar -xzf "${tgz}" -C "${tmp}"`, { stdio: 'ignore', windowsHide: true });
     const dir = fs.readdirSync(tmp).map(n => path.join(tmp, n)).find(p => fs.statSync(p).isDirectory());
     if (!dir || !fs.existsSync(path.join(dir, 'server', 'server.js')) || !fs.existsSync(path.join(dir, 'models.pc.json'))) throw new Error('The downloaded update looked incomplete, so nothing was changed.');
     JSON.parse(fs.readFileSync(path.join(dir, 'models.pc.json'), 'utf8'));   // refuse a broken catalog

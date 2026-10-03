@@ -52,8 +52,10 @@ function createGuard(deps, cfg = CFG) {
     if (!deps.isLoaded()) { badRun = 0; cpuRun = 0; return null; }                       // nothing local is running: nothing to protect
     if (Date.now() - (deps.startedAt() || 0) < cfg.grace) { badRun = 0; cpuRun = 0; return null; }   // model is still loading: heavy use is normal
     let why = judge(r, cfg);
+    // A busy CPU alone is NOT lag: a model that is writing a reply is SUPPOSED to use all of it, and stopping it then makes the chat go silent.
+    // The CPU counts only when the PC also shows a real symptom (Pholama itself stalling), which judge() already reports.
     cpuRun = r.cpu >= cfg.cpuPct ? cpuRun + 1 : 0;
-    if (!why && cpuRun >= cfg.cpuChecks) why = `the CPU has been maxed out for ${Math.round(cpuRun * cfg.every / 1000)} s`;
+    if (!why && cpuRun >= cfg.cpuChecks && r.loopMs != null && r.loopMs > cfg.loopMs / 2) why = `the CPU is maxed out and the PC is slowing down (Pholama stalled for ${(r.loopMs / 1000).toFixed(1)} s)`;
     badRun = why ? badRun + 1 : 0;
     if (why && badRun >= cfg.bad) {
       badRun = 0; cpuRun = 0; stopped = true;

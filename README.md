@@ -93,7 +93,7 @@ Models are saved in one folder, so you can delete any you stop using (`pholama r
 
 **Recommended model:** `pholama pull qwen2.5-1.5b` (about 1 GB). It is the smallest model that runs tools well.
 
-**Keeps your PC smooth:** while a local AI runs, Pholama watches the PC. If it really starts to lag (memory almost full, the PC freezing, or the CPU maxed out for a long time) it stops all local AIs and tells you why. Only local AIs are stopped. When you close Pholama, every local AI is stopped too.
+**Keeps your PC smooth:** while a local AI runs, Pholama watches the PC. If it really starts to lag (memory almost full, or the PC freezing up; a busy CPU alone never stops it, because a model writing a reply is meant to use the CPU) it stops all local AIs and tells you why. Only local AIs are stopped. When you close Pholama, every local AI is stopped too.
 
 **Remove Pholama completely:** `pholama remove-all` deletes the app, every downloaded model, the private Node.js, the `pholama` command and the icons. It lists everything first and waits for you to type `remove`. Use `pholama remove-all --dry-run` to only see the list. Updates only replace the 0.5 MB program, never your models.
 

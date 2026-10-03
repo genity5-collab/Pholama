@@ -11,6 +11,8 @@ const PORT = +process.env.PORT || 11435;
 const HOST = process.env.HOST || '127.0.0.1'; // set HOST=0.0.0.0 to chat from your phone on same WiFi
 const OLLAMA = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const LLAMA_PORT = 11436;
+const { fitToContext, chooseContext } = require('./fit');
+const { shieldedTurn, FRIENDLY } = require('./shield');
 const PIDFILE = path.join(os.homedir(), '.pholama', 'llama.pid');
 // A previous Pholama that crashed or was force-killed can leave its model running. Stop that leftover before starting anything new.
 function reapOrphan() {
@@ -22,7 +24,7 @@ function reapOrphan() {
     try {
       if (process.platform === 'linux') name = fs.readFileSync('/proc/' + pid + '/comm', 'utf8').trim();
       else if (process.platform === 'win32') name = String(execSync('tasklist /FI "PID eq ' + pid + '" /FO CSV /NH', { encoding: 'utf8', timeout: 4000, windowsHide: true }));
-      else name = String(execSync('ps -p ' + pid + ' -o comm=', { encoding: 'utf8', timeout: 4000 }));
+      else name = String(execSync('ps -p ' + pid + ' -o comm=', { encoding: 'utf8', timeout: 4000, windowsHide: true }));
     } catch { return; }   // not running, or we cannot tell: do nothing
     if (/llama-server/i.test(name)) { process.kill(pid, 'SIGKILL'); console.log('  Stopped a leftover local AI from a previous run (pid ' + pid + ').'); }
   } catch {}
@@ -40,15 +42,23 @@ function hardware() {
   const h = { ramGB: +(os.totalmem() / 2 ** 30).toFixed(1), freeRamGB: +(os.freemem() / 2 ** 30).toFixed(1),
     cpu: (os.cpus()[0] || {}).model || 'unknown', cores: os.cpus().length, platform: process.platform, gpu: null, vramGB: null };
   try {
-    const o = execSync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', { timeout: 3000, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim().split('\n')[0].split(',');
+    const o = execSync('nvidia-smi --query-gpu=name,memory.total --format=csv,noheader,nounits', { timeout: 3000, windowsHide: true, stdio: ['ignore', 'pipe', 'ignore'] }).toString().trim().split('\n')[0].split(',');
     h.gpu = o[0].trim(); h.vramGB = +(o[1] / 1024).toFixed(1);
   } catch {}
   if (!h.gpu && process.platform === 'darwin' && os.arch() === 'arm64') { h.gpu = 'Apple Silicon (unified memory)'; h.vramGB = h.ramGB; }
   return h;
 }
+// The RECOMMENDED model is the smallest one that can run tools (so Max-style actions work) and still fits this PC.
+// Computed from the catalog, never hard-coded, so it stays right when models are added.
+function pickRecommended(list, budget) {
+  const ok = list.filter(m => (m.caps || []).includes('tools') && budget >= m.minRamGB);
+  ok.sort((a, b) => a.bytes - b.bytes);
+  return ok.length ? ok[0].id : null;
+}
 function recommend(h) {
   const budget = h.vramGB && h.vramGB > 2 ? Math.max(h.vramGB, h.ramGB * 0.6) : h.ramGB;
-  return CATALOG.map(m => ({ ...m, fits: budget >= m.minRamGB, downloaded: fs.existsSync(path.join(MODELS_DIR, m.file)), partial: fs.existsSync(path.join(MODELS_DIR, m.file) + '.part'), progress: dl[m.id] || partialInfo(m) }));
+  const recId = pickRecommended(CATALOG, budget);
+  return CATALOG.map(m => ({ ...m, recommended: m.id === recId, fits: budget >= m.minRamGB, downloaded: fs.existsSync(path.join(MODELS_DIR, m.file)), partial: fs.existsSync(path.join(MODELS_DIR, m.file) + '.part'), progress: dl[m.id] || partialInfo(m) }));
 }
 
 // ---------- backends ----------
@@ -84,17 +94,46 @@ function killLocalNow() {
   try { if (llama) llama.kill('SIGKILL'); } catch {}
   llama = null; llamaModel = null; try { fs.unlinkSync(PIDFILE); } catch {}
 }
-async function startLlama(file) {
-  if (llama && llamaModel === file) return;
-  if (llama) { llama.kill(); llama = null; await new Promise(r => setTimeout(r, 500)); }
-  const bin = findLlamaServer();
-  if (!bin) throw new Error('llama-server not found. Install Ollama (ollama.com) OR download llama.cpp from github.com/ggml-org/llama.cpp/releases and put llama-server in ' + path.join(os.homedir(), '.pholama', 'bin'));
-  const args = ['-m', path.join(MODELS_DIR, file), '--port', String(LLAMA_PORT), '-c', '4096', '-ngl', '99'];
-  llama = spawn(bin, args, { stdio: 'inherit' }); llamaModel = file; llamaStartedAt = Date.now();
+let llamaCtx = 4096, llamaReady = false, startChain = Promise.resolve();
+// Only ONE start/restart may run at a time. Two messages arriving together used to launch two engines on the same port;
+// the second one crashed ("couldn't bind") and the chat went dead. Later callers now wait their turn and re-check.
+function startLlama(file) {
+  const run = startChain.then(() => startLlamaNow(file));
+  startChain = run.catch(() => {});   // one failure must not block the next attempt
+  return run;
+}
+async function startLlamaNow(file) {
+  const cm = CATALOG.find(x => x.file === file);
+  const ctx = chooseContext(cm && cm.ctx, +(hardware().ramGB || 0));
+  if (llama && llamaReady && llamaModel === file && llamaCtx === ctx) {
+    try { if ((await get(`http://127.0.0.1:${LLAMA_PORT}/health`)).status === 200) return; } catch {}   // looks alive but is not answering: restart it
+  }
+  llamaReady = false;
+  if (llama) { const old = llama; llama = null; old.kill(); await new Promise(r => { old.once('exit', r); setTimeout(r, 2500); }); }
+  let bin = findLlamaServer();
+  if (!bin) {   // first use on this PC: fetch the engine ourselves instead of sending the user to do it by hand
+    await ensureEngine();
+    bin = findLlamaServer();
+    if (!bin) throw new Error('The AI engine (llama.cpp) could not be set up automatically' + (inst.error ? ': ' + inst.error : '') + '. Check your internet connection and try again, or install Ollama from ollama.com and leave it running.');
+  }
+  const args = ['-m', path.join(MODELS_DIR, file), '--port', String(LLAMA_PORT), '-c', String(ctx), '-ngl', '99'];
+  llamaCtx = ctx;
+  // No console window (Windows would open a black terminal for the engine) - its output goes to a log file instead.
+  const logPath = path.join(os.homedir(), '.pholama', 'engine.log');
+  let logFd = 'ignore';
+  try { fs.mkdirSync(path.dirname(logPath), { recursive: true }); if (fs.existsSync(logPath) && fs.statSync(logPath).size > 2 * 1024 * 1024) fs.writeFileSync(logPath, ''); logFd = fs.openSync(logPath, 'a'); fs.writeSync(logFd, '\n--- ' + new Date().toISOString() + ' starting ' + file + '\n'); } catch {}
+  llama = spawn(bin, args, { stdio: ['ignore', logFd, logFd], windowsHide: true }); const me0 = llama; llamaModel = file; llamaStartedAt = Date.now();
+  if (typeof logFd === 'number') llama.once('spawn', () => { try { fs.closeSync(logFd); } catch {} });
   try { fs.mkdirSync(path.dirname(PIDFILE), { recursive: true }); fs.writeFileSync(PIDFILE, String(llama.pid)); } catch {}
-  llama.on('exit', () => { llama = null; llamaModel = null; try { fs.unlinkSync(PIDFILE); } catch {} });
-  for (let i = 0; i < 120; i++) { try { if ((await get(`http://127.0.0.1:${LLAMA_PORT}/health`)).status === 200) return; } catch {} await new Promise(r => setTimeout(r, 1000)); }
-  throw new Error('llama-server did not start in time');
+  llama.on('exit', () => { if (llama === me0 || llama === null) { llama = null; llamaModel = null; llamaReady = false; try { fs.unlinkSync(PIDFILE); } catch {} } });
+  const me = llama;
+  for (let i = 0; i < 120; i++) {
+    try { if ((await get(`http://127.0.0.1:${LLAMA_PORT}/health`)).status === 200) { llamaReady = true; return; } } catch {}
+    if (llama !== me) break;   // the engine already exited (damaged model, out of memory): no point waiting
+    await new Promise(r => setTimeout(r, i < 10 ? 300 : 1000));
+  }
+  let why = ''; try { why = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean).slice(-4).join(' | ').slice(-300); } catch {}
+  throw new Error((llama === me ? 'The AI engine did not start in time.' : 'The AI engine stopped right after starting (the model file may be damaged, or there is not enough free memory).') + (why ? ' Last engine message: ' + why : '') + ' Full log: ' + logPath);
 }
 
 // ---------- downloads ----------
@@ -176,15 +215,15 @@ async function installLlama() {
     await new Promise((ok, no) => f.end(e => e ? no(e) : ok()));
     inst.step = 'Unpacking...'; inst.speed = 0;
     // tar ships with Windows 10+, macOS and Linux and extracts both .tar.gz and .zip
-    execSync(`tar -xf "${arc}" -C "${dir}" --strip-components=1`, { stdio: 'ignore' });
-    if (!findLlamaServer()) execSync(`tar -xf "${arc}" -C "${dir}"`, { stdio: 'ignore' });
+    execSync(`tar -xf "${arc}" -C "${dir}" --strip-components=1`, { stdio: 'ignore', windowsHide: true });
+    if (!findLlamaServer()) execSync(`tar -xf "${arc}" -C "${dir}"`, { stdio: 'ignore', windowsHide: true });
     fs.unlinkSync(arc); arc = null;
     if (!findLlamaServer()) {
       const walk = (d) => fs.readdirSync(d, { withFileTypes: true }).flatMap(e => e.isDirectory() ? walk(path.join(d, e.name)) : [path.join(d, e.name)]);
       const f2 = walk(dir).find(x => /llama-server(\.exe)?$/.test(x));
       if (f2) process.env.LLAMA_SERVER_DIR = path.dirname(f2);
     }
-    if (process.platform !== 'win32') try { execSync(`chmod +x "${dir}"/llama-server 2>/dev/null || true`); } catch {}
+    if (process.platform !== 'win32') try { execSync(`chmod +x "${dir}"/llama-server 2>/dev/null || true`, { windowsHide: true }); } catch {}
     if (!findLlamaServer()) throw new Error('Installed, but llama-server was not found');
     inst.status = 'done'; inst.step = 'Installed';
   } catch (e) {
@@ -193,6 +232,22 @@ async function installLlama() {
     else { inst.status = 'error'; inst.error = e.message; }
   }
   inst.speed = 0; instAbort = null;
+}
+let engineWait = null;
+// Installs the llama.cpp engine if it is missing. Several requests at once share ONE download.
+function ensureEngine() {
+  if (findLlamaServer()) return Promise.resolve();
+  if (engineWait) return engineWait;
+  engineWait = (async () => {
+    console.log('  First use: downloading the AI engine (llama.cpp), about 30-200 MB, one time...');
+    if (inst.status !== 'installing') installLlama();
+    for (let i = 0; i < 1800; i++) {   // up to 15 minutes on a slow connection
+      if (inst.status === 'done' || findLlamaServer()) return;
+      if (inst.status === 'error' || inst.status === 'stopped') return;
+      await new Promise(r => setTimeout(r, 500));
+    }
+  })().finally(() => { engineWait = null; });
+  return engineWait;
 }
 async function uninstallLlama() { stopInstall(); await stopLlama(); try { fs.rmSync(path.join(os.homedir(), '.pholama', 'bin'), { recursive: true, force: true }); } catch {} Object.assign(inst, { status: 'idle', error: null, step: '', done: 0, total: 0 }); }
 
@@ -238,8 +293,15 @@ async function streamTurn(model, messages, options, onToken, signal, usage) {
   if (!m) throw new Error('Unknown model ' + model);
   if (!fs.existsSync(path.join(MODELS_DIR, m.file))) throw new Error('Model not downloaded yet');
   await startLlama(m.file);
+  const wantReply = Math.min(1024, (options || {}).num_predict || 1024);
+  const fit = fitToContext(messages, llamaCtx, wantReply);
+  if (fit.dropped || fit.trimmedLast) console.log('  Long chat: left out ' + fit.dropped + ' oldest message(s) so it fits the model (' + llamaCtx + ' tokens).');
   const r = await fetch(`http://127.0.0.1:${LLAMA_PORT}/v1/chat/completions`, { method: 'POST', signal, headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ messages, stream: true, stream_options: { include_usage: true }, temperature: (options || {}).temperature ?? 0.7, ...((options || {}).num_predict ? { max_tokens: options.num_predict } : {}) }) });
+    body: JSON.stringify({ messages: fit.messages, stream: true, stream_options: { include_usage: true }, temperature: (options || {}).temperature ?? 0.7, ...((options || {}).num_predict ? { max_tokens: options.num_predict } : {}) }) });
+  if (!r.ok) {   // the engine refused the request: say why instead of going silent
+    let msg = ''; try { const j = await r.json(); msg = (j.error && (j.error.message || j.error)) || ''; } catch {}
+    throw new Error('The AI engine could not answer' + (msg ? ': ' + String(msg).slice(0, 200) : ' (HTTP ' + r.status + ')') + '. Try a shorter message, or start a new chat.');
+  }
   let buf = '', all = '';
   for await (const c of r.body) {
     buf += Buffer.from(c).toString('utf8'); let i;
@@ -319,7 +381,7 @@ async function chat(req, res, b) {
       let cut = false;
       const lu = [...messages].reverse().find(m => m.role === 'user'), holdWeb = !tools.length && lu && ASKED_WEB.test(lu.content);   // decide before showing anything
       const flush = () => { if (cut) return; if (leaked(acc)) { cut = true; line({ model, message: { role: 'assistant', content: sent ? '\n' + CANT : CANT }, done: false }); log('step', 'Hid part of the reply that quoted private instructions.'); return; } if (acc.length > sent) { line({ model, message: { role: 'assistant', content: acc.slice(sent) }, done: false }); sent = acc.length; } };
-      const text = await streamTurn(model, messages, opts, t => {
+      const onTok = t => {
         acc += t; if (first) { first = false; log('step', 'Model is answering'); }
         if (thinking && !thinkSeen && acc.includes('<think>')) { thinkSeen = true; log('thought', 'Model is thinking...'); if (!thinkBilled && agent.spend(agent.COST.thinking)) { thinkBilled = true; log('step', `Thinking used (-${agent.COST.thinking} credits)`); } }
         if (mode === 'undecided') {
@@ -328,7 +390,16 @@ async function chat(req, res, b) {
           else if (head.length >= 5 || !'<tool'.startsWith(head)) mode = 'stream';
         }
         if (mode === 'stream' && !holdWeb) flush();
-      }, ac.signal, usage);
+      };
+      // Shield: an empty reply or an engine that dropped out before saying anything is retried (engine restarted first), never shown as silence.
+      const shot = await shieldedTurn((tok) => streamTurn(model, messages, opts, t => { tok(t); onTok(t); }, ac.signal, usage), {
+        tries: 3, signal: ac.signal,
+        onRetry: (n, e) => log('step', 'The AI gave no answer' + (e && e.message && e.message !== 'empty reply' ? ' (' + e.message.slice(0, 80) + ')' : '') + '. Restarting it and trying again (' + n + '/2)...'),
+        restart: async () => { if (!model.startsWith('ollama:')) { await stopLlama(); } },
+      });
+      if (shot.failed) { console.log('  Reply shield: no answer after 3 tries' + (shot.error ? ' (' + shot.error.message + ')' : '')); line({ model, message: { role: 'assistant', content: FRIENDLY }, done: false }); break; }
+      if (shot.recovered) log('step', 'The AI recovered and answered.');
+      const text = shot.text;
       generated += text;
       const shown = sent;
       const call = tools.length ? agent.parseTool(text) : null;

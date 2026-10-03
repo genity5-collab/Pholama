@@ -89,6 +89,30 @@
   "command": "pholama pull qwen2.5-coder-0.5b"
  },
  {
+  "id": "qwen3-0.6b",
+  "name": "Qwen3 0.6B",
+  "family": "Qwen",
+  "params": "0.6B",
+  "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf",
+  "file": "Qwen3-0.6B-Q4_K_M.gguf",
+  "ctx": 8192,
+  "categories": [
+   "agents",
+   "fast"
+  ],
+  "blurb": "The smallest model here that reliably uses tools (calculator, time). Under 0.4 GB, runs on almost any PC.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "fast"
+  ],
+  "command": "pholama pull qwen3-0.6b",
+  "bytes": 396705472,
+  "sizeGB": 0.37,
+  "minRamGB": 2
+ },
+ {
   "id": "gemma3-1b",
   "name": "Gemma 3 1B Instruct",
   "family": "Gemma",
