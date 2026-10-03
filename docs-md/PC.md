@@ -4,7 +4,7 @@
 
 
 
-Requires [Node.js 18+](https://nodejs.org). Nothing else to install.
+You do not need to install anything first. The one-line installer downloads its own private Node.js (about 30 MB) if your PC has none. If you run from a git clone instead (below), that route needs [Node.js 18+](https://nodejs.org).
 
 ```
 git clone https://github.com/genity5-collab/Pholama

@@ -51,7 +51,10 @@ async function ensureServer() {
   if (await up()) return;
   fs.mkdirSync(HOME, { recursive: true });
   const log = fs.openSync(path.join(HOME, 'server.log'), 'a');
-  const child = spawn(process.execPath, [path.join(__dirname, 'server.js')], { detached: true, stdio: ['ignore', log, log], windowsHide: true, env: process.env });
+  // In the single-file app, process.execPath is the launcher itself, so the script goes after --run (and the loop guard is cleared).
+  const viaLauncher = !!process.env.PHOLAMA_LAUNCHER;
+  const env = { ...process.env }; delete env.PHOLAMA_LAUNCHED;
+  const child = spawn(process.execPath, viaLauncher ? ['--run', path.join(__dirname, 'server.js')] : [path.join(__dirname, 'server.js')], { detached: true, stdio: ['ignore', log, log], windowsHide: true, env });
   child.unref();
   fs.writeFileSync(path.join(HOME, 'server.pid'), String(child.pid));
   for (let i = 0; i < 40; i++) { if (await up()) return; await sleep(250); }

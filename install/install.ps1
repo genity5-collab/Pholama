@@ -5,19 +5,36 @@ $dir = Join-Path $env:USERPROFILE 'Pholama'
 $zip = 'https://github.com/genity5-collab/Pholama/archive/refs/heads/main.zip'
 function Say($m) { Write-Host ""; Write-Host "  $m" }
 
-$node = Get-Command node -ErrorAction SilentlyContinue
+# Use the Node.js already on this PC when it is new enough; otherwise fetch a private copy (no install, no admin, nothing system-wide).
+$nodeExe = 'node'
 $ok = $false
-if ($node) { $ok = ([int](node -p "process.versions.node.split('.')[0]")) -ge 18 }
+$found = Get-Command node -ErrorAction SilentlyContinue
+if ($found) { try { $ok = ([int](node -p "process.versions.node.split('.')[0]")) -ge 18 } catch { $ok = $false } }
 if (-not $ok) {
-  Say "Node.js 18 or newer is needed."
-  if (Get-Command winget -ErrorAction SilentlyContinue) {
-    Say "Installing Node.js with winget ..."
-    winget install -e --id OpenJS.NodeJS.LTS --accept-source-agreements --accept-package-agreements
-    Say "Node.js installed. Close this window, open a new PowerShell and run the install command again."
-    return
+  $priv = Join-Path $env:USERPROFILE '.pholama\node'
+  $privNode = Join-Path $priv 'node.exe'
+  if (-not (Test-Path $privNode)) {
+    Say "No Node.js found, so Pholama is getting its own private copy (about 30 MB, one time). Nothing is installed on your PC."
+    $nv = 'v20.20.2'
+    $arch = if ($env:PROCESSOR_ARCHITECTURE -eq 'ARM64') { 'arm64' } else { 'x64' }
+    $nzip = Join-Path $env:TEMP ('node_' + [guid]::NewGuid().ToString('N') + '.zip')
+    $nout = Join-Path $env:TEMP ('nodex_' + [guid]::NewGuid().ToString('N'))
+    try {
+      Invoke-WebRequest "https://nodejs.org/dist/$nv/node-$nv-win-$arch.zip" -OutFile $nzip -UseBasicParsing
+      Expand-Archive $nzip -DestinationPath $nout -Force
+      $inner = Get-ChildItem $nout -Directory | Select-Object -First 1
+      New-Item -ItemType Directory -Path $priv -Force | Out-Null
+      Copy-Item (Join-Path $inner.FullName '*') $priv -Recurse -Force
+    } catch {
+      Say "Could not get Node.js ($($_.Exception.Message)). Check your internet connection and run the command again."
+      return
+    } finally {
+      Remove-Item $nzip -Force -ErrorAction SilentlyContinue
+      Remove-Item $nout -Recurse -Force -ErrorAction SilentlyContinue
+    }
   }
-  Say "Get it from https://nodejs.org, then run this again."
-  return
+  if (-not (Test-Path $privNode)) { Say "Node.js did not unpack correctly. Please run the command again."; return }
+  $nodeExe = $privNode
 }
 
 Say "Downloading Pholama to $dir ..."
@@ -30,7 +47,7 @@ Copy-Item "$tmp\Pholama-main\*" $dir -Recurse -Force
 Remove-Item $tmp -Recurse -Force
 # make the pholama command available in new terminals
 $bin = Join-Path $env:USERPROFILE '.pholama\cmd'; New-Item -ItemType Directory -Path $bin -Force | Out-Null
-foreach ($n in 'pholama','phollama') { Set-Content -Path (Join-Path $bin "$n.cmd") -Value "@echo off`r`nnode `"$dir\server\cli.js`" %*" -Encoding ASCII }
+foreach ($n in 'pholama','phollama') { Set-Content -Path (Join-Path $bin "$n.cmd") -Value "@echo off`r`n`"$nodeExe`" `"$dir\server\cli.js`" %*" -Encoding ASCII }
 $path = [Environment]::GetEnvironmentVariable('Path','User')
 if (($path -split ';') -notcontains $bin) { [Environment]::SetEnvironmentVariable('Path', "$path;$bin", 'User') }
 # Desktop + Start Menu shortcuts that carry the Pholama llama icon, so it is easy to spot and click
@@ -51,4 +68,4 @@ try {
 Say "Installed. Open a NEW terminal and try:  pholama list    then:  pholama pull qwen2.5-0.5b"
 Say "Or open the app now: double-click start.bat in $dir"
 Set-Location $dir
-node server\cli.js web
+& $nodeExe server\cli.js web

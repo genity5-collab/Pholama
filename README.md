@@ -45,14 +45,9 @@ Pick **Agent Max** in the model list. It can use tools, open and close the app's
 
 The PC version can also search the web, use tools and show a **live log** of what the AI is doing.
 
-You need [Node.js 18+](https://nodejs.org) once. Then pick one way:
+**You do not need to install Node.js.** The installer (option A) brings its own private copy, about 30 MB, and installs nothing on your PC.
 
-**A. One command (nothing to download by hand)**
-```
-npx github:genity5-collab/Pholama
-```
-
-**B. Installer (saves Pholama in a `Pholama` folder in your home folder, then starts it)**
+**A. Installer (recommended: saves Pholama in a `Pholama` folder in your home folder, then starts it)**
 
 Windows (PowerShell):
 ```
@@ -63,9 +58,14 @@ Mac / Linux (Terminal):
 curl -fsSL https://raw.githubusercontent.com/genity5-collab/Pholama/main/install/install.sh | bash
 ```
 
-**C. Zip file:** [download](https://github.com/genity5-collab/Pholama/archive/refs/heads/main.zip), unzip, then double-click **start.bat** (Windows) or run `./start.sh` (Mac/Linux).
+**B. Zip file:** [download](https://github.com/genity5-collab/Pholama/archive/refs/heads/main.zip), unzip, then double-click **start.bat** (Windows) or run `./start.sh` (Mac/Linux). This route needs [Node.js 18+](https://nodejs.org) already installed; the installer above does not.
 
-**Look for the llama icon.** The installer (B) puts a **Pholama** icon on your Desktop and in the Start Menu (Windows), in your app launcher (Linux) or on your Desktop (Mac). Double-click it to open Pholama. If you used the zip (C), the first time you run **start.bat** it adds the icon to your Desktop too.
+**C. One command with npx** (only if you already have [Node.js 18+](https://nodejs.org))
+```
+npx github:genity5-collab/Pholama
+```
+
+**Look for the llama icon.** The installer (A) puts a **Pholama** icon on your Desktop and in the Start Menu (Windows), in your app launcher (Linux) or on your Desktop (Mac). Double-click it to open Pholama. If you used the zip (C), the first time you run **start.bat** it adds the icon to your Desktop too.
 
 Then open **http://localhost:11435**, tap **Models**, then **Install**, then **Download** a model.
 
