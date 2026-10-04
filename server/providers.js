@@ -87,6 +87,14 @@ async function streamProvider(id, messages, options, onToken, signal, usage) {
     if (!changed) break;
     try { r = await send(); } catch (e) { if (e && e.name === 'AbortError') throw e; throw new Error('Could not reach ' + p.name + '. Check the internet. ' + scrub(e.message, [p.key])); }
   }
+  // Temporary trouble at the company (overloaded, gateway timeout): wait a moment and try again, up to 3 more times.
+  // Safe to repeat: nothing has been sent to the screen yet, so the answer cannot be doubled.
+  for (let tries = 0; !r.ok && [500, 502, 503, 504].includes(r.status) && tries < 3; tries++) {
+    const ra = Number(r.headers && r.headers.get && r.headers.get('retry-after'));
+    const wait = Math.min(8000, ra > 0 ? ra * 1000 : 1200 * Math.pow(2, tries));   // 1.2s, 2.4s, 4.8s, or what the company asks for (max 8s)
+    await new Promise((ok2, no) => { const t = setTimeout(ok2, wait); if (signal) signal.addEventListener('abort', () => { clearTimeout(t); no(Object.assign(new Error('aborted'), { name: 'AbortError' })); }, { once: true }); });
+    try { r = await send(); } catch (e) { if (e && e.name === 'AbortError') throw e; throw new Error('Could not reach ' + p.name + '. Check the internet. ' + scrub(e.message, [p.key])); }
+  }
   if (!r.ok) {
     let m = ''; try { const j = await r.json(); m = (j.error && (j.error.message || j.error)) || j.message || ''; } catch {}
     throw new Error(explain(r.status, p.name, scrub(String(m), [p.key])));
@@ -139,7 +147,7 @@ function explain(status, providerName, detail) {
   if (status === 404 || /model.*(not found|does not exist|no longer|deprecat|retired|not supported|unavailable)|no such model|invalid model/.test(d)) return 'That model name is not available any more at ' + providerName + '. Pick another one from the list.';
   if (status === 429 || /quota|rate.?limit|billing|insufficient|exceeded/.test(d)) return providerName + ' says this key has hit its limit or has no credit left. Check billing on their website, or wait a little.';
   if (status === 400) return providerName + ' did not accept the request' + (detail ? ': ' + String(detail).slice(0, 160) : '.');
-  if (status >= 500) return providerName + ' is having problems right now. Try again in a minute.';
+  if (status >= 500) return providerName + ' is overloaded or down right now (HTTP ' + status + '), even after trying again a few times. Your key and model are fine. Wait a minute and try again, or pick another model with Change model.' + (detail ? ' They said: ' + String(detail).slice(0, 140) : '');
   return providerName + ' said no (HTTP ' + status + ').' + (detail ? ' ' + String(detail).slice(0, 160) : '');
 }
 // Ask the company which models this key can use. The key goes only to the company's fixed address.

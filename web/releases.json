@@ -1,6 +1,15 @@
 {
- "latest": "0.9.10",
+ "latest": "0.9.11",
  "releases": [
+  {
+   "version": "0.9.11",
+   "date": "2026-10-04",
+   "title": "Gemini and ChatGPT: retry when the company is busy",
+   "notes": [
+    "When Gemini, ChatGPT or another company answers that it is overloaded or down (HTTP 500, 502, 503 or 504), Pholama now waits a moment and tries again up to 3 more times before giving up. Most of these pass within seconds",
+    "If it still fails, the message now says your key and model are fine, shows the company's own reason, and suggests Change model. Pressing Stop while it waits cancels at once"
+   ]
+  },
   {
    "version": "0.9.10",
    "date": "2026-10-04",

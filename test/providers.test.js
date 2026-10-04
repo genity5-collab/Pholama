@@ -52,7 +52,7 @@ ok('explain: refused key', /key was refused/.test(P.explain(401, 'ChatGPT', ''))
 ok('explain: retired model (404)', /not available any more/.test(P.explain(404, 'Gemini', 'models/x is not found')));
 ok('explain: retired model (400 with words)', /not available any more/.test(P.explain(400, 'Gemini', 'The model `x` does not exist')));
 ok('explain: no credit', /limit or has no credit/.test(P.explain(429, 'ChatGPT', 'You exceeded your current quota')));
-ok('explain: provider down', /having problems/.test(P.explain(503, 'ChatGPT', '')));
+ok('explain: provider down says the key is fine and what to do', /overloaded or down/.test(P.explain(503, 'ChatGPT', '')) && /key and model are fine/.test(P.explain(503, 'ChatGPT', '')) && /They said: busy/.test(P.explain(503, 'ChatGPT', 'busy')));
 ok('explain never returns empty', ['', 'x'].every(d => [0, 400, 401, 404, 418, 429, 500].every(c => P.explain(c, 'Z', d).length > 10)));
 
 (async () => {
@@ -95,6 +95,17 @@ ok('explain never returns empty', ['', 'x'].every(d => [0, 400, 401, 404, 418, 4
   ok('a retired model gives a plain sentence, not raw JSON', /not available any more/.test(msg) && !/\{/.test(msg), msg);
   msg = ''; try { await run('badkey'); } catch (e) { msg = e.message; }
   ok('a refused key in chat is plain and never shows the key', /key was refused/.test(msg) && !msg.includes('SECRETKEY12345'), msg);
+  // temporary 503s: retried, then succeeds; permanent 503: gives up after 4 tries with a plain message
+  { let hits = 0; const flaky = http.createServer((q, r) => { let b = ''; q.on('data', c => b += c); q.on('end', () => { hits++; if (hits <= 2) { r.statusCode = 503; r.setHeader('Content-Type', 'application/json'); r.setHeader('Retry-After', '0'); return r.end(JSON.stringify({ error: { message: 'The model is overloaded. Please try again later.' } })); } r.setHeader('Content-Type', 'text/event-stream'); r.write('data: ' + JSON.stringify({ choices: [{ delta: { content: 'finally' } }] }) + '\n\ndata: [DONE]\n\n'); r.end(); }); }).listen(0, '127.0.0.1');
+    await new Promise(r => setTimeout(r, 100)); const st2 = JSON.parse(fs.readFileSync(P.FILE, 'utf8')); st2.providers.push({ id: 'flaky', kind: 'openai', name: 'Flaky', base: 'http://127.0.0.1:' + flaky.address().port, model: 'm', key: 'KEY1234567', tools: true }); fs.writeFileSync(P.FILE, JSON.stringify(st2));
+    let out = ''; await P.streamProvider('flaky', [{ role: 'user', content: 'hi' }], {}, t => { out += t; }, undefined, { in: 0, out: 0 });
+    ok('a temporary 503 is retried and the answer arrives once', out === 'finally' && hits === 3, out + ' hits=' + hits);
+    hits = -100; msg = ''; const t0 = Date.now(); try { await P.streamProvider('flaky', [{ role: 'user', content: 'hi' }], {}, () => {}, undefined, { in: 0, out: 0 }); } catch (e) { msg = e.message; }
+    ok('a 503 that never ends stops after 4 tries with a plain message', /overloaded or down/.test(msg) && hits === -96, msg + ' hits=' + hits);
+    ok('that message contains the company\'s own reason', /overloaded\. Please try again/.test(msg), msg);
+    const ac = new AbortController(); hits = -100; setTimeout(() => ac.abort(), 150); msg = ''; try { await P.streamProvider('flaky', [{ role: 'user', content: 'hi' }], {}, () => {}, ac.signal, { in: 0, out: 0 }); } catch (e) { msg = e.name; }
+    ok('pressing Stop during the wait cancels at once', msg === 'AbortError' && Date.now() - t0 < 20000, msg);
+    flaky.close(); }
   mode = 'ok'; const ml = await P.modelsFor('fake'); ok('modelsFor returns only chat models and says if the current one is fine', JSON.stringify(ml.models) === '["gpt-5-mini","gpt-5"]' && ml.currentOk === true, JSON.stringify(ml));
   ok('setModel changes the model and keeps the key hidden', P.setModel('fake', 'gpt-5').model === 'gpt-5' && !JSON.stringify(P.list()).includes('KEY1234567'));
   ok('setModel refuses junk', /does not look right/.test(throws(() => P.setModel('fake', 'x; echo hacked'))) && /removed/.test(throws(() => P.setModel('nope', 'gpt-5'))));
