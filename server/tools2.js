@@ -100,7 +100,10 @@ const TOOLS = {
   } },
   hash_text: { desc: 'Get a SHA-256 hash of some text. args: {"text": string}', run(a) { return require('crypto').createHash('sha256').update(String(a.text || '')).digest('hex'); } },
   random_number: { desc: 'Pick random whole numbers. args: {"min": number, "max": number, "count": number (optional, default 1)}', run(a) {
-    const lo = Math.ceil(+a.min || 1), hi = Math.floor(+a.max || 100), n = Math.min(Math.max(+a.count || 1, 1), 50); if (hi < lo) throw new Error('"max" must be at least "min"');
+    const has = (v, fallback) => v == null || v === '' ? fallback : Number(v);
+    const lo = Math.ceil(has(a.min, 1)), hi = Math.floor(has(a.max, 100)), n = Math.min(Math.max(Math.floor(has(a.count, 1)), 1), 50);
+    if (![lo, hi, n].every(Number.isFinite)) throw new Error('"min", "max", and "count" must be numbers');
+    if (hi < lo) throw new Error('"max" must be at least "min"');
     return Array.from({ length: n }, () => lo + Math.floor(Math.random() * (hi - lo + 1))).join(', ');
   } },
   system_info: { desc: 'Show this PC\'s basic facts: system, memory, processor count, free disk is not shown. args: {}', run() {

@@ -605,8 +605,9 @@ function aboutUserHint(text, memories) {
 // ---- Broken tool calls: never show them, retry them ----
 // A small model often tries to call a tool and gets the format wrong (bad JSON, wrong tag, a code fence around it).
 // parseTool() then returns null, and the raw command used to be shown to the user as if it were the answer.
-const ATTEMPT_RE = /<\/?tool(?:_call)?\b|<(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|read_file|write_file|edit_file|list_files|delete_file|run_command)\b|\[TOOL_CALLS\]|<\|python_tag\|>|^\s*(?:web_search|fetch_page|platform_[a-z_]+|github_[a-z_]+)\s*\(|"name"\s*:\s*"[a-z_]+"\s*,\s*"(?:args|arguments)"\s*:|^\s*(?:tool_call|TOOL_CALL)\s*[:(]/im;
-const TOOL_NAME_RE = /^(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|read_file|write_file|append_file|edit_file|list_files|search_files|delete_file|make_folder|run_command|studio_[a-z_]+)$/i;
+  const LOCAL_TOOL_NAMES = 'read_file|write_file|append_file|edit_file|list_files|search_files|delete_file|make_folder|json_tool|text_stats|convert_units|hash_text|random_number|system_info';
+  const ATTEMPT_RE = new RegExp('<\\/?tool(?:_call)?\\b|<(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|' + LOCAL_TOOL_NAMES + '|run_command)\\b|\\[TOOL_CALLS\\]|<\\|python_tag\\|>|^\\s*(?:web_search|fetch_page|platform_[a-z_]+|github_[a-z_]+|' + LOCAL_TOOL_NAMES + ')\\s*\\(|"name"\\s*:\\s*"[a-z_]+"\\s*,\\s*"(?:args|arguments)"\\s*:|^\\s*(?:tool_call|TOOL_CALL)\\s*[:(]', 'im');
+  const TOOL_NAME_RE = new RegExp('^(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|' + LOCAL_TOOL_NAMES + '|run_command|studio_[a-z_]+)$', 'i');
 function looksLikeToolAttempt(text) { return ATTEMPT_RE.test(String(text || '')); }
 // Remove any tool-call text from a reply so it can be shown safely. Returns '' when nothing readable is left.
 function stripToolText(text) {
