@@ -8,6 +8,10 @@ import { planFallback } from './fallback.js';
 import { splitThinking, thinkLabel, countWords } from './thinking.js';
 import { splitBlocks, LANGS, cleanLang, extFor, safeFileName, diffLines, diffStats, extractScript, editPrompt, runCommand } from './codeblocks.js';
 import { collapse, groupByDay, dayTitle, applyFilter, summarise, summaryText, info as logInfo, detailRows, fmtTime, FILTERS } from './editlog.js';
+import { canSave, usedText } from './memlimit.js';
+import { loadReader, readerLoaded } from './reader.js';
+import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
+import { READER } from './attach.js';
 import { initAttach, hasAttachments, attachedNames, clearAttachments, prepare } from './attachui.js';
 import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 
@@ -206,6 +210,23 @@ async function ensureEngine(value) {
   engine = await webllm.CreateMLCEngine(id, { initProgressCallback: p => note.textContent = p.text });
   engineModel = id; note.textContent = 'Model ready.'; markReady(id);
 }
+
+
+// The helper AI on the site: its own CPU pipeline, kept apart so loading it never evicts the main model.
+let helperPipe = null, helperId = null;
+async function duoHints(question, h, onStep) {
+  const tf = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
+  if (!helperPipe || helperId !== h.id) {
+    onStep('Duo: loading the helper (' + h.name + ')...');
+    helperPipe = null; helperId = null;
+    const mk = dt => tf.pipeline('text-generation', h.id, { dtype: dt });
+    helperPipe = await mk('q4').catch(() => mk('q8')); helperId = h.id;
+  }
+  const out = await helperPipe([{ role: 'system', content: DUO_SYS }, { role: 'user', content: String(question).slice(0, 1500) }], { max_new_tokens: 160, do_sample: true, temperature: 0.3 });
+  const g = out && out[0] && out[0].generated_text; const last = Array.isArray(g) ? (g[g.length - 1] || {}).content : g;
+  return duoClean(last);
+}
+function dropHelper() { helperPipe = null; helperId = null; }   // frees the helper's memory
 
 // CPU/WASM fallback (transformers.js) for browsers without WebGPU
 let cpuPipe = null, cpuModel = null;
@@ -427,7 +448,21 @@ async function send() {
       }
     } else if (sel.value.startsWith('cpu:')) {
       msg.log('step', 'Running on your phone CPU. This can be slow.', 0);
-      msg.usage(await cpuChat(send_, t => { acc += t; msg.text(acc); }, effort));
+      let toSend = send_;
+      if (duoOn()) {   // two local AIs: a small helper writes hints first. Any problem = one AI answers, never an error.
+        const dp = duoPlan();
+        if (!dp.on) { msg.log('step', dp.why, 0); dropHelper(); }
+        else {
+          try {
+            const hints = await duoHints(text, dp.helper, m => msg.log('step', m, 0));
+            if (hints) {
+              msg.log('step', 'Duo: ' + dp.why, 0);
+              toSend = send_.map((m, i) => i === send_.length - 1 && m.role === 'user' ? { ...m, content: duoWithNotes(m.content, hints) } : m);
+            } else msg.log('step', 'Duo: the helper gave no usable hints, so the main AI answers alone.', 0);
+          } catch (e) { dropHelper(); msg.log('error', 'Duo helper failed (' + (e.message || e) + '). One AI is answering.', 0); }
+        }
+      } else if (helperPipe) dropHelper();
+      msg.usage(await cpuChat(toSend, t => { acc += t; msg.text(acc); }, effort));
     } else if (sel.value.startsWith('web:')) {
       msg.log('step', 'Running on your phone GPU.', 0);
       stopper = () => { try { engine.interruptGenerate(); } catch {} };
@@ -503,6 +538,7 @@ async function paintMemList() {
   const box = $('#a_list'); box.innerHTML = '';
   let list = []; try { list = await Account.list(); } catch (e) { box.innerHTML = '<div class="sys" style="text-align:left">Could not load memories: ' + e.message + '</div>'; return; }
   memories = list.map(m => m.content);
+  const mc = $('#a_memCount'); if (mc) mc.textContent = usedText(list.length, !!server);
   if (!list.length) { box.innerHTML = '<div class="sys" style="text-align:left">Nothing yet. Say "remember that I like short answers".</div>'; return; }
   for (const m of list) {
     const d = document.createElement('div'); d.className = 'mem'; d.innerHTML = '<span></span><button>Forget</button>';
@@ -610,6 +646,8 @@ scPaint();
 async function saveMemory(text) {
   if (!Account.user()) return 'Not saved: log in first (Account tab in Settings).';
   if (!memOn) return 'Not saved: memory is off.';
+  const cap = canSave(memories.length, !!server);   // site keeps 5, the PC app keeps 15
+  if (!cap.ok) return 'Not saved. ' + cap.message;
   try { await Account.remember(text); memories.unshift(text); return 'Saved to memory: ' + text; } catch (e) { return 'Could not save: ' + e.message; }
 }
 // Phones have no agent host, so recognise "remember that ..." in the browser. Same rule as the PC: real content only.
@@ -624,6 +662,7 @@ function render() {
   $('#tLocal').style.display = server ? '' : 'none';
   $('#tBrowser').classList.toggle('on', tab === 'browser'); $('#tLocal').classList.toggle('on', tab === 'local');
   listEl.innerHTML = '';
+  paintDuoBar();
   if (tab === 'browser') {
     const ram = deviceRam(), gpu = hasGPU;
     $('#hw').textContent = gpu
@@ -631,6 +670,7 @@ function render() {
       : 'No usable WebGPU here, so only small CPU models run (slower). Chrome on Android 121+ gives full speed.';
     const list = gpu ? catalog.browser : (catalog.cpu || []);
     const maxTier = !ram ? 2 : ram >= 8 ? 4 : ram >= 6 ? 3 : ram >= 4 ? 2 : 1; // unknown RAM: assume a typical phone
+    paintReaderRow();
     let lastTier = 0;
     for (const m of [...list].sort((a, b) => a.tier - b.tier)) {
       if (m.tier !== lastTier) { lastTier = m.tier; const h = document.createElement('h4'); h.textContent = (catalog.tiers || {})[m.tier] || "Models"; h.style.cssText = 'margin:12px 0 2px;font-size:13px;color:#aab1c3'; listEl.appendChild(h); }
@@ -670,6 +710,63 @@ function render() {
   } else {
     renderPC();
   }
+}
+
+
+// ---- Duo: two local AIs working together. Always switchable off here. ----
+const duoOn = () => localStorage.getItem(DUO_KEY) === '1';
+const duoHelperId = () => localStorage.getItem(DUO_HELPER_KEY) || '';
+// The models the user has downloaded, in the shape the duo rules expect. Site = browser CPU models. PC app = PC models.
+function duoDownloaded() {
+  if (server) return (server.models || []).filter(m => m.downloaded).map(m => ({ id: m.id, name: m.name, size: m.sizeGB ? '~' + m.sizeGB + ' GB' : m.size, caps: m.caps || [] }));
+  const got = saved(); return ((catalog && catalog.cpu) || []).filter(m => got.includes('cpu:' + m.id)).map(m => ({ id: m.id, name: m.name, size: m.size, caps: m.caps || [] }));
+}
+function duoMain() { const v = sel.value || ''; const id = v.replace(/^(cpu:|gguf:)/, ''); return duoDownloaded().find(m => m.id === id) || null; }
+function duoPlan() { return duoPlanFn({ enabled: duoOn(), main: duoMain(), downloaded: duoDownloaded(), chosenId: duoHelperId(), deviceGB: navigator.deviceMemory }); }
+function paintDuoBar() {
+  const bar = document.createElement('div'); bar.className = 'duobar'; bar.style.cssText = 'margin:8px 0;padding:10px 12px;border:1px solid var(--line,#ddd);border-radius:12px';
+  const top = document.createElement('label'); top.style.cssText = 'display:flex;align-items:center;gap:10px;cursor:pointer';
+  const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = duoOn(); cb.id = 'duoSwitch';
+  const t = document.createElement('b'); t.textContent = 'Duo: two local AIs work together'; top.append(cb, t);
+  const info = document.createElement('div'); info.className = 'sys'; info.style.cssText = 'text-align:left;margin-top:6px';
+  const pick = document.createElement('select'); pick.id = 'duoHelper'; pick.style.cssText = 'margin-top:6px;max-width:100%';
+  const paint = () => {
+    const p = duoPlan(), cands = duoHelpers(duoMain(), duoDownloaded());
+    pick.innerHTML = ''; for (const h of cands) pick.add(new Option('Helper: ' + h.name, h.id));
+    if (p.helper) pick.value = p.helper.id; pick.style.display = cb.checked && cands.length ? '' : 'none';
+    info.textContent = !cb.checked ? 'Off. One AI answers. A small second AI can write quick hints first, which makes thinking faster but does not make answers smarter. You can turn it off any time.'
+      : (p.on ? 'On. ' + p.why + ' Hints can be wrong, so the main AI double-checks them.' : 'On, but not active: ' + p.why);
+  };
+  cb.onchange = () => { localStorage.setItem(DUO_KEY, cb.checked ? '1' : '0'); paint(); };
+  pick.onchange = () => { localStorage.setItem(DUO_HELPER_KEY, pick.value); paint(); };
+  bar.append(top, info, pick); listEl.appendChild(bar); paint();
+}
+
+// ---- the picture reader shows up in the library like any other model ----
+const READER_FLAG = 'pholama.reader.ready';   // its own key: the chat-model list filters unknown ids out
+function paintReaderRow() {
+  const h = document.createElement('h4'); h.textContent = 'Picture reader (lets any chat model see pictures)'; h.style.cssText = 'margin:12px 0 2px;font-size:13px;color:var(--mut)'; listEl.appendChild(h);
+  let ready = readerLoaded() || localStorage.getItem(READER_FLAG) === '1';
+  const r = row(READER.name, `~${READER.sizeMB} MB · Reads pictures and photos into words, then your chat model answers. Pair it with Qwen2.5 0.5B (~0.5 GB), about 0.7 GB in total.`, ready ? 'Ready' : 'Download');
+  const chips = document.createElement('div'); chips.className = 'chips2';
+  for (const t of ['Reads pictures', 'Fits any phone', 'Runs on this device']) { const c = document.createElement('span'); c.className = 'chip'; c.textContent = t; chips.appendChild(c); }
+  r.sub.appendChild(chips);
+  const del = mini('Delete', async () => {
+    if (!confirm('Delete the picture reader from this browser?')) return;
+    try { for (const k of await caches.keys()) if (/transformers/i.test(k)) await caches.delete(k); } catch {}
+    localStorage.removeItem(READER_FLAG); render();
+  });
+  r.actions.appendChild(del); del.style.display = ready ? '' : 'none';
+  const idle = (label, isReady) => { r.loader.set(isReady ? 1 : 0); r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = false; r.btn.onclick = start; del.style.display = isReady ? '' : 'none'; };
+  const start = async () => {
+    r.btn.disabled = true; r.bar.style.display = '';
+    try {
+      await loadReader(p => r.setProgress(p.pct / 100));
+      localStorage.setItem(READER_FLAG, '1');
+      idle('Ready', true);
+    } catch (e) { idle('Retry', false); r.sub.textContent = 'Error: ' + e.message; }
+  };
+  idle(ready ? 'Ready' : 'Download', ready);
 }
 // ---- PC models: every row shows size, categories and the exact command. Phone models never appear here. ----
 const PC_CATS = [['all', 'All'], ['tools', 'Tool running'], ['reasoning', 'Reasoning'], ['fast', 'Fast'], ['slow', 'Slow']];

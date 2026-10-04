@@ -51,3 +51,8 @@ pholama rm <model>             # remove just one model
 ```
 
 It removes the app folder, all models, the private Node.js, llama.cpp, the `pholama` command and the Desktop / Start Menu icons. Your browser chats and other programs are not touched.
+
+
+## Duo on the PC
+
+Turn on **Duo** in **Models** to let a small downloaded model prepare hints while a bigger one answers. The PC runs the helper as a second engine on its own port, so pick a helper that is at most 60% of the main model. Both engines are stopped when you close Pholama, when the lag guard stops local AIs, and when you turn Duo off. If memory is tight or the helper fails, Pholama answers with one AI and tells you why. The PC app keeps up to **15** memories.

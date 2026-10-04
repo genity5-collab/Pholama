@@ -1,6 +1,17 @@
 {
- "latest": "0.7.0",
+ "latest": "0.8.0",
  "releases": [
+  {
+   "version": "0.8.0",
+   "date": "2026-10-04",
+   "title": "Duo, memory limits and the picture reader",
+   "notes": [
+    "New Duo switch in Models: a small second AI can write quick hints before your main AI answers. Off by default, switch it off any time. It is a speed option and does not make answers smarter",
+    "The picture reader (SmolVLM 256M) now shows in the Models list so you can download it",
+    "Memory limits: 5 memories on the website, 15 in the PC app, with a clear message when full",
+    "Phone support has ended because phones have too little storage. The website still works there"
+   ]
+  },
   {
    "version": "0.7.0",
    "date": "2026-10-04",

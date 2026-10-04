@@ -80,3 +80,10 @@ On the PC list every model shows a label.
 - **Chat only**: every other model.
 
 The smallest model that really runs tools is Llama 3.2 3B (1.9 GB, 4 GB RAM).
+
+
+## Picture reader and Duo
+
+- **Picture reader (SmolVLM 256M, ~190 MB).** It now has its own row at the top of the **In this browser** list in **Models**. Press **Download** once. It lets any chat model work with pictures by reading them into words first. Pair it with Qwen2.5 0.5B (~0.5 GB), about 0.7 GB in total.
+- **Duo.** The switch at the top of **Models** lets a small helper AI write hints before the main AI answers. It is a speed option, not an accuracy boost, and it can always be switched off. See [Duo](../README.md#duo-two-local-ais-working-together).
+- **Memory.** The website keeps up to 5 memories and the PC app up to 15.

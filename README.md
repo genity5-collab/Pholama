@@ -2,9 +2,10 @@
 
 Run an AI chat **on your own phone or PC**. Free and private.
 
-> **Phone support is ending.** Pholama is moving to the **PC app**: bigger models, tools, web search and Roblox Studio. The phone site stays as a small helper for daily chat, maths and reading pictures. It gets no new features.
+> **Phone support has ended.** Phones do not have enough storage for good models, so Pholama is now built for the **PC app**: bigger models, tools, web search and Roblox Studio.
+> The small website still works on a phone for daily chat, maths and reading pictures, and you can still use Pholama there. It just gets no new features.
 
-## On your phone (3 taps)
+## On your phone (still works, 3 taps)
 
 1. **[Tap here to open Pholama](https://genity5-collab.github.io/Pholama/)** (use Chrome)
 2. Tap **Models**, then tap **Download** on a model.
@@ -25,6 +26,30 @@ Download these two and you can chat, do maths and **send pictures**:
 
 How it works: the reader looks at your picture, then the brain answers using what the reader saw. Everything runs on your phone. Nothing is uploaded.
 Full guide: [Send files and pictures](docs-md/FILES.md).
+
+
+### Memory limits
+
+Pholama can remember facts about you ("remember that I like short answers"). To keep things light:
+
+| Where | Memories you can keep |
+|---|---|
+| The website (phone or browser) | **5** |
+| The PC app | **15** |
+
+When it is full, Pholama tells you and shows how many are used ("5 of 5 memories used"). Open **Settings > Account** and press **Forget** on one to make room.
+
+### Duo: two local AIs working together
+
+Open **Models** and you will see a **Duo** switch at the top. It is **off by default and you can switch it off any time**.
+
+With Duo on, a small second AI (the *helper*) writes quick hints, then your chosen AI (the *main* AI) writes the answer. You pick the helper from the models you have downloaded.
+
+- **What it is good for:** making the thinking step faster. In our test it was about 25% quicker per thinking message.
+- **What it is not:** it does **not** make answers smarter. On 20 test questions the single 1.5B model got 17 right and the duo got 16. Small helpers can be wrong, so the main AI is told the hints may be wrong.
+- **Safe by design:** the helper must be clearly smaller (at most 60% of the main model). It is never the same model. If memory is low, there is no second model, or the helper fails, Pholama quietly uses one AI and tells you why.
+- **PC app:** the helper runs as its own engine. It is stopped when you close Pholama, when the lag guard fires, and when you turn Duo off.
+- **Website:** the helper runs in the browser (CPU). It needs enough device memory to hold two models.
 
 ### Downloads keep their place
 

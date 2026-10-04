@@ -104,6 +104,73 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
   ok('fmtBytes', a.fmtBytes(500) === '1 KB' && a.fmtBytes(2048) === '2 KB' && a.fmtBytes(3 * 1048576) === '3.0 MB');
 })();
 
+
+// ---- duo: two local AIs working together ----
+{
+  const duo = require(path.join(root, 'server/duo.js'));
+  const by = id => cat.find(m => m.id === id);
+  const have = ['smollm2-360m', 'qwen2.5-0.5b', 'qwen2.5-1.5b', 'qwen2.5-7b', 'qwen2.5-coder-1.5b', 'deepseek-r1-1.5b', 'llama3.2-3b'].map(by);
+  const main7 = by('qwen2.5-7b'), main1 = by('qwen2.5-1.5b');
+  const ids = a => a.map(x => x.id).sort().join(',');
+  ok('duo: helper is never the main model', !duo.helperCandidates(main7, have).some(h => h.id === main7.id));
+  ok('duo: helper must be well under the main size (60%)', duo.helperCandidates(main7, have).every(h => h.sizeGB <= main7.sizeGB * 0.6));
+  ok('duo: code and reasoning specialists are not helpers', !duo.helperCandidates(main7, have).some(h => h.id === 'qwen2.5-coder-1.5b' || h.id === 'deepseek-r1-1.5b'));
+  ok('duo: 7B main gets the strongest eligible helper (3B)', duo.pickHelper(main7, have).id === 'llama3.2-3b', duo.pickHelper(main7, have) && duo.pickHelper(main7, have).id);
+  ok('duo: 1.5B main gets a tiny helper, not a bigger model', (() => { const h = duo.pickHelper(main1, have); return h && h.sizeGB <= main1.sizeGB * 0.6; })());
+  ok('duo: smallest main has no helper', duo.pickHelper(by('smollm2-360m'), have) === null);
+  ok('duo: only one model downloaded means no duo', duo.pickHelper(main7, [main7]) === null && duo.pickHelper(main7, []) === null && duo.pickHelper(main7, null) === null);
+  ok('duo: the user\'s own valid choice wins', duo.pickHelper(main7, have, 'qwen2.5-0.5b').id === 'qwen2.5-0.5b');
+  ok('duo: an invalid choice (too big) is ignored, not obeyed', duo.pickHelper(main1, have, 'qwen2.5-7b').id !== 'qwen2.5-7b');
+  ok('duo: null main is safe', duo.helperCandidates(null, have).length === 0 && duo.planDuo({ enabled: true, main: null, downloaded: have }).on === false);
+  ok('duo: off switch means off', duo.planDuo({ enabled: false, main: main7, downloaded: have }).on === false);
+  ok('duo: on with a helper available', (() => { const p = duo.planDuo({ enabled: true, main: main7, downloaded: have, freeGB: 16 }); return p.on && p.helper && /answers/.test(p.why); })());
+  ok('duo: low memory refuses, says why', (() => { const p = duo.planDuo({ enabled: true, main: main7, downloaded: have, freeGB: 2 }); return !p.on && /Not enough free memory/.test(p.why); })());
+  ok('duo: unknown memory does not block', duo.planDuo({ enabled: true, main: main7, downloaded: have }).on === true);
+  ok('duo: no second model explains itself', /second, smaller chat model/.test(duo.planDuo({ enabled: true, main: main7, downloaded: [main7] }).why));
+  ok('notes: normal notes pass', duo.cleanNotes('- asked: add numbers\n- 17+25=42') === '- asked: add numbers\n- 17+25=42');
+  ok('notes: a one-line direct answer is dropped (it could be wrong)', duo.cleanNotes('There are 4 rows of 6 apples left.') === '' && duo.cleanNotes('The capital of France is Paris.') === '');
+  ok('notes: think tags and nulls are removed', duo.cleanNotes('<think>asked: add the numbers\nstep: 17+25\u0000</think>') === 'asked: add the numbers\nstep: 17+25');
+  ok('notes: too short is dropped', duo.cleanNotes('ok') === '' && duo.cleanNotes(null) === '' && duo.cleanNotes(undefined) === '');
+  ok('notes: a refusal is not notes', duo.cleanNotes('Sorry, I cannot help with that request.') === '' && duo.cleanNotes("I can't do that for you, sorry") === '');
+  ok('notes: long notes are cut on a word', (() => { const n = duo.cleanNotes(('word '.repeat(30) + '\n').repeat(20), 100); return n.length <= 104 && n.endsWith(' ...'); })());
+  ok('withNotes: appends the notes to the user text', (() => { const t = duo.withNotes('What is 17+25?', 'asked: add two numbers\nadd the two numbers: 42'); return t.startsWith('What is 17+25?') && t.includes('add the two numbers: 42') && /final answer/.test(t) && /may be wrong/.test(t); })());
+  ok('withNotes: bad notes leave the question untouched', duo.withNotes('hello', 'sorry, I cannot') === 'hello' && duo.withNotes('hello', '') === 'hello' && duo.withNotes(null, 'x') === '');
+  ok('helper prompt forbids the final answer', /Never greet, never write the final answer/.test(duo.HELPER_SYSTEM));
+}
+
+
+// ---- memory limits: site 5, PC app 15 ----
+(async () => {
+  const m = await import(path.join(root, 'web/memlimit.js'));
+  ok('memory: site limit is 5, PC limit is 15', m.limitFor(false) === 5 && m.limitFor(true) === 15);
+  ok('memory: site saves up to 5', m.canSave(0, false).ok && m.canSave(4, false).ok && m.canSave(4, false).left === 0);
+  ok('memory: site is full at 5 and says how to free space', (() => { const r = m.canSave(5, false); return !r.ok && /full \(5 of 5\)/.test(r.message) && /Forget one in Account/.test(r.message) && /PC app keeps up to 15/.test(r.message); })());
+  ok('memory: PC saves up to 15, full at 15', m.canSave(14, true).ok && !m.canSave(15, true).ok && !/PC app keeps/.test(m.canSave(15, true).message));
+  ok('memory: over the limit stays refused (old accounts with more)', !m.canSave(40, false).ok && !m.canSave(99, true).ok);
+  ok('memory: bad counts are safe', m.canSave(undefined, false).ok && m.canSave(-3, true).ok && m.canSave('x', false).ok);
+  ok('memory: usage text', m.usedText(3, false) === '3 of 5 memories used' && m.usedText(15, true) === '15 of 15 memories used');
+})();
+
+
+// ---- duo in the browser (site + PC page) ----
+(async () => {
+  const d = await import(path.join(root, 'web/duo.js'));
+  const M = (id, size, caps = ['chat']) => ({ id, name: id, size, caps });
+  const big = M('big', '~1.0 GB'), mid = M('mid', '~0.5 GB'), tiny = M('tiny', '~0.3 GB'), coder = M('coder', '~0.2 GB', ['chat', 'code']);
+  ok('bduo: sizes read from catalog text', d.sizeMB(M('a', '~0.4 GB')) === 410 && d.sizeMB(M('a', '~190 MB')) === 190 && d.sizeMB(M('a', 'huge')) === 0 && d.sizeMB(null) === 0);
+  ok('bduo: never the same model, never above 60%', (() => { const h = d.helpers(big, [big, mid, tiny, M('close', '~0.7 GB')]); return !h.includes(big) && h.includes(mid) && h.includes(tiny) && !h.some(x => x.id === 'close'); })());
+  ok('bduo: code models are not helpers', !d.helpers(big, [tiny, coder]).includes(coder));
+  ok('bduo: picks the strongest allowed, honours a valid choice', d.pickHelper(big, [tiny, M('t2', '~0.1 GB')]).id === 'tiny' && d.pickHelper(big, [tiny, M('t2', '~0.1 GB')], 't2').id === 't2');
+  ok('bduo: nothing downloaded is safe', d.pickHelper(big, []) === null && d.pickHelper(big, null) === null && d.pickHelper(null, [tiny]) === null);
+  ok('bduo: off means off', d.plan({ enabled: false, main: big, downloaded: [tiny] }).on === false);
+  ok('bduo: on with a helper', (() => { const p = d.plan({ enabled: true, main: big, downloaded: [tiny], deviceGB: 8 }); return p.on && p.helper.id === 'tiny'; })());
+  ok('bduo: refuses when device memory is too low, says why', (() => { const p = d.plan({ enabled: true, main: big, downloaded: [tiny], deviceGB: 2 }); return !p.on && /too little/.test(p.why); })());
+  ok('bduo: unknown device memory does not block', d.plan({ enabled: true, main: big, downloaded: [tiny] }).on === true);
+  ok('bduo: no helper explains itself', /second, smaller/.test(d.plan({ enabled: true, main: big, downloaded: [big] }).why));
+  ok('bduo: one-line answers and refusals are not hints', d.cleanNotes('It is 19.') === '' && d.cleanNotes('Sorry, I cannot') === '' && d.cleanNotes('a: b\nc: d') !== '');
+  ok('bduo: hints are marked as possibly wrong', /may be wrong/.test(d.withNotes('q?', 'asked: x\nstep: y')) && d.withNotes('q?', 'bad') === 'q?');
+})();
+
 // ---- dashboard logic ----
 (async () => {
   const d = await import(path.join(root, 'web/dashboard.js'));

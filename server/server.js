@@ -81,7 +81,8 @@ async function stopLlama(onlyFile) {
 }
 // Stops every LOCAL model: the llama-server child and any Ollama model this app loaded. Nothing in the cloud or the browser is touched.
 async function stopAllLocal() {
-  const had = !!llama || ollamaUsed.size > 0;
+  const had = !!llama || ollamaUsed.size > 0 || helperEng.isUp();
+  await helperEng.stop();
   await stopLlama();
   for (const m of [...ollamaUsed]) {
     try { await fetch(OLLAMA + '/api/generate', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: m, keep_alive: 0 }), signal: AbortSignal.timeout(4000) }); } catch {}
@@ -91,9 +92,13 @@ async function stopAllLocal() {
 }
 // Killing right now, without waiting (used when the process is going away and cannot await anything).
 function killLocalNow() {
+  try { helperEng.killNow(); } catch {}
   try { if (llama) llama.kill('SIGKILL'); } catch {}
   llama = null; llamaModel = null; try { fs.unlinkSync(PIDFILE); } catch {}
 }
+const duoMod = require('./duo');
+const helperEng = require('./helper-engine').create({ findBin: () => findLlamaServer(), modelsDir: MODELS_DIR, get: u => get(u), log: m => console.log('  ' + m) });
+try { helperEng.cleanupStale(); } catch {}
 let llamaCtx = 4096, llamaReady = false, startChain = Promise.resolve();
 // Only ONE start/restart may run at a time. Two messages arriving together used to launch two engines on the same port;
 // the second one crashed ("couldn't bind") and the chat went dead. Later callers now wait their turn and re-check.
@@ -407,9 +412,31 @@ async function chat(req, res, b) {
       const tmsgs = [{ role: 'system', content: 'You are the private thinking step of an assistant. Write ONLY working notes for yourself, never the final answer. ' + depth + ' Plain text, no greeting.' }, ...messages.filter(m => m.role !== 'system').slice(-6)];
       const tt0 = Date.now(); let notes = ''; log('thought', 'Thinking (' + effortUse + ')...');
       line({ model, message: { role: 'assistant', content: '<think>' }, done: false });
-      try {
-        await streamTurn(model, tmsgs, { ...opts, num_predict: effortUse === 'max' ? 700 : effortUse === 'long' ? 420 : 220, temperature: 0.4 }, t => { notes += t; line({ model, message: { role: 'assistant', content: t }, done: false }); }, ac.signal, usage);
-      } catch (e) { log('error', 'Thinking pass failed (' + e.message + '). Answering without it.'); }
+      const think = { ...opts, num_predict: effortUse === 'max' ? 700 : effortUse === 'long' ? 420 : 220, temperature: 0.4 };
+      const onTok = t => { notes += t; line({ model, message: { role: 'assistant', content: t }, done: false }); };
+      let usedHelper = false;
+      if (b.duo === true && model.startsWith('gguf:')) {   // duo: a small second AI writes the notes, the main AI answers
+        try {
+          const mainM = CATALOG.find(x => x.id === model.replace(/^gguf:/, ''));
+          const got = CATALOG.filter(x => fs.existsSync(path.join(MODELS_DIR, x.file)));
+          const plan = duoMod.planDuo({ enabled: true, main: mainM, downloaded: got, chosenId: b.duoHelper, freeGB: require('./guard').freeMemMB() / 1024 });
+          if (!plan.on) log('step', plan.why + ' Using one AI.');
+          else {
+            await helperEng.start(plan.helper.file, 2048);
+            log('step', 'Duo: ' + plan.why);
+            const hm = [{ role: 'system', content: duoMod.HELPER_SYSTEM }, ...messages.filter(m => m.role !== 'system').slice(-4)];
+            const r = await fetch(`http://127.0.0.1:${helperEng.port}/v1/chat/completions`, { method: 'POST', signal: ac.signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ messages: hm, stream: false, max_tokens: think.num_predict, temperature: 0.3 }) });
+            if (!r.ok) throw new Error('helper HTTP ' + r.status);
+            const j = await r.json(); const txt = duoMod.cleanNotes(j.choices && j.choices[0] && j.choices[0].message && j.choices[0].message.content);
+            if (!txt) throw new Error('the helper gave no usable notes');
+            onTok(txt); usedHelper = true;
+          }
+        } catch (e) { notes = ''; log('error', 'Duo helper failed (' + e.message + '). The main AI thinks for itself.'); try { await helperEng.stop(); } catch {} }
+      }
+      if (!usedHelper) {
+        try { await streamTurn(model, tmsgs, think, onTok, ac.signal, usage); }
+        catch (e) { log('error', 'Thinking pass failed (' + e.message + '). Answering without it.'); }
+      }
       line({ model, message: { role: 'assistant', content: '</think>\n' }, done: false });
       notes = notes.replace(/<\/?think>/g, '').trim();
       if (notes) {
@@ -686,7 +713,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/update' && req.method === 'GET') return json(res, 200, require('./update').status());
     if (p === '/api/update/check' && req.method === 'POST') return json(res, 200, await require('./update').backgroundCheck());
     if (p === '/api/update/auto' && req.method === 'POST') { const b = await body(req); return json(res, 200, require('./update').setAuto(b.auto !== false)); }
-    if (p === '/api/guard') { const n = guardNote; guardNote = null; return json(res, 200, { stopped: n, loaded: !!llama || ollamaUsed.size > 0 }); }
+    if (p === '/api/guard') { const n = guardNote; guardNote = null; return json(res, 200, { stopped: n, loaded: !!llama || helperEng.isUp() || ollamaUsed.size > 0 }); }
     if (p === '/api/stop-local' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); const had = await stopAllLocal(); return json(res, 200, { ok: true, stopped: had }); }
     if (p === '/api/hardware') { const h = hardware(); return json(res, 200, { hardware: h, ollama: await ollamaUp(), llamaServer: !!findLlamaServer(), toolAI: await hasToolAI(), models: recommend(h) }); }
     if (p === '/api/tags') return json(res, 200, { models: await listModels() });
@@ -753,7 +780,7 @@ server.listen(PORT, HOST, () => {
 });
 // ---------- lag guard: if the PC starts struggling, stop the local AIs (and only those) ----------
 const guard = require('./guard').createGuard({
-  isLoaded: () => !!llama || ollamaUsed.size > 0,
+  isLoaded: () => !!llama || helperEng.isUp() || ollamaUsed.size > 0,
   startedAt: () => llamaStartedAt,
   stopLocal: () => stopAllLocal(),
   onStop: (why) => { guardNote = { at: Date.now(), why }; console.log('\n  Lag guard: ' + why + '. Stopped all local AIs. Cloud Agent Max is not affected.\n'); },
