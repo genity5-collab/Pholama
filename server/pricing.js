@@ -10,11 +10,12 @@ const CODE_PER_1000 = 2;     // per 1000 characters of pasted code, rounded up
 const CODE_MIN = 2;          // any pasted code costs at least this
 const CODE_MAX = 30;         // but one message never costs more than this for code
 const STUDIO_MESSAGE = 3;    // per Studio message
+const MAX_STUDIO = 20;       // extra per Studio message when Agent Max does the thinking (it makes several cloud calls per build)
 const MAX_IMAGES = 4;        // same as the app's file limit
 
 const whole = (n, hi) => { n = Math.floor(+n); return Number.isFinite(n) && n > 0 ? Math.min(n, hi) : 0; };
 
-// extras: { images: number, codeChars: number, studio: boolean }  (anything else is ignored)
+// extras: { images: number, codeChars: number, studio: boolean, maxStudio: boolean }  (anything else is ignored)
 function extraCost(extras) {
   const e = extras && typeof extras === 'object' ? extras : {};
   const images = whole(e.images, MAX_IMAGES);
@@ -23,7 +24,8 @@ function extraCost(extras) {
   const img = images * IMAGE_EACH;
   const code = codeChars ? Math.min(CODE_MAX, Math.max(CODE_MIN, Math.ceil(codeChars / 1000) * CODE_PER_1000)) : 0;
   const stu = studio ? STUDIO_MESSAGE : 0;
-  return { images, codeChars, studio, img, code, stu, total: img + code + stu };
+  const maxStudio = studio && e.maxStudio === true, mx = maxStudio ? MAX_STUDIO : 0;   // Agent Max in Studio only counts inside Studio
+  return { images, codeChars, studio, maxStudio, img, code, stu, mx, total: img + code + stu + mx };
 }
 
 // How much of a user's own message is pasted code: text inside ``` fences, plus any very long single paste with code-like lines.
@@ -44,7 +46,8 @@ function describe(c) {
   if (c.img) parts.push(`${c.images} picture${c.images === 1 ? '' : 's'} ${c.img}`);
   if (c.code) parts.push(`pasted code ${c.code}`);
   if (c.stu) parts.push(`Studio ${c.stu}`);
+  if (c.mx) parts.push(`Agent Max in Studio ${c.mx}`);
   return parts.join(' + ');
 }
 
-module.exports = { IMAGE_EACH, CODE_PER_1000, CODE_MIN, CODE_MAX, STUDIO_MESSAGE, MAX_IMAGES, extraCost, codeCharsIn, describe };
+module.exports = { MAX_STUDIO, IMAGE_EACH, CODE_PER_1000, CODE_MIN, CODE_MAX, STUDIO_MESSAGE, MAX_IMAGES, extraCost, codeCharsIn, describe };

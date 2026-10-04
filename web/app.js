@@ -15,6 +15,7 @@ import { canSave, usedText } from './memlimit.js';
 import { loadReader, readerLoaded } from './reader.js';
 import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
 import { READER } from './attach.js';
+import { buildKeysPanel, friendlyModelName } from './keys.js';
 import { initAttach, hasAttachments, attachedNames, clearAttachments, prepare } from './attachui.js';
 
 const $ = s => document.querySelector(s);
@@ -215,7 +216,7 @@ async function refreshSelect() {
   }
   if (server) try {
     const t = await (await api('api/tags')).json();
-    for (const m of t.models) sel.add(new Option('💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
+    for (const m of t.models) sel.add(new Option(m.hosted ? '🔑 ' + (m.label || m.name.replace(/^byok:/, '')) : '💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
     shareRecentAis(t.models.map(m => m.name));
   } catch {}
   sel.add(new Option('☁ ' + MAX_NAME + ' (cloud, no download)', CLOUD_ID));
@@ -764,6 +765,7 @@ function render() {
   $('#tBrowser').classList.toggle('on', tab === 'browser'); $('#tLocal').classList.toggle('on', tab === 'local');
   listEl.innerHTML = '';
   paintDuoBar();
+  if (server && !remoteBase()) buildKeysPanel({ api, parent: listEl, onChange: () => { refreshSelect(); } });
   if (tab === 'browser') {
     const ram = deviceRam(), gpu = hasGPU;
     $('#hw').textContent = gpu

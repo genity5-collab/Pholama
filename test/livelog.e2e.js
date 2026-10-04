@@ -53,7 +53,7 @@ s.end(JSON.stringify({choices:[{message:{content:out}}]}))})}).listen(port,'127.
     const done = fe.find(e => e.status === 'ok' && e.path === 't.js' && e.id);
     ok('then a Done entry with the same id', !!done && fe.some(e => e.status === 'working' && e.id === done.id), JSON.stringify(fe));
     ok('with correct line counts (+2 / -1)', !!done && done.added === 2 && done.removed === 1, JSON.stringify(done));
-  } finally { srv.kill('SIGKILL'); }
+  } finally { srv.kill('SIGKILL'); await wait(400); try { process.kill(+fs.readFileSync(path.join(home, '.pholama', 'llama.pid'), 'utf8'), 'SIGKILL'); } catch {} }
   console.log(bad ? bad + ' FAILED' : 'ALL PASSED'); process.exit(bad ? 1 : 0);
 }
 main().catch(e => { console.error(e); process.exit(1); });

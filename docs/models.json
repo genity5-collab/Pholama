@@ -1630,6 +1630,157 @@
    "toolTier": "good",
    "released": "2025-10",
    "added": "2026-10-04"
+  },
+  {
+   "id": "hermes3-llama3.2-3b",
+   "name": "Hermes 3 (Llama 3.2) 3B",
+   "family": "Hermes",
+   "params": "3B",
+   "url": "https://huggingface.co/bartowski/Hermes-3-Llama-3.2-3B-GGUF/resolve/main/Hermes-3-Llama-3.2-3B-Q4_K_M.gguf",
+   "file": "Hermes-3-Llama-3.2-3B-Q4_K_M.gguf",
+   "bytes": 2019374176,
+   "sizeGB": 1.88,
+   "minRamGB": 4,
+   "ctx": 8192,
+   "categories": [
+    "tools",
+    "agents"
+   ],
+   "blurb": "Nous Research Hermes 3 on the Llama 3.2 3B base. Trained on the exact tool-calling format Pholama uses, so it is a strong pick for agent work at 3B size.",
+   "license": "Llama 3.2 Community",
+   "caps": [
+    "chat",
+    "tools"
+   ],
+   "command": "pholama pull hermes3-llama3.2-3b",
+   "toolTier": "good",
+   "released": "2024-09",
+   "added": "2026-10-04"
+  },
+  {
+   "id": "llama3.2-3b-q6",
+   "name": "Llama 3.2 3B Instruct (high quality)",
+   "family": "Llama",
+   "params": "3B",
+   "url": "https://huggingface.co/bartowski/Llama-3.2-3B-Instruct-GGUF/resolve/main/Llama-3.2-3B-Instruct-Q6_K_L.gguf",
+   "file": "Llama-3.2-3B-Instruct-Q6_K_L.gguf",
+   "bytes": 2739276320,
+   "sizeGB": 2.55,
+   "minRamGB": 5,
+   "ctx": 8192,
+   "categories": [
+    "tools"
+   ],
+   "blurb": "The same Llama 3.2 3B, saved at higher quality (Q6_K_L). Small models lose the most from compression, so tool calls and search queries come out more accurate. Needs about 1 GB more memory.",
+   "license": "Llama 3.2 Community",
+   "caps": [
+    "chat",
+    "tools"
+   ],
+   "command": "pholama pull llama3.2-3b-q6",
+   "toolTier": "good",
+   "released": "2024-09",
+   "added": "2026-10-04"
+  },
+  {
+   "id": "granite3.1-3b-a800m",
+   "name": "Granite 3.1 3B (fast MoE)",
+   "family": "Granite",
+   "params": "3B (0.8B active)",
+   "url": "https://huggingface.co/bartowski/granite-3.1-3b-a800m-instruct-GGUF/resolve/main/granite-3.1-3b-a800m-instruct-Q4_K_M.gguf",
+   "file": "granite-3.1-3b-a800m-instruct-Q4_K_M.gguf",
+   "bytes": 2016888384,
+   "sizeGB": 1.88,
+   "minRamGB": 4,
+   "ctx": 8192,
+   "categories": [
+    "fast"
+   ],
+   "blurb": "IBM Granite 3.1 mixture-of-experts: 3B in size but only 0.8B works on each word, so it answers quickly on a normal PC. Marked simple tools only until it has been tested here.",
+   "license": "Apache 2.0",
+   "caps": [
+    "chat",
+    "fast"
+   ],
+   "command": "pholama pull granite3.1-3b-a800m",
+   "toolTier": "basic",
+   "released": "2024-12",
+   "added": "2026-10-04"
+  },
+  {
+   "id": "dolphin3-llama3.2-3b",
+   "name": "Dolphin 3.0 (Llama 3.2) 3B",
+   "family": "Dolphin",
+   "params": "3B",
+   "url": "https://huggingface.co/bartowski/Dolphin3.0-Llama3.2-3B-GGUF/resolve/main/Dolphin3.0-Llama3.2-3B-Q4_K_M.gguf",
+   "file": "Dolphin3.0-Llama3.2-3B-Q4_K_M.gguf",
+   "bytes": 2019382400,
+   "sizeGB": 1.88,
+   "minRamGB": 4,
+   "ctx": 8192,
+   "categories": [
+    "fast"
+   ],
+   "blurb": "Llama 3.2 3B tuned for following instructions and chat. Handles simple tool steps but is less reliable than Llama 3.2 or Hermes on multi-step work.",
+   "license": "Llama 3.2 Community",
+   "caps": [
+    "chat",
+    "fast"
+   ],
+   "command": "pholama pull dolphin3-llama3.2-3b",
+   "toolTier": "basic",
+   "released": "2024-12",
+   "added": "2026-10-04"
+  },
+  {
+   "id": "falcon3-3b",
+   "name": "Falcon3 3B Instruct",
+   "family": "Falcon",
+   "params": "3B",
+   "url": "https://huggingface.co/bartowski/Falcon3-3B-Instruct-GGUF/resolve/main/Falcon3-3B-Instruct-Q4_K_M.gguf",
+   "file": "Falcon3-3B-Instruct-Q4_K_M.gguf",
+   "bytes": 2005684480,
+   "sizeGB": 1.87,
+   "minRamGB": 4,
+   "ctx": 8192,
+   "categories": [
+    "fast"
+   ],
+   "blurb": "TII Falcon3 3B. A different family from Llama and Qwen, good at reasoning and maths for its size. Simple tools only.",
+   "license": "Falcon LLM",
+   "caps": [
+    "chat",
+    "fast"
+   ],
+   "command": "pholama pull falcon3-3b",
+   "toolTier": "basic",
+   "released": "2024-12",
+   "added": "2026-10-04"
+  },
+  {
+   "id": "exaone3.5-2.4b",
+   "name": "EXAONE 3.5 2.4B",
+   "family": "EXAONE",
+   "params": "2.4B",
+   "url": "https://huggingface.co/bartowski/EXAONE-3.5-2.4B-Instruct-GGUF/resolve/main/EXAONE-3.5-2.4B-Instruct-Q4_K_M.gguf",
+   "file": "EXAONE-3.5-2.4B-Instruct-Q4_K_M.gguf",
+   "bytes": 1644918816,
+   "sizeGB": 1.53,
+   "minRamGB": 4,
+   "ctx": 8192,
+   "categories": [
+    "fast"
+   ],
+   "blurb": "LG EXAONE 3.5, small and quick, strong at following instructions in English and Korean. Simple tools only.",
+   "license": "EXAONE AI Model",
+   "caps": [
+    "chat",
+    "fast"
+   ],
+   "command": "pholama pull exaone3.5-2.4b",
+   "toolTier": "basic",
+   "released": "2024-12",
+   "added": "2026-10-04"
   }
  ],
  "cpu": [

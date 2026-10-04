@@ -162,6 +162,7 @@ export function createStudio(env) {
     if (!S.project) { say('Make a project first: press New.', 'err'); return; }
     save.flush(); await new Promise(r => setTimeout(r, 60));   // make sure the AI sees what the user just typed
     const model = getModel(); if (!model) { say('Pick a model at the top first.', 'err'); return; }
+    if (model === 'cloud:pholama' && !S.maxWarned) { S.maxWarned = true; say('Agent Max in Studio costs more: about 23 credits a message, plus up to 8 Max messages from your daily and monthly allowance. If Max runs out, your own model on this PC takes over for free.', 'warn'); }
     S.busy = true; el.stSend.textContent = 'Stop'; say(text, 'me'); hist.push({ role: 'user', content: text }); if (hist.length > 8) hist.splice(0, hist.length - 8);
     const ac = new AbortController(); S.stopper = () => ac.abort(); let reply = '', node = null, srcCard = null, thinkNode = null;
     try {

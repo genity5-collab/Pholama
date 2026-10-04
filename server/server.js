@@ -12,6 +12,7 @@ const sec = require('./security');
 
 const PORT = +process.env.PORT || 11435;
 const HOST = process.env.HOST || '127.0.0.1'; // set HOST=0.0.0.0 to chat from your phone on same WiFi
+const providers = require('./providers'), maxcloud = require('./maxcloud');
 const OLLAMA = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const LLAMA_PORT = 11436;
 const { fitToContext, chooseContext } = require('./fit');
@@ -276,6 +277,11 @@ const capCache = {};
 async function modelCaps(model) {
   if (capCache[model]) return capCache[model];
   let caps = null;
+  if (model === 'cloud:pholama') return { tools: true, tier: 'good', thinking: false, source: 'max' };   // Agent Max in Studio: the cloud writes, this PC does the file work
+  if (model.startsWith('byok:')) {   // your own hosted model: these all understand the tool format, so they count as a full agent
+    const pv = providers.get(model.slice(5)); const tl = !!(pv && pv.tools);
+    return (capCache[model] = { tools: tl, tier: tl ? 'good' : 'basic', thinking: false, source: 'byok' });
+  }
   if (model.startsWith('ollama:')) {
     try {
       const r = await fetch(OLLAMA + '/api/show', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model.slice(7) }) });
@@ -294,7 +300,8 @@ async function modelCaps(model) {
 }
 
 // Streams ONE model turn from whichever backend serves `model`, calling onToken(text). Returns the full text.
-async function streamTurn(model, messages, options, onToken, signal, usage) {
+async function streamTurnBase(model, messages, options, onToken, signal, usage) {
+  if (model.startsWith('byok:')) return providers.streamProvider(model.slice(5), messages, options, onToken, signal, usage);
   if (model.startsWith('ollama:')) {
     ollamaUsed.add(model.slice(7)); if (!llamaStartedAt || !ollamaUsed.size) llamaStartedAt = Date.now();
     const r = await fetch(OLLAMA + '/api/chat', { method: 'POST', signal, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model.slice(7), messages, options, stream: true }) });
@@ -346,12 +353,15 @@ const NO_WEB = 'I can\'t browse the web or get live data with this model. I answ
 // Chat endpoint. Plain Ollama-style NDJSON. Extra event types: {tool:{...}} / {status:"..."} / {credits:{...}}.
 async function chat(req, res, b) {
   const model = b.model || '';
-  res.writeHead(200, { 'Content-Type': 'application/x-ndjson', ...(res.cors || {}), 'Cache-Control': 'no-cache' });
+  if (!res.headersSent) res.writeHead(200, { 'Content-Type': 'application/x-ndjson', ...(res.cors || {}), 'Cache-Control': 'no-cache' });
   const line = (o) => res.write(JSON.stringify(o) + '\n');
   const t0 = Date.now(), log = (kind, text) => line({ log: { kind, text, t: +((Date.now() - t0) / 1000).toFixed(1) } });
   const ac = new AbortController(); res.on('close', () => ac.abort());
+  // Agent Max as the brain: one cloud call per step, capped per message. Everything else goes to the normal backends.
+  const maxBudget = maxcloud.newBudget(), maxToken = String(req.headers['x-pholama-token'] || '').slice(0, 4000);
+  const streamTurn = (m, msgs, o, onTok, sig, u) => m === 'cloud:pholama' ? maxcloud.streamMax(maxToken, msgs, o, onTok, sig, u, maxBudget) : streamTurnBase(m, msgs, o, onTok, sig, u);
   try {
-    log('step', 'Got your message. Model: ' + model.replace(/^(gguf|ollama):/, ''));
+    log('step', 'Got your message. Model: ' + model.replace(/^(gguf|ollama|byok|cloud):/, ''));
     if (memUnloaded) { log('step', memUnloaded); memUnloaded = ''; }   // explain why the AI had to load again
     const allow = b.agent ? agent.allowed() : { search: false, tools: false, mcp: false, thinking: false };
     // 1) The model must be able to do it. 2) The per-message switch in the page must be on. 3) Credits (already in `allow`).
@@ -365,7 +375,9 @@ async function chat(req, res, b) {
     // Memory is its own switch (set by the signed-in user in the browser). It costs credits, so it is off at 0 credits.
     const memOn = !!(b.agent && canTools && b.memory === true && true);
     if (b.agent && b.memory === true && !memOn) log('error', !canTools ? 'Memory is on, but this model cannot use tools, so it cannot save new memories. Saved notes are still used.' : 'Memory is on, but there are not enough credits to save new memories today.');
-    const inStudio = !!(b.studio && b.studio.project && req.who === 'local'), stu = require('./studio');   // a remote API key can never make the AI touch files on this PC
+    const inStudio = !!(b.studio && b.studio.project && req.who === 'local'), stu = require('./studio');
+    if (model === 'cloud:pholama' && !inStudio) { line({ status: 'Agent Max runs from the Chat box in the page. Here it only works inside Studio. Pick a model from this PC, or open Studio.' }); log('error', 'Agent Max in this box only works inside Studio.'); line({ message: { role: 'assistant', content: '' }, done: true }); return res.end(); }
+    const maxStudio = inStudio && model === 'cloud:pholama';   // a remote API key can never make the AI touch files on this PC
     if (inStudio) { allow.studio = true; if (canTools && !allow.github && (req.headers['x-github-token'] || '')) allow.github = sw.github !== false; }   // Studio tools are local and free; GitHub only with the user's own token
     const { tools } = await agent.buildTools({ ...allow, memory: memOn, inStudio });
     if (inStudio && !canTools) log('error', 'This model cannot use tools, so it cannot build in Studio. Pick a model tagged "tools" (Qwen3 0.6B is the smallest).');
@@ -392,11 +404,12 @@ async function chat(req, res, b) {
     let extraSpent = 0;
     if (b.agent) {
       const lastUser = (() => { const u = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return u ? String(u.content) : ''; })();
-      const want = pricing.extraCost({ images: b.images, codeChars: pricing.codeCharsIn(lastUser), studio: inStudio });
+      const want = pricing.extraCost({ images: b.images, codeChars: pricing.codeCharsIn(lastUser), studio: inStudio, maxStudio });
       if (want.total > 0) {
         if (agent.credits().left >= want.total && agent.spend(want.total)) {
           extraSpent = want.total;
           log('step', `Spent ${want.total} credits (${pricing.describe(want)}). ${agent.credits().left} left.`);
+          if (want.mx) log('action', `Agent Max in Studio: ${want.mx} extra credits, and up to ${maxcloud.MAX_CALLS} Max messages from your daily and monthly allowance.`);
           line({ credits: { spent: want.total, left: agent.credits().left } });
         } else {
           log('error', `Not enough credits for ${pricing.describe(want)} (${want.total} needed, ${agent.credits().left} left). Your chat still works. It is free on your own model.`);
@@ -408,6 +421,7 @@ async function chat(req, res, b) {
     const opts = { ...(b.options || {}) }; if (effortUse !== 'normal') opts.num_predict = effortUse === 'max' ? 2048 : 1024;
     if (effortUse !== 'normal') log('step', 'Effort: ' + effortUse);
     const usage = { in: 0, out: 0, got: false }, t1 = Date.now();
+    let searchRan = false;   // did a real search / page / GitHub tool run this message? If not, a reply that says it found results is invented.
     const origUserText = (() => { const u = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return u ? String(u.content) : ''; })();
     if (inStudio) {   // Studio: only the last few turns, and never the model's own <think> notes, so a small model stays on the request instead of looping
       const cl = t => String(t || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/<\/?think>/g, '').trim();
@@ -542,7 +556,6 @@ async function chat(req, res, b) {
       }
     }
     let lazyTried = false;   // one firm retry per message when the AI refuses normal work as 'too complex'
-    let searchRan = false;   // did a real search / page / GitHub tool run this message? If not, a reply that says it found results is invented.
     const seenCalls = {}; let badCalls = 0; const failedTry = {}; let retrying = false;   // retrying: a repair round whose words must not be shown twice
     const MAX_ROUNDS = inStudio ? 14 : 5;   // building an app takes many tool steps
     for (let round = 0; round < MAX_ROUNDS && !guidedDone; round++) {
@@ -633,7 +646,15 @@ async function chat(req, res, b) {
     log('step', `Done. ${agent.credits().left} credits left.`);
     line({ credits: agent.credits() });
     line({ model, message: { role: 'assistant', content: '' }, done: true });
-  } catch (e) { line({ error: e.message, done: true }); }
+  } catch (e) {
+    // Agent Max ran out (day or month): keep working on this PC's own model, free, instead of stopping.
+    if (model === 'cloud:pholama' && e && e.limit && !b._fellBack) {
+      const have = CATALOG.filter(m => fs.existsSync(path.join(MODELS_DIR, m.file)) && m.toolTier && m.toolTier !== 'none');
+      const pick = have.find(m => m.toolTier === 'good') || have[0];
+      if (pick) { log('action', e.message + ' Switching to ' + pick.name + ' on this PC. It is free.'); line({ fallback: { from: 'cloud:pholama', to: 'gguf:' + pick.id } }); return chat(req, res, { ...b, model: 'gguf:' + pick.id, _fellBack: true }); }
+    }
+    line({ error: e.message, done: true });
+  }
   res.end();
 }
 
@@ -676,6 +697,7 @@ async function hasToolAI() {
 async function listModels() {   // Ollama-compatible model list (ours + Ollama's)
   const list = CATALOG.filter(m => fs.existsSync(path.join(MODELS_DIR, m.file))).map(m => ({ name: 'gguf:' + m.id, model: 'gguf:' + m.id, size: m.sizeGB * 2 ** 30 }));
   if (await ollamaUp()) { try { const o = JSON.parse((await get(OLLAMA + '/api/tags')).body); for (const m of o.models || []) list.push({ ...m, name: 'ollama:' + m.name, model: 'ollama:' + m.name }); } catch {} }
+  for (const pv of providers.list()) list.push({ name: 'byok:' + pv.id, model: 'byok:' + pv.id, size: 0, label: pv.name + ' (' + pv.model + ')', hosted: true });
   return list;
 }
 
@@ -746,7 +768,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/github/approve' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ok: true, text: await agent.github.confirm(String(req.headers['x-github-token'] || ''), String(b.id || ''), b.approve === true) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); } }
     // ---- commands the AI proposes: run only after the user clicks Allow, only from this PC's own page ----
-    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/editlog/stream' || p === '/api/bonus' || p === '/api/bonus/github' || p === '/api/bonus/rewards') {
+    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/editlog/stream' || p === '/api/providers' || p === '/api/bonus' || p === '/api/bonus/github' || p === '/api/bonus/rewards') {
       if (req.who !== 'local') return json(res, 403, { error: 'This can only be done on the PC itself.' });
       const o = req.headers.origin;   // the public website is allowed to chat with this PC, but never to approve or stop commands
       if (o && !new RegExp('^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\]):' + PORT + '$').test(o)) return json(res, 403, { error: 'Approve commands in the Pholama window on this PC.' });
@@ -758,6 +780,11 @@ const server = http.createServer(async (req, res) => {
         catch (e) { return json(res, 200, { ok: false, text: e.message }); }
       }
       if (p === '/api/cmd/stop' && req.method === 'POST') return json(res, 200, { ok: agent.power.stopRunning() });
+      if (p === '/api/providers') {   // your own API keys: only on this PC, and the key is never sent back
+        if (req.method === 'GET') return json(res, 200, { providers: providers.list(), known: providers.known() });
+        if (req.method === 'POST') { try { const b = await body(req); return json(res, 200, { ok: true, provider: providers.add(b, agent.sources.checkLink) }); } catch (e) { return json(res, 400, { error: providers.scrub(e.message) }); } }
+        if (req.method === 'DELETE') { const id = u.searchParams.get('id'); for (const k of Object.keys(capCache)) if (k === 'byok:' + id) delete capCache[k]; return json(res, 200, { ok: providers.remove(id) }); }
+      }
       if (p === '/api/editlog/stream' && req.method === 'GET') {   // live feed of new log entries (server-sent events)
         res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
         const send = e => { try { res.write('data: ' + JSON.stringify(e) + '\n\n'); } catch {} };
@@ -785,7 +812,7 @@ const server = http.createServer(async (req, res) => {
       if (!model) return json(res, 400, { error: 'Pick a model at the top first.' });
       try {
         for (let tries = 0; tries < 2; tries++) {
-          let text = ''; await streamTurn(model, [{ role: 'system', content: agent.plugins.SKILL_WRITER_PROMPT }, { role: 'user', content: 'Skill idea: ' + idea }], { num_predict: 500, temperature: 0.3 }, t => { text += t; }, AbortSignal.timeout(90000), { in: 0, out: 0, got: false });
+          let text = ''; await streamTurnBase(model, [{ role: 'system', content: agent.plugins.SKILL_WRITER_PROMPT }, { role: 'user', content: 'Skill idea: ' + idea }], { num_predict: 500, temperature: 0.3 }, t => { text += t; }, AbortSignal.timeout(90000), { in: 0, out: 0, got: false });
           const sk = agent.plugins.parseSkillJson(text.replace(/<think>[\s\S]*?(<\/think>|$)/g, ''));
           if (sk && !agent.plugins.skillProblem(sk)) return json(res, 200, { skill: { name: agent.plugins.slugify(sk.name), when: String(sk.when).slice(0, 200), steps: String(sk.steps).slice(0, 1500) } });
         }

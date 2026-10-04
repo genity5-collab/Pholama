@@ -447,6 +447,16 @@ async function runToolRaw(tools, name, args, ctx) {
 // A bare "ok start searching" / "look it up" / "search" has no subject. The subject is what the person was talking about just before.
 // Pure function (no I/O) so it is tested on its own. history = earlier messages [{role, content}], oldest first.
 const BARE_SEARCH = /^(?:ok(?:ay)?[,.!\s]+|yes[,.!\s]+|yeah[,.!\s]+|please[,.!\s]+|go (?:on|ahead)[,.!\s]+|now[,.!\s]+)*(?:start |go |just |try |can you |could you |please )*(?:search(?:ing)?|look(?:ing)? (?:it|that|this) up|look up|google it|find (?:it|that|out)|check (?:online|the web|the internet))(?: (?:it|that|this|for it|online|the web|the internet|now|again|please|for me))*[.!?\s]*$/i;
+// "search me a image of a cat" must search for "cat image", not for the words "me a image of a cat".
+function cleanSearchQuery(q) {
+  let t = String(q || '').replace(/[?.!]+$/, '').trim();
+  t = t.replace(/^(?:for\s+)?(?:me|us)\s+/i, '').replace(/^(?:for\s+)/i, '');
+  const pic = /^(?:(?:a|an|the|some|any|one|two|three|\d+)\s+)*(image|images|picture|pictures|photo|photos|pic|pics|gif|gifs)\s+(?:of|with|showing)\s+(?:(?:a|an|the|some)\s+)*(.{2,})$/i.exec(t);
+  if (pic) { const kind = /gif/i.test(pic[1]) ? 'gif' : 'image'; return (pic[2].trim() + ' ' + kind).slice(0, 200); }
+  const pic2 = /^(?:(?:a|an|the|some|any)\s+)*(.{2,}?)\s+(image|images|picture|pictures|photo|photos)$/i.exec(t);
+  if (pic2) return (pic2[1].trim() + ' image').slice(0, 200);
+  return t.replace(/^(?:(?:a|an|the|some)\s+)+(?=\S+\s+\S)/i, '').slice(0, 200) || String(q || '').trim();
+}
 function searchSubjectFromHistory(text, history) {
   if (!BARE_SEARCH.test(String(text || '').trim())) return '';
   const earlier = (Array.isArray(history) ? history : []).filter(m => m && m.role === 'user' && typeof m.content === 'string');
@@ -492,7 +502,7 @@ function routeIntent(text, tools, history) {
   if (gr && has('github_repo_info')) return { name: 'github_repo_info', args: { repo: gr[1] } };
   { const subj = searchSubjectFromHistory(t, history); if (subj && has('web_search')) return { name: 'web_search', args: { query: subj } }; }
   const se = /^(?:please\s+)?(?:search(?: the web| online)?(?: for)?|look up|google|find (?:out )?(?:about)?|latest|news (?:about|on))\s+(.{3,})/i.exec(t);
-  if (se && has('web_search')) return { name: 'web_search', args: { query: se[1].replace(/[?.!]+$/, '') } };
+  if (se && has('web_search')) return { name: 'web_search', args: { query: cleanSearchQuery(se[1]) } };
   const rm = /^(?:please\s+)?(?:remember|memorize|don'?t forget)\s+(?:that\s+)?(?!that\b)(\S.{5,})/i.exec(t);
   if (rm && has('remember_thing')) return { name: 'remember_thing', args: { text: rm[1].replace(/[?.!]+$/, '') } };
   // Natural questions that need fresh facts: "what are the latest news about X", "tell me the newest X news", "who won the last X".
@@ -643,4 +653,4 @@ function safeShowLength(acc) {
 }
 const isToolFail = r => /^Tool error/.test(String(r || ''));
 
-module.exports = { loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+module.exports = { cleanSearchQuery, loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

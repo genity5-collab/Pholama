@@ -1,6 +1,18 @@
 {
- "latest": "0.9.7",
+ "latest": "0.9.8",
  "releases": [
+  {
+   "version": "0.9.8",
+   "date": "2026-10-04",
+   "title": "Your own AI keys, Agent Max in Studio, 6 more models, and a search fix",
+   "notes": [
+    "Your own AI keys: use ChatGPT, Gemini, Groq, OpenRouter, Mistral, DeepSeek, Together, Grok or any OpenAI-style address with your own account. Add a key in Models, then pick it at the top. It works in Chat and in Studio with all the tools. The key stays on this PC in a private file, is never shown again (only the last 4 characters), and is only ever sent to the company it belongs to. You pay that company directly",
+    "Keys are PC only: a website can never read, add or remove them, and a custom address that points into your home network is refused. Known companies get the full tool set. A custom address gets simple tools only, because Pholama cannot know what is behind it",
+    "Agent Max now works in Studio. Max does the thinking and this PC does the file work. It costs more: 20 extra credits per message on top of the normal Studio price, and up to 8 Max messages from your daily and monthly allowance. You are told the price first. If Max runs out, your own model on this PC takes over for free",
+    "Fixed: 'search me a image of a cat' crashed with \"Cannot access 'searchRan' before initialization\", and searched the wrong words. It now searches 'cat image'",
+    "6 new models about the size of Llama 3.2 3B: Hermes 3 (Llama 3.2) 3B, Llama 3.2 3B high quality, Granite 3.1 3B, Dolphin 3.0 3B, Falcon3 3B and EXAONE 3.5 2.4B. Only ones proven with tools are marked Runs tools"
+   ]
+  },
   {
    "version": "0.9.7",
    "date": "2026-10-04",
