@@ -1,6 +1,16 @@
 {
- "latest": "0.9.15",
+ "latest": "0.9.17",
  "releases": [
+  {
+   "version": "0.9.17",
+   "date": "2026-10-04",
+   "title": "New local-first Pholama mark",
+   "notes": [
+    "Reworked the Pholama icon into a simpler, more recognizable llama silhouette that stays legible from a browser tab to a desktop shortcut",
+    "Used the same source mark across the public site, PC app, PWA icons and Windows installer icon",
+    "Added a small mint eye accent to distinguish Pholama while keeping the charcoal and warm-white local-first palette"
+   ]
+  },
   {
    "version": "0.9.15",
    "date": "2026-10-04",

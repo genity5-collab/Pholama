@@ -1,1 +1,9 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc"><title id="title">Pholama llama mascot</title><desc id="desc">A white llama in profile wearing black sunglasses on a charcoal tile.</desc><rect width="512" height="512" rx="112" fill="#171717"/><path fill="#fff" d="M150 376c-18-42-13-92 16-131 19-26 45-43 74-51l-3-91c-1-22 26-34 42-18l46 47 48-7c24-4 39 25 21 42l-30 28c31 26 49 65 49 107 0 32-10 57-29 74-24 22-59 31-102 31h-99c-15 0-27-11-33-31zm102-182c-35 10-59 30-72 61h196c-4-23-16-43-34-57l-31 21c-8 5-18 7-27 4l-32-11zm-24 104c0 14 12 26 26 26s26-12 26-26-12-26-26-26-26 12-26 26zm91 0c0 14 12 26 26 26s26-12 26-26-12-26-26-26-26 12-26 26z"/><path fill="#171717" d="M217 271h64l-8 40h-56zm91 0h65l8 40h-65z"/><path fill="none" stroke="#fff" stroke-linecap="round" stroke-width="12" d="M281 289h27M187 370h206"/><circle cx="179" cy="236" r="8" fill="#171717"/></svg>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-labelledby="title desc">
+  <title id="title">Pholama local AI mark</title>
+  <desc id="desc">A warm white llama silhouette with a mint eye on a charcoal rounded tile.</desc>
+  <rect width="512" height="512" rx="112" fill="#171717"/>
+  <path fill="#F5F0E8" d="M145 377c-18-43-13-93 16-134 20-28 48-47 80-56l-4-101c-1-23 27-35 44-18l45 47 51-8c26-4 42 28 22 46l-35 31c33 28 52 68 52 112 0 35-11 63-32 83-26 24-63 35-109 35h-98c-15 0-26-14-32-37Zm103-190c-31 9-54 28-68 57h183c-5-22-16-40-34-54l-30 20c-9 6-19 8-29 4l-22-8Zm-17 97c0 16 13 29 29 29s29-13 29-29-13-29-29-29-29 13-29 29Zm94 0c0 16 13 29 29 29s29-13 29-29-13-29-29-29-29 13-29 29Z"/>
+  <circle cx="282" cy="286" r="10" fill="#171717"/>
+  <path fill="none" stroke="#171717" stroke-width="11" stroke-linecap="round" d="M270 323c19 11 43 11 62 0M190 379h193"/>
+  <circle cx="282" cy="249" r="9" fill="#8DE6C5"/>
+</svg>
