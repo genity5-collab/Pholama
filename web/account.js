@@ -28,8 +28,12 @@ function niceError(j, fallback) {
 // ----- Discord sign-in (Supabase OAuth, implicit flow: tokens come back in the URL #hash) -----
 // Discord is free. Its account must have a verified email, which is what stops people farming accounts.
 // Builds the address that sends the person to Discord. `returnTo` must be allow-listed in Supabase.
-export function oauthUrl(supabaseUrl, returnTo) {
-  return String(supabaseUrl).replace(/\/+$/, '') + '/auth/v1/authorize?provider=discord&prompt=consent&redirect_to=' + encodeURIComponent(returnTo);
+export const PROVIDERS = ['discord', 'github'];
+export function oauthUrl(supabaseUrl, returnTo, provider = 'discord') {
+  const p = PROVIDERS.includes(provider) ? provider : 'discord';   // only known providers, never a value from the address bar
+  // GitHub needs the repo scope so Pholama can write to repositories without a pasted token. Discord needs nothing extra.
+  const scopes = p === 'github' ? '&scopes=' + encodeURIComponent('read:user user:email repo') : '';
+  return String(supabaseUrl).replace(/\/+$/, '') + '/auth/v1/authorize?provider=' + p + '&prompt=consent' + scopes + '&redirect_to=' + encodeURIComponent(returnTo);
 }
 // Where to come back to: this exact page, without any old query or hash.
 export function returnAddress(loc) { return loc.origin + loc.pathname; }
@@ -40,7 +44,9 @@ export function parseAuthHash(hash) {
   if (p.get('error') || p.get('error_description')) return { error: (p.get('error_description') || p.get('error')).replace(/\+/g, ' ') };
   const access = p.get('access_token'); if (!access) return null;
   const exp = +p.get('expires_at') || (Math.floor(Date.now() / 1000) + (+p.get('expires_in') || 3600));
-  return { access_token: access, refresh_token: p.get('refresh_token') || '', expires_at: exp, token_type: p.get('token_type') || 'bearer' };
+  const out = { access_token: access, refresh_token: p.get('refresh_token') || '', expires_at: exp, token_type: p.get('token_type') || 'bearer' };
+  if (p.get('provider_token')) out.provider_token = p.get('provider_token');   // GitHub's own permission token: lets Pholama use GitHub with no pasted token
+  return out;
 }
 // A display name taken from the Discord profile; never the email address.
 export function oauthName(user) {
@@ -54,6 +60,10 @@ export const Account = {
   user: () => (session && session.user) || null,
   token: () => (session && session.access_token) || null,   // sent to the cloud model so it knows who is asking
   name: () => { const u = session && session.user; if (!u) return ''; const m = u.user_metadata || {}; return m.name || (u.app_metadata && u.app_metadata.provider === 'discord' ? oauthName(u) : (m.full_name || '')); },
+  provider: () => (session && session.user && session.user.app_metadata && session.user.app_metadata.provider) || '',
+  isGithub: () => !!(session && session.user && session.user.app_metadata && session.user.app_metadata.provider === 'github'),
+  // The GitHub permission token Supabase hands back at sign-in. Only present for GitHub logins; kept on this device like the session.
+  githubToken: () => (session && session.provider_token && session.user && session.user.app_metadata && session.user.app_metadata.provider === 'github') ? String(session.provider_token) : '',
   isDiscord: () => !!(session && session.user && session.user.app_metadata && session.user.app_metadata.provider === 'discord'),
 
   async load() {
@@ -85,12 +95,12 @@ export const Account = {
     save(j); return this.user();
   },
   // Sends the person to Discord. They come back to this same page with a sign-in in the address hash.
-  startLogin() { location.href = oauthUrl(base(), returnAddress(location)); },
+  startLogin(provider = 'discord') { try { sessionStorage.setItem('pholama.oauth.provider', PROVIDERS.includes(provider) ? provider : 'discord'); } catch {} location.href = oauthUrl(base(), returnAddress(location), provider); },
   // Call on page load. If the address holds a Discord result, verify it with Supabase, save the session, and clean the address bar.
   async finishLogin() {
     const r = parseAuthHash(location.hash); if (!r) return null;
     try { history.replaceState(null, '', location.pathname + location.search); } catch {}   // tokens must not stay in the address bar / history
-    if (r.error) throw new Error(/access_denied|denied|cancel/i.test(r.error) ? 'Discord sign-in was cancelled.' : 'Discord sign-in failed: ' + r.error);
+    if (r.error) throw new Error(/access_denied|denied|cancel/i.test(r.error) ? ((sessionStorage.getItem('pholama.oauth.provider') === 'github') ? 'GitHub' : 'Discord') + ' sign-in was cancelled.' : ((sessionStorage.getItem('pholama.oauth.provider') === 'github') ? 'GitHub' : 'Discord') + ' sign-in failed: ' + r.error);
     const who = await fetch(base() + '/auth/v1/user', { headers: hdr(r.access_token) });   // never trust a token we have not verified
     const user = await who.json().catch(() => null);
     if (!who.ok || !user || !user.id) throw new Error('Discord sign-in could not be verified. Try again.');
@@ -98,6 +108,33 @@ export const Account = {
     save({ ...r, user }); return this.user();
   },
   logout() { save(null); },
+
+  // ----- "GitHub on both" bonus bookkeeping. The database decides; this page only reports where the person signed in. -----
+  // Records that this account signed in on `surface` ('site' or 'pc'). Safe to call every time: a repeat is ignored.
+  async recordSurface(surface) {
+    const u = this.user(); if (!u || !session || !['site', 'pc'].includes(surface)) return false;
+    const provider = (session.user.app_metadata && session.user.app_metadata.provider) || '';
+    if (!['github', 'discord'].includes(provider)) return false;
+    try {
+      await this.rest('pholama_logins?on_conflict=user_id,surface', { method: 'POST', headers: { Prefer: 'resolution=ignore-duplicates,return=minimal' }, body: JSON.stringify({ user_id: session.user.id, surface, provider }) });
+      return true;
+    } catch { return false; }   // the table may not exist yet, or the network is down: never block login for this
+  },
+  // Tells the Platform which local models this person has on their PC. Names only, at most 12. Nothing else is sent.
+  async reportRecentAis(names) {
+    const u = this.user(); if (!u || !session) return false;
+    const list = [...new Set((names || []).map(n => String(n || '').replace(/^(gguf|ollama):/, '').trim().slice(0, 80)).filter(Boolean))].slice(0, 12);
+    if (!list.length) return false;
+    try {
+      await this.rest('pholama_recent_ais?on_conflict=user_id,model', { method: 'POST', headers: { Prefer: 'resolution=merge-duplicates,return=minimal' }, body: JSON.stringify(list.map(model => ({ user_id: session.user.id, model, seen_at: new Date().toISOString() }))) });
+      return true;
+    } catch { return false; }   // the table may not exist yet: never bother the person
+  },
+  // Asks the database whether this account used GitHub on both the site and the PC app.
+  async githubOnBoth() {
+    if (!session) return false;
+    try { const r = await this.rest('rpc/pholama_github_both', { method: 'POST', body: '{}' }); return r === true; } catch { return false; }
+  },
 
   // ----- authenticated REST helper (refreshes an expiring token once) -----
   async rest(path, opts = {}) {
@@ -109,6 +146,16 @@ export const Account = {
     const t = await r.text(); let j = null; try { j = t ? JSON.parse(t) : null; } catch {}
     if (!r.ok) throw new Error(niceError(j, 'Request failed (' + r.status + ')'));
     return j;
+  },
+
+  // Uploads a file into the avatar bucket with the person's own login. The database only lets them write inside their own folder.
+  async storage(path, file) {
+    if (!session) throw new Error('Log in first');
+    if (session.expires_at && session.expires_at * 1000 - Date.now() < 30000) await this.refresh();
+    if (!session) throw new Error('Your login expired. Log in again.');
+    const r = await fetch(base() + '/storage/v1/object/pholama-avatars/' + path.split('/').map(encodeURIComponent).join('/'), { method: 'POST', headers: { apikey: C().SUPABASE_ANON_KEY, Authorization: 'Bearer ' + session.access_token, 'Content-Type': file.type, 'x-upsert': 'true', 'Cache-Control': 'max-age=60' }, body: file });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(niceError(j, 'Could not upload the picture (' + r.status + ')')); }
+    return true;
   },
 
   // ----- memory setting (on/off) -----

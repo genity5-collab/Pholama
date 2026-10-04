@@ -688,7 +688,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/github/approve' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ok: true, text: await agent.github.confirm(String(req.headers['x-github-token'] || ''), String(b.id || ''), b.approve === true) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); } }
     // ---- commands the AI proposes: run only after the user clicks Allow, only from this PC's own page ----
-    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/bonus') {
+    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/bonus' || p === '/api/bonus/github') {
       if (req.who !== 'local') return json(res, 403, { error: 'This can only be done on the PC itself.' });
       const o = req.headers.origin;   // the public website is allowed to chat with this PC, but never to approve or stop commands
       if (o && !new RegExp('^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\]):' + PORT + '$').test(o)) return json(res, 403, { error: 'Approve commands in the Pholama window on this PC.' });
@@ -703,6 +703,7 @@ const server = http.createServer(async (req, res) => {
       if (p === '/api/editlog' && req.method === 'GET') return json(res, 200, { entries: agent.power.readLog(+u.searchParams.get('n') || 100) });
       if (p === '/api/editlog' && req.method === 'DELETE') return json(res, 200, { ok: agent.power.clearLog() });
       if (p === '/api/bonus' && req.method === 'POST') { try { return json(res, 200, await agent.power.claimBonus(String((await body(req)).token || ''))); } catch (e) { return json(res, 200, { error: e.message, bonus: agent.power.bonusTotal() }); } }
+      if (p === '/api/bonus/github' && req.method === 'POST') { try { return json(res, 200, await agent.power.claimGithubBonus(String((await body(req)).token || ''))); } catch (e) { return json(res, 400, { error: e.message }); } }
       if (p === '/api/bonus' && req.method === 'GET') return json(res, 200, { bonus: agent.power.bonusTotal() });
     }
     if (p === '/api/credits') return json(res, 200, { ...agent.credits(), allowed: agent.allowed() });

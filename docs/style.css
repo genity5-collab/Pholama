@@ -240,3 +240,26 @@ code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:13px}
 .achip{display:flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;font-size:13px;max-width:100%}
 .achip img{width:26px;height:26px;object-fit:cover;border-radius:6px}.achip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}
 .achip button{min-height:0;width:22px;height:22px;padding:0;border-radius:50%;line-height:1;background:transparent;border:0;color:var(--mut);cursor:pointer;font-size:16px}
+
+.aiwarn{margin:10px 14px 0;padding:11px 14px;border:1px solid var(--warn);border-left-width:4px;border-radius:var(--r);background:var(--card);font-size:14px;line-height:1.45;text-align:left}
+.aiwarn b{color:var(--warn)}.aiwarn a{color:var(--fg);font-weight:600;text-decoration:underline}
+
+.infwrap{max-width:860px;margin:18px auto 30px;padding:0 14px;text-align:left}
+.infwrap h2{margin:0 0 4px}.infwrap .dcard{margin-top:14px}
+.infrel{border-top:1px solid var(--line);padding:8px 0}.infrel summary{cursor:pointer;font-size:15px}
+.infrel .dbul{margin:8px 0 2px 18px}.infrel pre{margin:8px 0 0;overflow:auto}
+.infkv{margin:8px 0 12px}.infkv dt{font-weight:600;margin-top:8px}.infkv dd{margin:2px 0 0;color:var(--mut)}
+.inftbl{width:100%;border-collapse:collapse;font-size:14px}.inftbl th,.inftbl td{text-align:left;padding:6px 8px;border-top:1px solid var(--line)}
+.inftbl td:nth-child(2){font-family:ui-monospace,Consolas,monospace}
+
+body.plat-on #dash{display:none!important}
+.whoami{max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;padding:5px 10px;border-radius:999px}
+@media(max-width:560px){.whoami{max-width:34vw;font-size:12px}#viewSw button{padding-left:8px;padding-right:8px}}
+.platwrap{max-width:760px;margin:16px auto 30px;padding:0 14px;text-align:left}
+.platwrap .dcard{margin-top:12px}.platwrap input:not([type=file]),.platwrap textarea{width:100%;box-sizing:border-box;margin:6px 0}
+.plrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:4px 0}
+.pavatar{width:38px;height:38px;border-radius:50%;background:var(--card);border:1px solid var(--line);display:inline-flex;align-items:center;justify-content:center;overflow:hidden;font-weight:700;flex:none}
+.pavatar img{width:100%;height:100%;object-fit:cover}
+.platcom{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 0}
+.plbody{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0}
+.plrx{display:flex;gap:6px;flex-wrap:wrap}.plhid{opacity:.6;border-style:dashed}

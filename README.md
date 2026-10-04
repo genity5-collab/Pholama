@@ -28,6 +28,21 @@ How it works: the reader looks at your picture, then the brain answers using wha
 Full guide: [Send files and pictures](docs-md/FILES.md).
 
 
+
+### Pholama Platform (the website)
+
+The website is now **Pholama Platform**. The AI lives in the PC app, and the site is where you log in, keep a profile and meet other people.
+
+- **Logged in as** your own Platform name, in the header on PC and phone. You choose the name and picture, and they are not your Discord or GitHub name or email.
+- **Communities** with posts. **Every post disappears after 3 hours.** React with Like, Love, Haha, Wow or Fire.
+- **Moderation:** report a post. Three reports hide it until a moderator looks. Links and secret keys are blocked in posts, and the database enforces this, not the page.
+- **Your last local AIs:** when the PC app opens, it sends only the **names** of your downloaded models, once, when your PC is idle. No files and no chats.
+- **One small assistant on the site.** It can chat, and it cannot use tools or files. Bigger models and tools are in the PC app.
+
+**Sign in with GitHub:** press **Continue with GitHub** in Settings > Account, on the site or the PC app. It replaces pasting a token, and every write to GitHub still asks you first. Use the **same GitHub account on both** and the PC app adds **250 credits**, once per account.
+
+**Setup for whoever runs Supabase (once):** turn on the GitHub provider, then run [`supabase/github_bonus.sql`](supabase/github_bonus.sql) and [`supabase/platform.sql`](supabase/platform.sql) in the SQL Editor. GitHub callback URL: `https://<project>.supabase.co/auth/v1/callback`. Add the site and `http://localhost:11435/` to Supabase redirect URLs. To make someone a moderator: `insert into public.pholama_moderators (user_id) values ('<their user id>');`
+
 ### Memory limits
 
 Pholama can remember facts about you ("remember that I like short answers"). To keep things light:

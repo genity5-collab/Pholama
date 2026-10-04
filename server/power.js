@@ -146,7 +146,7 @@ const list = () => { sweep(); return [...pending.values()].map(p => ({ id: p.id,
 
 // ---------- login bonus: +55 tool credits, once per account, granted by the server (never by this page) ----------
 function bonusState() { try { return JSON.parse(fs.readFileSync(BONUS_FILE, 'utf8')); } catch { return { users: {} }; } }
-function bonusTotal() { const s = bonusState(); return Object.values(s.users || {}).reduce((n, v) => n + (+v.credits || 0), 0); }
+function bonusTotal() { const s = bonusState(); return [...Object.values(s.users || {}), ...Object.values(s.github || {})].reduce((n, v) => n + (+v.credits || 0), 0); }
 // The page sends the login token. We ask the Pholama server ourselves, so a number sent by the page is never trusted.
 async function claimBonus(token) {
   if (!token || typeof token !== 'string' || token.length > 4000) throw new Error('Log in first.');
@@ -162,4 +162,29 @@ async function claimBonus(token) {
   return { bonus: bonusTotal(), granted: !!j.granted };
 }
 
-module.exports = { LIMITS, propose, approve, reject, list, stopRunning, checkCommand, readLog, clearLog, logEntry, claimBonus, bonusTotal };
+
+// ---------- GitHub-on-both bonus: +250 tool credits, once per account ----------
+// The database (not the page) says whether this account used GitHub on both the site and the PC app.
+// We ask it ourselves, with the person's own login token, and read who they are from its answer.
+const SB_URL = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
+const GITHUB_BONUS = 250;
+async function claimGithubBonus(token) {
+  const anonKey = (fs.readFileSync(path.join(__dirname, '..', 'web', 'config.js'), 'utf8').match(/SUPABASE_ANON_KEY:\s*'([^']+)'/) || [])[1] || '';
+  if (!token || typeof token !== 'string' || token.length > 4000) throw new Error('Log in first.');
+  const h = { Authorization: 'Bearer ' + token, apikey: String(anonKey || ''), 'Content-Type': 'application/json' };
+  const who = await fetch(SB_URL + '/auth/v1/user', { headers: h, signal: AbortSignal.timeout(10000) });
+  const user = await who.json().catch(() => null);
+  if (!who.ok || !user || !/^[0-9a-f-]{36}$/i.test(user.id || '')) throw new Error('Could not read your account.');
+  const s = bonusState(); s.github = s.github || {};
+  if (s.github[user.id]) return { bonus: bonusTotal(), granted: false, already: true };
+  const r = await fetch(SB_URL + '/rest/v1/rpc/pholama_github_both', { method: 'POST', headers: h, body: '{}', signal: AbortSignal.timeout(10000) });
+  const both = await r.json().catch(() => null);
+  if (!r.ok) throw new Error('Could not check your GitHub sign-ins yet.');
+  if (both !== true) return { bonus: bonusTotal(), granted: false, both: false };
+  s.github[user.id] = { credits: GITHUB_BONUS, at: new Date().toISOString() };
+  fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(BONUS_FILE, JSON.stringify(s, null, 2));
+  logEntry({ kind: 'bonus', status: 'granted', credits: GITHUB_BONUS });
+  return { bonus: bonusTotal(), granted: true, both: true };
+}
+
+module.exports = { LIMITS, propose, approve, reject, list, stopRunning, checkCommand, readLog, clearLog, logEntry, claimBonus, claimGithubBonus, bonusTotal };

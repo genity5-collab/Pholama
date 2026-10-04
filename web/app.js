@@ -215,6 +215,7 @@ async function refreshSelect() {
   if (server) try {
     const t = await (await api('api/tags')).json();
     for (const m of t.models) sel.add(new Option('💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
+    shareRecentAis(t.models.map(m => m.name));
   } catch {}
   sel.add(new Option('☁ ' + MAX_NAME + ' (cloud, no download)', CLOUD_ID));
   const first = [...sel.options].findIndex(o => !o.disabled); if (first >= 0) sel.selectedIndex = first;
@@ -549,6 +550,8 @@ async function afterAuth() {
   const u = Account.user();
   memOn = false; memories = [];
   if (u) claimBonus();
+  if (u) githubBothBonus();
+  if (u) shareRecentAis();
   if (u) { try { memOn = await Account.memoryOn(); if (memOn) memories = (await Account.list()).map(m => m.content); } catch {} }
 }
 function paintAcct() {
@@ -584,7 +587,8 @@ async function submitAcct() {
   btn.disabled = false; paintAcct();
 }
 $('#a_go').onclick = submitAcct;
-$('#a_login').onclick = () => { $('#a_msg').textContent = ''; Account.startLogin(); };
+$('#a_login').onclick = () => { $('#a_msg').textContent = ''; Account.startLogin('discord'); };
+$('#a_github').onclick = () => { $('#a_msg').textContent = ''; Account.startLogin('github'); };
 for (const id of ['#a_name', '#a_pass']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') submitAcct(); });
 $('#a_mem').onchange = async e => {
   const want = e.target.checked; e.target.disabled = true;
@@ -1266,6 +1270,18 @@ $('#clearHistBtn').onclick = () => {
 
 init().then(refreshCredits).then(() => showView('dash'));
 
+// ----- GitHub on both: this page only reports where you signed in. The database decides, and the PC server grants the 250. -----
+async function githubBothBonus() {
+  if (!server || remoteBase()) return;   // only the real PC app counts as the PC
+  try {
+    if (!Account.isGithub()) return;
+    await Account.recordSurface('pc');
+    const t = Account.token(); if (!t) return;
+    const r = await (await api('api/bonus/github', { method: 'POST', body: JSON.stringify({ token: t }) })).json();
+    if (r && r.granted) { await refreshCredits(); add('sys', 'You used GitHub on both the site and the PC app. +250 credits added.'); }
+  } catch {}
+}
+
 // ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----
 async function claimBonus() {
   if (!server || remoteBase()) return;   // only on the PC itself
@@ -1337,9 +1353,10 @@ $('#logClear').onclick = async () => { if (!confirm('Clear the edit log? This ca
 
 // ----- GitHub: the token lives only in this browser; writes need a click on Allow -----
 const GHK = 'pholama_gh_token';
-const ghToken = () => { try { return localStorage.getItem(GHK) || ''; } catch { return ''; } };
+// A pasted token wins. Otherwise a GitHub sign-in supplies it, so nothing has to be pasted.
+const ghToken = () => { try { return localStorage.getItem(GHK) || Account.githubToken() || ''; } catch { return ''; } };
 function ghHeaders() { const t = ghToken(); return t ? { 'x-github-token': t } : {}; }
-function ghPaint() { const t = ghToken(); const el = $('#ghState'); if (el) el.textContent = t ? 'GitHub connected on this device (token saved here only).' : 'Not connected. Reading public repos works without a token.'; }
+function ghPaint() { const t = ghToken(); const el = $('#ghState'); if (el) el.textContent = t ? (localStorage.getItem(GHK) ? 'GitHub connected on this device (token saved here only).' : 'GitHub connected through your GitHub sign-in. No token needed.') : 'Not connected. Reading public repos works without a token.'; }
 $('#ghSave').onclick = () => { const v = $('#ghTok').value.trim(); if (!v) return; try { localStorage.setItem(GHK, v); } catch {} $('#ghTok').value = ''; ghPaint(); };
 $('#ghClear').onclick = () => { try { localStorage.removeItem(GHK); } catch {} ghPaint(); };
 function ghAsk(msg, a) {
@@ -1436,3 +1453,13 @@ paintUpdate(); setInterval(paintUpdate, 10 * 60 * 1000);
   setTimeout(() => { if (!gone && !server) box.hidden = false; }, 1500);
   $('#pcPromoX').onclick = () => { box.hidden = true; try { localStorage.setItem('pholama.promo.pc', '1'); } catch {} };
 })();
+
+// ----- Recent local AIs: once per app start, when the browser is idle, send only the model NAMES to your Platform profile -----
+let aisShared = false, aisNames = [];
+function shareRecentAis(names) {
+  if (names) aisNames = names;
+  if (aisShared || !server || remoteBase() || !Account.user()) return;
+  aisShared = true;
+  const go = () => { Account.reportRecentAis(aisNames); };
+  if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 8000 }); else setTimeout(go, 3000);
+}

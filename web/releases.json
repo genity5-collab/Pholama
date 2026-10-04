@@ -1,6 +1,21 @@
 {
- "latest": "0.8.1",
+ "latest": "0.9.0",
  "releases": [
+  {
+   "version": "0.9.0",
+   "date": "2026-10-04",
+   "title": "Pholama Platform and sign in with GitHub",
+   "notes": [
+    "The site is now Pholama Platform: log in, pick your own Platform name and picture, and see 'Logged in as' in the header on PC and phone",
+    "New communities: General, Models, Games and API, Help and Showcase. Every post disappears after 3 hours, and you can react to posts",
+    "Moderation: report a post, three reports hide it, and moderators can hide posts and ban people. Links and secret keys are blocked in posts",
+    "Your last local AIs: the PC app shares only the names of the models you downloaded, once when it opens, when your PC is idle",
+    "The site now keeps one small chat assistant. It cannot use tools or files. Bigger models and tools live in the PC app",
+    "New: Continue with GitHub on the site and the PC app. No pasted token needed, and every GitHub write still asks you first",
+    "Use GitHub on both the site and the PC app with the same account to earn 250 credits, once per account",
+    "The site has an update log, API and key help and guides. A warning says the browser AI might stop working"
+   ]
+  },
   {
    "version": "0.8.1",
    "date": "2026-10-04",

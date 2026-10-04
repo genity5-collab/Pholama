@@ -196,6 +196,70 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
   a.setTier('basic'); const pb = a.systemPrompt(r.tools, false, [], 'normal'); ok('basic model keeps the short prompt', !/<tool_call>/.test(pb));
   // ---- API docs ----
   const d = require('../server/apidocs.js').page(11435); ok('docs page', /v1\/chat\/completions/.test(d) && /Roblox/.test(d) && /localhost:11435/.test(d) && /<\/html>$/.test(d));
+  // ---- GitHub sign-in + the 250 "GitHub on both" bonus ----
+  {
+    const { parseAuthHash, oauthUrl } = await import('../web/account.js');
+    ok('github: sign-in result keeps the GitHub token', parseAuthHash('#access_token=A&provider_token=gho_X').provider_token === 'gho_X');
+    ok('github: discord sign-in has no GitHub token', parseAuthHash('#access_token=A').provider_token === undefined);
+    const gu = oauthUrl('https://x.supabase.co', 'https://a.b/p/', 'github');
+    ok('github: url asks for the right provider and the repo scope', /provider=github/.test(gu) && /scopes=.*repo/.test(gu));
+    ok('github: discord url is unchanged', !/scopes=/.test(oauthUrl('https://x.supabase.co', 'https://a.b/')) && /provider=discord/.test(oauthUrl('https://x.supabase.co', 'https://a.b/')));
+    ok('github: an unknown provider falls back to discord', /provider=discord/.test(oauthUrl('https://x.supabase.co', 'https://a.b/', 'evil&x=1')));
+    const http = require('http'); const UID = '11111111-2222-3333-4444-555555555555'; let both = false, dbCalls = 0;
+    const fake = http.createServer((rq, rs) => { rs.setHeader('Content-Type', 'application/json');
+      if (rq.url === '/auth/v1/user') { if (rq.headers.authorization !== 'Bearer good') { rs.statusCode = 401; return rs.end('{}'); } return rs.end(JSON.stringify({ id: UID })); }
+      if (rq.url === '/rest/v1/rpc/pholama_github_both') { dbCalls++; return rs.end(JSON.stringify(both)); } rs.statusCode = 404; rs.end('{}'); });
+    await new Promise(r => fake.listen(0, r)); const port = fake.address().port;
+    const realFetch = global.fetch; global.fetch = (u, o) => realFetch(String(u).replace('https://nyswblzzvqzheaxvrqtq.supabase.co', 'http://127.0.0.1:' + port), o);
+    try {
+      const pw = require('../server/power.js'); const before = pw.bonusTotal();
+      ok('bonus 250: one surface only gives nothing', (await pw.claimGithubBonus('good')).granted === false && pw.bonusTotal() === before);
+      both = true; const g = await pw.claimGithubBonus('good');
+      ok('bonus 250: both surfaces give exactly 250', g.granted === true && pw.bonusTotal() === before + 250, pw.bonusTotal());
+      const calls = dbCalls; const again = await pw.claimGithubBonus('good');
+      ok('bonus 250: only once per account', again.granted === false && pw.bonusTotal() === before + 250);
+      ok('bonus 250: a repeat does not even ask the database', dbCalls === calls);
+      ok('bonus 250: forged token rejected', await pw.claimGithubBonus('forged').then(() => false, () => true));
+      ok('bonus 250: empty token rejected', await pw.claimGithubBonus('').then(() => false, () => true));
+    } finally { global.fetch = realFetch; fake.close(); }
+    const info = await import('../docs/info.js');
+    ok('info: date formatting', info.fmtDate('2026-10-04') === '4 Oct 2026' && info.fmtDate('nonsense') === 'nonsense');
+    ok('info: guides cover start, github, api and remote', ['start', 'github', 'api', 'remote'].every(id => info.GUIDES.some(g => g.id === id)));
+    ok('info: never asks for a secret key', !info.KEY_FACTS.some(([, v]) => /enter your (api )?key here/i.test(v)) && info.KEY_FACTS.some(([, v]) => /never asks for or stores your keys/.test(v)));
+    const idx = fs.readFileSync(path.join(root, 'docs', 'index.html'), 'utf8'), pcIdx = fs.readFileSync(path.join(root, 'web', 'index.html'), 'utf8');
+    ok('site: warns the AI might stop working', /id="aiwarn"/.test(idx) && /might stop working/.test(idx));
+    ok('pc app: has no site warning', !/id="aiwarn"/.test(pcIdx));
+    ok('both: GitHub button present', /id="a_github"/.test(idx) && /id="a_github"/.test(pcIdx));
+    ok('sql: table is protected by row-level security', /enable row level security/.test(fs.readFileSync(path.join(root, 'supabase', 'github_bonus.sql'), 'utf8')));
+  }
+  // ---- Pholama Platform ----
+  {
+    const PL = await import('../docs/platform.js');
+    const platUi = fs.readFileSync(path.join(root, 'docs', 'platformui.js'), 'utf8'), platJs = fs.readFileSync(path.join(root, 'docs', 'platform.js'), 'utf8'), infoJs = fs.readFileSync(path.join(root, 'docs', 'info.js'), 'utf8');
+    const sql = fs.readFileSync(path.join(root, 'supabase', 'platform.sql'), 'utf8');
+    ok('platform: text from other people is never put into HTML', ![platUi, platJs, infoJs].some(t => /\.innerHTML\s*=|insertAdjacentHTML|outerHTML\s*=|document\.write\(/.test(t)));
+    ok('platform: profile picture only loads from https', /\^https:\\\/\\\//.test(platUi));
+    ok('platform: name cleaning strips tags and caps length', !/[<>]/.test(PL.cleanPlatformName('<script>x</script>')) && PL.cleanPlatformName('x'.repeat(99)).length === 30);
+    ok('platform: name and post checks', !!PL.nameProblem('a') && !PL.nameProblem('ab') && !!PL.postProblem(' ') && !!PL.postProblem('x'.repeat(501)) && !PL.postProblem('hi'));
+    ok('platform: posts last 3 hours', PL.LIFETIME_MS === 10800000 && PL.timeLeft('2026-10-04T12:05:00Z', Date.parse('2026-10-04T10:00:00Z')) === '2h 5m left' && PL.timeLeft('2020-01-01T00:00:00Z') === 'expired');
+    ok('platform: expired and hidden posts are not live', !PL.isLive({ expires_at: '2020-01-01T00:00:00Z', hidden: false }) && !PL.isLive({ expires_at: '2999-01-01T00:00:00Z', hidden: true }) && PL.isLive({ expires_at: '2999-01-01T00:00:00Z', hidden: false }));
+    const tl = PL.tally([{ kind: 'like', user_id: 'a' }, { kind: 'like', user_id: 'b' }, { kind: 'nope', user_id: 'a' }], 'a');
+    ok('platform: reactions are counted and mine is marked', tl.like.n === 2 && tl.like.mine && !tl.fire.mine && !('nope' in tl));
+    ok('platform: 5 reactions', PL.REACTIONS.length === 5);
+    ok('platform: picture rules', !!PL.avatarProblem({ type: 'image/gif', size: 1 }) && !!PL.avatarProblem({ type: 'image/png', size: 300000 }) && !PL.avatarProblem({ type: 'image/webp', size: 1000 }) && PL.avatarPathFor('u', 'image/jpeg') === 'u/avatar.jpg');
+    ok('platform: site keeps ONE small assistant', PL.assistantRule([], 'a') === '' && PL.assistantRule(['a'], 'a') === '' && !!PL.assistantRule(['a'], 'b'));
+    ok('platform: site is named Pholama Platform', /<title>Pholama Platform<\/title>/.test(fs.readFileSync(path.join(root, 'docs', 'index.html'), 'utf8')) && /Pholama Platform/.test(fs.readFileSync(path.join(root, 'docs', 'manifest.webmanifest'), 'utf8')));
+    ok('platform: header shows who is logged in', /id="whoami"/.test(fs.readFileSync(path.join(root, 'docs', 'index.html'), 'utf8')) && /Logged in as/.test(fs.readFileSync(path.join(root, 'docs', 'app.js'), 'utf8')));
+    ok('platform: PC app shares only model names, when idle', /requestIdleCallback/.test(fs.readFileSync(path.join(root, 'web', 'app.js'), 'utf8')) && /slice\(0, 12\)/.test(fs.readFileSync(path.join(root, 'web', 'account.js'), 'utf8')));
+    const tables = (sql.match(/create table if not exists public\.(\w+)/g) || []).map(x => x.split('.')[1]);
+    ok('sql: every table has row-level security', tables.length === 7 && tables.every(t => new RegExp('alter table public\\.' + t + ' enable row level security').test(sql)), tables.join());
+    ok('sql: posts live exactly 3 hours and the database sets it', /interval '3 hours'/.test(sql) && /new\.expires_at := now\(\) \+ interval '3 hours'/.test(sql));
+    ok('sql: expired posts are hidden by the read rule and swept', /expires_at > now\(\)/.test(sql) && /pholama_sweep/.test(sql));
+    ok('sql: moderators only, and 3 reports hide a post', (sql.match(/if not public\.pholama_is_mod\(\)/g) || []).length >= 2 && /\) >= 3 then/.test(sql) && /update public\.pholama_posts set hidden = true/.test(sql));
+    ok('sql: people cannot lift their own ban', /new\.banned := old\.banned/.test(sql));
+    ok('sql: blocks links and secret keys in posts', /Links are not allowed/.test(sql) && /secret key/.test(sql));
+    ok('sql: pictures limited to 256 KB and the owner folder', /file_size_limit[^;]*262144/.test(sql) && /storage\.foldername\(name\)\)\[1\] = auth\.uid\(\)::text/.test(sql));
+  }
   // ---- syntax of every file ----
   for (const f of fs.readdirSync(path.join(root, 'server'))) if (f.endsWith('.js')) { try { new (require('vm').Script)(fs.readFileSync(path.join(root, 'server', f), 'utf8').replace(/^#!.*/, '')); P++; } catch (e) { F++; console.log('FAIL syntax', f, e.message); } }
   await new Promise(r => setTimeout(r, 300)); console.log(`${P} passed, ${F} failed`); process.exit(F ? 1 : 0);

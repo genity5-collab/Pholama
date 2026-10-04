@@ -181,7 +181,7 @@ async function init() {
   await Account.load();
   try { await Account.finishLogin(); }
   catch (e) { Account.logout(); openSettings('account'); $('#a_msg').textContent = e.message; }
-  await afterAuth(); paintAcct();
+  await afterAuth(); paintAcct(); paintWhoami();
   if (![...sel.options].some(o => !o.disabled)) dlg.showModal(), render();
 }
 
@@ -522,6 +522,7 @@ async function afterAuth() {
   const u = Account.user();
   memOn = false; memories = [];
   if (u) claimBonus();
+  if (u) recordSiteLogin();
   if (u) { try { memOn = await Account.memoryOn(); if (memOn) memories = (await Account.list()).map(m => m.content); } catch {} }
 }
 function paintAcct() {
@@ -557,7 +558,8 @@ async function submitAcct() {
   btn.disabled = false; paintAcct();
 }
 $('#a_go').onclick = submitAcct;
-$('#a_login').onclick = () => { $('#a_msg').textContent = ''; Account.startLogin(); };
+$('#a_login').onclick = () => { $('#a_msg').textContent = ''; Account.startLogin('discord'); };
+$('#a_github').onclick = () => { $('#a_msg').textContent = ''; Account.startLogin('github'); };
 for (const id of ['#a_name', '#a_pass']) $(id).addEventListener('keydown', e => { if (e.key === 'Enter') submitAcct(); });
 $('#a_mem').onchange = async e => {
   const want = e.target.checked; e.target.disabled = true;
@@ -699,6 +701,7 @@ function render() {
       const idle = (label, isReady) => { r.loader.set(isReady ? 1 : 0); r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = false; r.btn.onclick = start; del.style.display = isReady ? '' : 'none'; use.style.display = isReady ? '' : 'none'; };
       const start = async () => {
         if (needLogin('download')) return;
+        { const why = (await import('./platform.js')).assistantRule(saved().filter(id => (catalog.browser || []).some(x => x.id === id || x.fallback === id) || (catalog.cpu || []).some(x => 'cpu:' + x.id === id)), key); if (why) { r.sub.textContent = why; return; } }   // one small assistant on the site
         r.btn.disabled = true;
         try {
           if (gpu) await ensureEngineWithBar(useId, r);
@@ -1196,10 +1199,27 @@ $('#clearHistBtn').onclick = () => {
 
 // ---------- views: the Dashboard is the landing page, Chat is one tap away ----------
 function showView(name) {
-  const dh = name === 'dash';
-  document.body.classList.toggle('dash-on', dh); const dz = $('#dash'); if (dz) dz.hidden = !dh;
-  for (const [id, on] of [['#vDash', dh], ['#vChat', !dh]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  const dh = name === 'dash', ph = name === 'plat';
+  document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph);
+  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph;
+  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vChat', !dh && !ph]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
   if (dh) paintDashboard();
+  if (ph) paintPlatform();
+}
+let platMod = null;
+async function paintPlatform() {
+  const host = $('#platHost'); if (!host) return;
+  try {
+    platMod = platMod || await import('./platformui.js');
+    await platMod.mountPlatform(host, { Account, cfg: () => window.PHOLAMA || {}, login: () => { openSettings('account'); }, onProfile: paintWhoami });
+  } catch (e) { host.textContent = 'The Platform could not load: ' + (e && e.message || e); }
+}
+// "Logged in as Name" in the header, on PC and on phones. Shows the platform name when there is one.
+async function paintWhoami(name) {
+  const b = $('#whoami'); if (!b) return;
+  const u = Account.user(); if (!u) { b.style.display = 'none'; return; }
+  let n = name; if (!n) { try { const m = await import('./platform.js'); const p = await m.makePlatform(Account, () => window.PHOLAMA || {}).profile(); n = p && p.platform_name; } catch {} }
+  b.textContent = 'Logged in as ' + (n || Account.name() || 'you'); b.style.display = ''; b.onclick = () => showView('plat');
 }
 let dashMod = null;
 async function paintDashboard() {
@@ -1207,13 +1227,19 @@ async function paintDashboard() {
   try {
     dashMod = dashMod || await import('./dashboard.js');
     await dashMod.mountDashboard(el, { server, openChat: p => { showView('chat'); if (p) { inEl.value = p; inEl.focus(); } else inEl.focus(); }, openModels: () => $('#mgr').click() });
+    if (!server) { try { const infoMod = await import('./info.js'); const rel = await (await fetch('releases.json', { cache: 'no-cache' })).json().catch(() => null); const host = document.createElement('div'); host.id = 'infoHost'; el.appendChild(host); infoMod.mountInfo(host, { releases: rel && rel.releases }); } catch {} }
   } catch (e) { el.textContent = 'The dashboard could not load: ' + (e && e.message || e); }
 }
 $('#vDash').onclick = () => showView('dash');
 $('#vChat').onclick = () => showView('chat');
+$('#vPlat').onclick = () => showView('plat');
 init().then(refreshCredits).then(() => showView('dash'));
 
 // ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----
+// ----- GitHub on both: the site only reports that you signed in here. The 250 is granted by the PC app once the database sees both. -----
+async function recordSiteLogin() {
+  try { if (Account.isGithub()) await Account.recordSurface('site'); } catch {}
+}
 async function claimBonus() {
   if (!server || remoteBase()) return;   // only on the PC itself
   try { const t = Account.token(); if (!t) return; const r = await (await api('api/bonus', { method: 'POST', body: JSON.stringify({ token: t }) })).json(); if (r && r.granted) { await refreshCredits(); } } catch {}
@@ -1284,9 +1310,10 @@ $('#logClear').onclick = async () => { if (!confirm('Clear the edit log? This ca
 
 // ----- GitHub: the token lives only in this browser; writes need a click on Allow -----
 const GHK = 'pholama_gh_token';
-const ghToken = () => { try { return localStorage.getItem(GHK) || ''; } catch { return ''; } };
+// A pasted token wins. Otherwise a GitHub sign-in supplies it, so nothing has to be pasted.
+const ghToken = () => { try { return localStorage.getItem(GHK) || Account.githubToken() || ''; } catch { return ''; } };
 function ghHeaders() { const t = ghToken(); return t ? { 'x-github-token': t } : {}; }
-function ghPaint() { const t = ghToken(); const el = $('#ghState'); if (el) el.textContent = t ? 'GitHub connected on this device (token saved here only).' : 'Not connected. Reading public repos works without a token.'; }
+function ghPaint() { const t = ghToken(); const el = $('#ghState'); if (el) el.textContent = t ? (localStorage.getItem(GHK) ? 'GitHub connected on this device (token saved here only).' : 'GitHub connected through your GitHub sign-in. No token needed.') : 'Not connected. Reading public repos works without a token.'; }
 $('#ghSave').onclick = () => { const v = $('#ghTok').value.trim(); if (!v) return; try { localStorage.setItem(GHK, v); } catch {} $('#ghTok').value = ''; ghPaint(); };
 $('#ghClear').onclick = () => { try { localStorage.removeItem(GHK); } catch {} ghPaint(); };
 function ghAsk(msg, a) {
