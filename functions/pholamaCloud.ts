@@ -100,13 +100,16 @@ const SCHEMA = { type: 'object', properties: {
 const GROQ_MODELS = ['qwen/qwen3.8-27b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
 const JSON_RULE = 'Reply with ONLY one JSON object, no other text, shaped like: {"action":"tool" or "answer","tool":"calculator"|"clock"|"site_help"|"ui" (only when action is tool),"thinking":"one short sentence","input":{"expression":"","question":"","action":""},"answer":"the final reply (only when action is answer)"}. You are Agent Max, never say you are Qwen or any other model.';
 async function groqJson(prompt: string): Promise<any> {
-  const key = Deno.env.get('GROQ_API_KEY'); if (!key) throw new Error('no key');
+  // Two keys: the second (GROQ_API_KEY_2) takes over when the first is rate limited or rejected. Keys are read from the environment only.
+  const keys = [Deno.env.get('GROQ_API_KEY'), Deno.env.get('GROQ_API_KEY_2')].filter((k): k is string => !!k);
+  if (!keys.length) throw new Error('no key');
   let last = '';
-  for (const model of GROQ_MODELS) {
+  for (const key of keys) for (const model of GROQ_MODELS) {
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(25000),
         headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
         body: JSON.stringify({ model, temperature: 0.4, max_tokens: 900, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: JSON_RULE }, { role: 'user', content: prompt }] }) });
+      if (r.status === 401 || r.status === 403 || r.status === 429) { last = 'key HTTP ' + r.status; break; }   // this key is limited or bad: use the next key
       if (!r.ok) { last = 'HTTP ' + r.status; continue; }
       const j = await r.json(); const t = String(j?.choices?.[0]?.message?.content || '');
       const m = t.match(/\{[\s\S]*\}/); if (!m) { last = 'no json'; continue; }

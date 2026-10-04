@@ -1,6 +1,19 @@
 {
- "latest": "0.9.20",
+ "latest": "0.9.21",
  "releases": [
+  {
+   "version": "0.9.21",
+   "date": "2026-10-04",
+   "title": "Web answers, videos, pictures and your own tools",
+   "notes": [
+    "Ask a plain question (who, when, how tall, how far) and the AI looks it up on the web first. It answers only when a result clearly supports it, says which website it came from, and says it could not confirm it otherwise",
+    "Ask for a video and the AI finds a real YouTube video and plays it in the chat. Ask for a picture and it shows a real one",
+    "New My tools panel in Plugins: make a tool that lets the AI use any web service, like Supabase or Discord. Or just ask the AI to make one",
+    "Your keys stay on this PC and the AI never sees them. A tool can only reach the internet, never your own network. Anything that changes data asks you to Allow first",
+    "Fix: Studio could not load (\"invalid regular expression flag\"). A broken pattern in the Studio file is fixed, and a new test now checks every file so it cannot happen again",
+    "A second Groq key can now take over when the first is busy"
+   ]
+  },
   {
    "version": "0.9.20",
    "date": "2026-10-04",

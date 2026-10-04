@@ -1,0 +1,14 @@
+const a=require(require('path').join(__dirname,'..','server','agent.js')); const fq=a.factualQuestion||(()=>{throw new Error('not exported')}); const mr=a.mediaRequest;
+let bad=0; const ok=(n,c,x)=>{console.log((c?'PASS ':'FAIL ')+n+(c?'':' -> '+x)); if(!c) bad++;};
+const yes=['who is the tallest man in the world?','how far is the moon from earth','when was the eiffel tower built','what is the capital of australia','how many people live in japan','which planet has the most moons','is the great wall visible from space','what year did world war 2 end','where is mount kilimanjaro','how tall is mount everest'];
+const no=['how are you','hi there','what do you think about pizza','write a function that adds numbers','can you fix my code','what is my name','should i learn python','how do i make a cake in studio','explain this code','tell me a joke','what are you','is it good','make a snake game','translate hello to french','what is 2+2','help me plan my day','why','ok thanks'];
+for(const q of yes) ok('SEARCHES: '+q, !!fq(q), fq(q));
+for(const q of no)  ok('does NOT search: '+q, !fq(q), fq(q));
+ok('video request',mr('show me a video of cats')?.kind==='video' && /cats/.test(mr('show me a video of cats').query));
+ok('video request 2',mr('post a youtube video about volcanoes')?.kind==='video');
+ok('video request 3',mr('find me a funny cat video')?.kind==='video');
+ok('image request',mr('show me a picture of a red panda')?.kind==='image');
+ok('image request 2',mr('send me a photo of the eiffel tower')?.kind==='image');
+ok('image request 3',mr('show me a cute dog picture')?.kind==='image');
+ok('normal chat is not media',mr('what is a video codec')===null && mr('hello')===null);
+console.log(bad?bad+' FAILED':'ALL PASSED');

@@ -194,7 +194,9 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
 (async () => {
   const r = await a.buildTools({ search: true, tools: true, terminal: true });
   const names = r.tools.map(x => x.name);
-  ok('agent has 19 tools', names.length === 19, names.length);
+  ok('agent has 21 tools (19 + show_video and show_image)', names.length === 21 && names.includes('show_video') && names.includes('show_image'), names.length);
+  ok('create_plugin is only offered when Skills is on', !names.includes('create_plugin'));
+  { const sk = await a.buildTools({ skills: true }); ok('with Skills on the AI can make tools', sk.tools.some(x => x.name === 'create_plugin')); const off = await a.buildTools({ search: false }); ok('with search off there are no media tools', !off.tools.some(x => x.name === 'show_video')); }
   ok('agent has file tools', ['read_file', 'write_file', 'edit_file', 'list_files'].every(n => names.includes(n)));
   const off = await a.buildTools({ search: false, tools: false, terminal: false }); ok('switches off = no tools', off.tools.length === 0, off.tools.length);
   ok('agent runs a file tool', /Created/.test(await a.runTool(r.tools, 'write_file', { path: 'z.txt', content: 'hi' }, {})));

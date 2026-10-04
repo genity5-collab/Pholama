@@ -14,6 +14,7 @@ import { downloadDecision, readCached, writeCached } from './pclink.js';
 import { canSave, usedText } from './memlimit.js';
 import { loadReader, readerLoaded } from './reader.js';
 import { showBanner, hideBanner, openInstalling, checkCelebrate } from './updatefx.js';
+import { mediaCard, toolAsk, paintMyTools } from './mytools.js';
 import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
 import { READER } from './attach.js';
 import { buildKeysPanel, friendlyModelName } from './keys.js';
@@ -146,7 +147,8 @@ function makeMsg() {
   const ans = document.createElement('div'); ans.className = 'ans';
   const use = document.createElement('div'); use.className = 'usage'; use.style.display = 'none';
   const srcs = sourcesCard([]); srcs.el.style.display = 'none';
-  el.append(live, think, ans, srcs.el, use); chatEl.appendChild(el); chatEl.scrollTop = 1e9;
+  const mediaBox = document.createElement('div'); mediaBox.className = 'mediabox';
+  el.append(live, think, ans, mediaBox, srcs.el, use); chatEl.appendChild(el); chatEl.scrollTop = 1e9;
   const lines = live.querySelector('.lines'), sum = live.querySelector('.sum'); let n = 0;
   return {
     el,
@@ -172,6 +174,8 @@ function makeMsg() {
     thought(text, seconds) {   // a finished reasoning text from Agent Max (not streamed)
       if (!text) return; tStop(); showThought(String(text).trim(), false, (+seconds || 0) * 1000); think.open = false;
     },
+    media(m) { const c = mediaCard(m); if (c) { mediaBox.append(c); chatEl.scrollTop = 1e9; } },   // a YouTube video or a picture the AI chose to show
+    tool(a) { mediaBox.append(toolAsk(a, api, () => { chatEl.scrollTop = 1e9; })); chatEl.scrollTop = 1e9; },
     sources(list) { srcs.update(list); chatEl.scrollTop = 1e9; },   // sites the AI visited, with safe links and preview pictures
     usage(u) {            // u = {in, out, estimated, seconds}. Real counts come from the model backend; otherwise flagged as estimates.
       if (!u) return; const tot = (u.in || 0) + (u.out || 0), f = n => (+n).toLocaleString();
@@ -314,6 +318,7 @@ async function paintPlugins() {
     cb.onchange = async () => { cb.disabled = true; try { await api('api/plugins/switch', { method: 'POST', body: JSON.stringify({ id: p.id, on: cb.checked }) }); } catch {} cb.disabled = false; paintPlugins(); };
   }
   const h = $('#plHealth'); if (h) h.textContent = d.check.ok ? 'Self-check: everything is healthy.' : 'Self-check found ' + d.check.problems.length + ' problem(s): ' + d.check.problems.slice(0, 3).join('; ') + '. Broken skills are ignored, chat keeps working.';
+  { const mt = $('#myToolsBox'); if (mt) paintMyTools(mt, api); }
   const sk = $('#skList'); if (!sk) return; sk.textContent = '';
   if (!d.skills.length) { const e = document.createElement('div'); e.className = 'sys'; e.textContent = 'No skills yet.'; sk.append(e); }
   for (const k of d.skills) {
@@ -496,7 +501,8 @@ async function pcChat(model, msg, onText) {
       if (j.log) { msg.log(j.log.kind, j.log.text, j.log.t); continue; }
       if (j.status) { msg.log('step', j.status); continue; }
       if (j.memory) { const note = await saveMemory(j.memory.text); msg.log(/^Saved/.test(note) ? 'result' : 'error', note); continue; }
-      if (j.approve) { (j.approve.type === 'command' ? cmdAsk : ghAsk)(msg, j.approve); continue; }
+      if (j.media) { msg.media(j.media); continue; }
+      if (j.approve) { if (j.approve.type === 'tool') msg.tool(j.approve); else (j.approve.type === 'command' ? cmdAsk : ghAsk)(msg, j.approve); continue; }
       if (j.sources) { msg.sources(j.sources); continue; }
       if (j.tool) { refreshCredits(); continue; }
       if (j.usage) { msg.usage(j.usage); continue; }
@@ -1057,7 +1063,8 @@ async function openStudio() {
   if (studio || studioLoading) { if (studio) studio.open(); return; }
   studioLoading = true;
   try {
-    const { createStudio } = await import('./studio.js');
+    let mod; try { mod = await import('./studio.js'); } catch (e1) { mod = await import('./studio.js?fresh=' + Date.now()); }   // a stale cached copy that will not parse: fetch a fresh one once
+    const { createStudio } = mod;
     studio = createStudio({ api, $, ghHeaders, mount: $('#studio'), getModel: () => (sel.value || '').replace(/^$/, '') });
     await studio.open();
   } catch (e) { $('#studio').textContent = 'Studio could not load: ' + (e && e.message || e); console.warn(e); }

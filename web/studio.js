@@ -204,9 +204,9 @@ export function createStudio(env) {
     try {
       await jsend(apiPath, 'PUT', { file: name, content: '// Your JavaScript file. Add your code below.\n\n' });
       const page = S.files.find(f => f.name === 'index.html'); let linked = false;
-      if (page && !page.content.includes(name) && /<\\/body\\s*>/i.test(page.content)) {
+      if (page && !page.content.includes(name) && /<\/body\s*>/i.test(page.content)) {
         const src = name.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
-        const content = page.content.replace(/<\\/body\\s*>/i, '<script src="' + src + '"></script>\n</body>');
+        const content = page.content.replace(/<\/body\s*>/i, '<script src="' + src + '"></script>\n</body>');
         await jsend(apiPath, 'PUT', { file: page.name, content }); linked = true;
       }
       await refreshFromServer(); S.current = name; S.newFiles.add(name); paintTabs(); paintEditor(); renderPreview(true);

@@ -384,7 +384,7 @@ async function chat(req, res, b) {
     const { tools } = await agent.buildTools({ ...allow, memory: memOn, inStudio });
     if (inStudio && !canTools) log('error', 'This model cannot use tools, so it cannot build in Studio. Pick a model tagged "tools" (Qwen3 0.6B is the smallest).');
     const visited = agent.sources.makeCollector(12); let sentSrc = 0;
-    const tctx = { sources: visited, pholamaToken: String(req.headers['x-pholama-token'] || '').slice(0, 4000), ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), onPending: p => line({ approve: p }) };
+    const tctx = { sources: visited, pholamaToken: String(req.headers['x-pholama-token'] || '').slice(0, 4000), ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), onPending: p => line({ approve: p }), onMedia: m => line({ media: m }) };
     if (tools.length) log('step', `${tools.length} tools ready: ${tools.map(t => t.name).join(', ')}`);
     const effort = ['long', 'max'].includes(b.effort) ? b.effort : 'normal';
     // Price this message from the two levels, then take the credits BEFORE answering so the counter visibly drops.
@@ -444,7 +444,18 @@ async function chat(req, res, b) {
         if (r0.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
         log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
         line({ tool: { name: r0.name, args: r0.args, result: result.slice(0, 400) } }); if (visited.size() !== sentSrc) { sentSrc = visited.size(); line({ sources: visited.list() }); }
-        messages.push({ role: 'assistant', content: `<tool>${JSON.stringify(r0)}</tool>` }, { role: 'user', content: `Tool result for ${r0.name}:\n${result}\n\nNow answer the user's question using this result. Be brief.` });
+        let follow = `Tool result for ${r0.name}:\n${result}\n\nNow answer the user's question using this result. Be brief.`;
+        if (r0.then === 'show_video' || r0.then === 'show_image') {   // the server does the showing itself, so a small model cannot skip it
+          const want = r0.then, links = [...result.matchAll(/https?:\/\/[^\s)\]"'<>]+/g)].map(m => m[0].replace(/[.,;]+$/, ''));
+          let shown = null;
+          for (const u of links) { try { const r = agent.media.run(want, { url: u, title: (lastUser.content || '').slice(0, 100) }, { onMedia: m => { shown = m; line({ media: m }); } }); if (shown) { follow = `${r}\nThe user asked: "${String(lastUser.content).slice(0, 200)}". Reply with ONE short friendly line.`; break; } } catch {} }
+          if (!shown && want === 'show_image') { try { const w = await agent.media.imageSearch(r0.args.query); if (w) { shown = { kind: 'image', url: w.url, title: w.title }; line({ media: shown }); follow = `SHOWN: the picture "${w.title}" (from Wikipedia) is now showing in the chat. Reply with ONE short friendly line.`; } } catch {} }
+          if (!shown) follow = `Tool result for ${r0.name}:\n${result}\n\nNo playable ${want === 'show_video' ? 'YouTube video' : 'picture'} link was in the results. Tell the user you could not find one and say what you searched for. Do not make up a link.`;
+          log(shown ? 'result' : 'error', shown ? `Showing a ${shown.kind} in the chat.` : 'No usable link found in the search results.');
+        } else if (r0.then === 'answer_from_sources') {
+          follow = `Search results for the user's question:\n${result}\n\nAnswer the question ONLY from these results. Rules: (1) If at least one result clearly states the answer, give it in one or two sentences and name the website it came from. (2) If two results disagree, say so and give both. (3) If the results do not actually answer it, say "I could not confirm that from the web" and say what you looked for. Never fill the gap from memory and never invent a source.`;
+        }
+        messages.push({ role: 'assistant', content: `<tool>${JSON.stringify(r0)}</tool>` }, { role: 'user', content: follow });
       }
     }
     // Real thinking for ANY model. A model with its own <think> mode does it itself. Every other model gets a hidden first pass that
@@ -798,7 +809,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/github/approve' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ok: true, text: await agent.github.confirm(String(req.headers['x-github-token'] || ''), String(b.id || ''), b.approve === true) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); } }
     // ---- commands the AI proposes: run only after the user clicks Allow, only from this PC's own page ----
-    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/editlog/stream' || p === '/api/providers' || p === '/api/providers/models' || p === '/api/bonus' || p === '/api/bonus/github' || p === '/api/bonus/rewards') {
+    if (p.startsWith('/api/cmd/') || p.startsWith('/api/mytools') || p === '/api/editlog' || p === '/api/editlog/stream' || p === '/api/providers' || p === '/api/providers/models' || p === '/api/bonus' || p === '/api/bonus/github' || p === '/api/bonus/rewards') {
       if (req.who !== 'local') return json(res, 403, { error: 'This can only be done on the PC itself.' });
       const o = req.headers.origin;   // the public website is allowed to chat with this PC, but never to approve or stop commands
       if (o && !new RegExp('^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\]):' + PORT + '$').test(o)) return json(res, 403, { error: 'Approve commands in the Pholama window on this PC.' });
@@ -810,6 +821,17 @@ const server = http.createServer(async (req, res) => {
         catch (e) { return json(res, 200, { ok: false, text: e.message }); }
       }
       if (p === '/api/cmd/stop' && req.method === 'POST') return json(res, 200, { ok: agent.power.stopRunning() });
+      // ---- "My tools": tools you make yourself. Secrets stay on this PC and are never sent back. ----
+      if (p === '/api/mytools' && req.method === 'GET') return json(res, 200, { tools: agent.usertools.list(), secrets: agent.usertools.secretNames() });
+      if (p === '/api/mytools/save' && req.method === 'POST') { const b = await body(req); try { const n = agent.usertools.save({ ...b, by: 'user' }); return json(res, 200, { ok: true, name: n, tools: agent.usertools.list() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+      if (p === '/api/mytools/delete' && req.method === 'POST') { const b = await body(req); try { agent.usertools.remove(b.name); return json(res, 200, { ok: true, tools: agent.usertools.list() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+      if (p === '/api/mytools/switch' && req.method === 'POST') { const b = await body(req); try { agent.usertools.setOn(b.name, b.on === true); return json(res, 200, { ok: true, tools: agent.usertools.list() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+      if (p === '/api/mytools/secret' && req.method === 'POST') { const b = await body(req); try { agent.usertools.setSecret(b.name, b.value); return json(res, 200, { ok: true, secrets: agent.usertools.secretNames() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+      if (p === '/api/mytools/approve' && req.method === 'POST') {
+        const b = await body(req), id = String(b.id || '');
+        if (b.approve !== true) return json(res, 200, { ok: agent.rejectTool(id), text: 'Denied. Nothing ran.' });
+        try { return json(res, 200, { ok: true, text: await agent.approveTool(id) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); }
+      }
       if (p === '/api/providers/models' && req.method === 'GET') {   // the models this saved key can really use (asked from the company, key never leaves this PC except to them)
         try { return json(res, 200, await providers.modelsFor(u.searchParams.get('id'))); } catch (e) { return json(res, 400, { error: providers.scrub(e.message) }); }
       }

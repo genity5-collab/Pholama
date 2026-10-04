@@ -8,6 +8,7 @@ const DAILY = +process.env.PHOLAMA_DAILY_CREDITS || 1000;
 
 // What each feature costs (credits). Plain local chat is always free.
 // Tools are free. Only thinking mode uses credits.
+const pendingTools = new Map();   // custom tools waiting for the user's Allow
 const COST = { search: 0, fetch: 0, calc: 0, time: 0, mcp: 0, thinking: 25, memory: 0, ghread: 0, ghwrite: 0, cmd: 0, studio: 0 };
 const github = require('./github');
 const studio = require('./studio');
@@ -15,6 +16,8 @@ const tools2 = require('./tools2');
 const sources = require('./sources');
 const power = require('./power');
 const plugins = require('./plugins');
+const usertools = require('./usertools');
+const media = require('./media');
 
 function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function load() { try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { return {}; } }
@@ -206,7 +209,9 @@ function systemPrompt(tools, thinking, memories, effort) {
     p += '\n[how to work]\nYou may call ONE tool per turn. To call it, write exactly: <tool_call>{"name": "TOOL_NAME", "arguments": {...}}</tool_call> and stop. You will get the result, then continue. Call another tool if the task needs more steps, and answer in plain words when it is done.\n' +
       'Work in steps: look first, then change, then check. Never guess a file\'s content: list_files and read_file first. After write_file or edit_file, read the file again to check it. Use edit_file for small changes and write_file for new files. Never claim you did something a tool did not confirm.\n' +
       (names.includes('write_file') ? 'Files live in the Pholama workspace folder. Use short relative paths like "notes/todo.txt".\n' : '') +
-      (names.includes('web_search') ? 'For news, prices, weather or anything after your training, use web_search then fetch_page, and say where it came from.\n' : '') +
+      (names.includes('web_search') ? 'For any factual question (people, places, dates, numbers, news, prices, weather, sports, science), do not answer from memory: use web_search first, then fetch_page if the snippets are not enough. Answer only when a result clearly supports it, say which website it came from, and if nothing reliable turns up say "I could not confirm that" instead of guessing.\n' : '') +
+      (names.includes('show_video') ? 'To show a video, web_search for it, then call show_video with a real youtube link from the results. To show a picture, find a real image link then call show_image. Never invent a link or an id.\n' : '') +
+      (names.includes('create_plugin') ? 'If the user asks for an ability you do not have (edit their Supabase, post to Discord, call an API), use create_plugin to make a tool for it. Keys always go in headers as {{secret.NAME}}; never write a real key. Tell the user which secret to add in Plugins > My tools.\n' : '') +
       (names.includes('calculator') ? 'Use calculator for any exact maths instead of doing it in your head.\n' : '');
   }
   return p;
@@ -361,7 +366,8 @@ async function buildTools(a) {
   if (a.tools) tools.push(...tools2.tools());   // workspace files + helpers: local, free, confined to one folder
   if (a.github) tools.push(...github.tools());
   if (a.platform) tools.push(...plugins.PLATFORM_TOOLS);   // read only: newest posts, daily post, projects, rules, updates
-  if (a.skills) tools.push(...plugins.SKILL_TOOLS);
+  if (a.skills) { tools.push(...plugins.SKILL_TOOLS); tools.push(usertools.MAKER_TOOL, ...usertools.asTools().map(t => ({ name: t.name, desc: t.desc, kind: 'usertool' }))); }
+  if (a.search) tools.push(...media.tools());   // show_video / show_image: only when the web switch is on
   if (a.studio && a.inStudio) tools.push(...studio.tools());
   if (a.terminal) tools.push({ name: 'run_command', desc: 'Run ONE shell command on the user\'s PC. The user must click Allow first; nothing runs until they do. args: {"command": string, "cwd": string (optional folder inside the home folder), "why": string (one short sentence for the user)}', kind: 'cmd' });
   const mcp = [];
@@ -435,6 +441,17 @@ async function runToolRaw(tools, name, args, ctx) {
   }
   if (studio.isStudio(name)) return runStudioLogged(name, args);   // local and free, works even with 0 credits
   if (plugins.isSkillTool(name)) return plugins.runSkillTool(name, args);   // local and free
+  if (media.isMedia(name)) return media.run(name, args, ctx);   // a video or picture card for the chat
+  if (usertools.isMaker(name)) return usertools.runMaker(args);   // the AI writes the recipe only; secrets are added by the user
+  if (usertools.isUserTool(name)) {   // a tool the user made: reads run, anything that changes data waits for the user's OK
+    if (usertools.needsApproval(name)) {
+      const id = require('crypto').randomBytes(8).toString('hex'); pendingTools.set(id, { name, args: args || {}, at: Date.now() });
+      for (const [k, v] of pendingTools) if (Date.now() - v.at > 15 * 60 * 1000) pendingTools.delete(k);
+      if (ctx && ctx.onPending) ctx.onPending({ id, type: 'tool', title: 'Run your tool ' + name.slice(2), tool: name.slice(2), details: JSON.stringify(args || {}).slice(0, 400) });
+      return 'This tool changes data, so it is waiting for the user to click Allow. It has NOT run. Tell the user it needs their approval and stop. Do not say it ran.';
+    }
+    return usertools.run(name, args);
+  }
   if (plugins.isPlatform(name)) { if (name !== 'platform_updates' && !spend(COST.search)) throw new Error('out of daily credits'); return plugins.runPlatform(name, args, ctx && ctx.pholamaToken); }
   if (github.isGithub(name)) {
     if (!spend(COST[t.kind])) throw new Error('out of daily credits');
@@ -492,6 +509,32 @@ function lazyRefusal(userText, reply) {
 const LAZY_RETRY = 'That request is normal and allowed. Do not say it is too complex or outside your scope. Give the user a real, working first version right now: short, complete code in one code block, then one line saying what to add next. If it is big, do the smallest useful part first.';
 
 // Small models often ignore the tool format. Route obvious intents on the host so tools still work.
+// A plain factual question ("who is the tallest man?", "how far is the moon?", "when was X built?"). These should be looked up, not guessed.
+// It is deliberately narrow: not chat ("how are you"), not maths, not code or Studio requests, not opinions or advice.
+function factualQuestion(text) {
+  const t = String(text || '').trim().replace(/\s+/g, ' '); if (t.length < 8 || t.length > 160) return '';
+  if (/```|[{};]{2}/.test(t)) return '';
+  if (/^(?:please\s+)?(?:can|could|would|will)\s+you\b|\b(?:write|make|build|create|fix|code|edit|open|delete|generate|draw|translate|summari[sz]e|explain (?:this|my|the code)|help me)\b/i.test(t)) return '';
+  if (/\b(?:you|your|yourself|i|me|my|we|us|our)\b/i.test(t) && !/^who (?:is|was) the\b/i.test(t)) return '';   // about the chat itself or the user
+  if (/^how (?:are|is it going|do i|can i|should i|to)\b/i.test(t) || /\b(?:should|better|best way|advice|opinion|think of|favou?rite)\b/i.test(t)) return '';
+  if (/^(?:what|who|when|where|which|how (?:many|much|far|long|old|tall|big|fast|high|deep|heavy|hot|cold)|why|is|are|was|were|does|did|do|has|have)\b/i.test(t) || /\?$/.test(t)) {
+    const q = t.replace(/[?.!]+$/, ''); if (q.split(' ').length < 3) return '';
+    if (/\d\s*[-+*/x×^%]\s*\d/.test(q)) return '';   // maths goes to the calculator
+    const subject = q.split(' ').filter(w => w.length >= 4 && !/^(?:what|which|when|where|does|that|this|there|here|good|bad|real|true|false|have|been|with|from|about|would|could|should)$/i.test(w));
+    if (!subject.length) return '';   // nothing specific to look up ("is it good")
+    return q.slice(0, 160);
+  }
+  return '';
+}
+// A request to SEE a video or a picture: look one up first, then show it.
+function mediaRequest(text) {
+  const t = String(text || '').trim().replace(/\s+/g, ' ');
+  let m = /^(?:please\s+)?(?:can you\s+|could you\s+)?(?:show|post|send|find|play|get|give)(?:\s+me)?\s+(?:a\s+|an\s+|the\s+|some\s+)?(?:youtube\s+)?(video|videos|clip|trailer)\s+(?:of|about|on|for)?\s*(.{3,})$/i.exec(t) || /^(?:please\s+)?(?:show|post|send|find|play|get|give)(?:\s+me)?\s+(?:a\s+|an\s+)?(.{3,}?)\s+(?:youtube\s+)?(video|clip|trailer)$/i.exec(t);
+  if (m) { const kind = /^(video|videos|clip|trailer)$/i.test(m[1]) ? m[2] : m[1]; return { kind: 'video', query: (kind + ' youtube video').replace(/[?.!]+$/, '').slice(0, 160) }; }
+  m = /^(?:please\s+)?(?:can you\s+|could you\s+)?(?:show|post|send|find|get|give)(?:\s+me)?\s+(?:a\s+|an\s+|the\s+|some\s+)?(?:picture|image|photo|pic)s?\s+(?:of|about|for)\s+(.{3,})$/i.exec(t) || /^(?:please\s+)?(?:show|post|send|find|get|give)(?:\s+me)?\s+(?:a\s+|an\s+)?(.{3,}?)\s+(?:picture|image|photo|pic)$/i.exec(t);
+  if (m) return { kind: 'image', query: (m[1] + ' photo').replace(/[?.!]+$/, '').slice(0, 160) };
+  return null;
+}
 function routeIntent(text, tools, history) {
   const has = n => tools.some(t => t.name === n), t = String(text || '').trim();
   const math = /(-?\d[\d.,]*\s*(?:[-+*/x×^%]|times|plus|minus|divided by|multiplied by)\s*-?\d[\d.,]*(?:\s*(?:[-+*/x×^%]|times|plus|minus|divided by|multiplied by)\s*-?\d[\d.,]*)*)/i.exec(t);
@@ -517,6 +560,10 @@ function routeIntent(text, tools, history) {
   if (nw && has('web_search')) return { name: 'web_search', args: { query: (/^who\s/i.test(t) ? t.replace(/^(?:please\s+)?/i, '') : 'latest news ' + nw[1]).replace(/[?.!]+$/, '') } };
   const url = /https?:\/\/\S+/.exec(t);
   if (url && has('fetch_page')) return { name: 'fetch_page', args: { url: url[0].replace(/[),.;]+$/, '') } };
+  const mr = mediaRequest(t);
+  if (mr && has('web_search') && has(mr.kind === 'video' ? 'show_video' : 'show_image')) return { name: 'web_search', args: { query: mr.kind === 'video' ? mr.query + ' site:youtube.com' : mr.query }, then: mr.kind === 'video' ? 'show_video' : 'show_image' };
+  const fq = factualQuestion(t);
+  if (fq && has('web_search')) return { name: 'web_search', args: { query: fq }, then: 'answer_from_sources' };
   return null;
 }
 
@@ -665,4 +712,6 @@ function safeShowLength(acc) {
 }
 const isToolFail = r => /^Tool error/.test(String(r || ''));
 
-module.exports = { cleanSearchQuery, loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+async function approveTool(id) { const p = pendingTools.get(id); if (!p) throw new Error('That request expired or was already answered.'); pendingTools.delete(id); if (!usertools.isUserTool(p.name)) throw new Error('That tool no longer exists.'); return usertools.run(p.name, p.args); }
+function rejectTool(id) { return pendingTools.delete(id); }
+module.exports = { factualQuestion, mediaRequest, usertools, media, approveTool, rejectTool, cleanSearchQuery, loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
