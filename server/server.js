@@ -916,8 +916,15 @@ const server = http.createServer(async (req, res) => {
     }
     // static
     let f = path.join(WEB, p === '/' ? 'index.html' : p);
-    if (!f.startsWith(WEB) || !fs.existsSync(f) || fs.statSync(f).isDirectory()) { res.writeHead(404); return res.end('not found'); }
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream' }); fs.createReadStream(f).pipe(res);
+    const inside = f === WEB || f.startsWith(WEB + path.sep);   // "web-other" must not count as inside "web"
+    let st; try { st = inside ? fs.statSync(f) : null; } catch { st = null; }
+    if (!st || st.isDirectory()) { res.writeHead(404); return res.end('not found'); }
+    // The browser must ask this PC every time, otherwise after an update it keeps showing the OLD Studio, pages and icons (it guesses a cache time
+    // when there is no header). An ETag makes that check cheap: nothing changed = a tiny "304 not modified" answer, no download.
+    const tag = '"' + st.size.toString(36) + '-' + Math.floor(st.mtimeMs).toString(36) + '"';
+    const hdr = { 'Content-Type': MIME[path.extname(f)] || 'application/octet-stream', 'Cache-Control': 'no-cache', ETag: tag };
+    if (req.headers['if-none-match'] === tag) { res.writeHead(304, hdr); return res.end(); }
+    res.writeHead(200, { ...hdr, 'Content-Length': st.size }); fs.createReadStream(f).pipe(res);
   } catch (e) { json(res, 500, { error: e.message }); }
 });
 server.listen(PORT, HOST, () => {

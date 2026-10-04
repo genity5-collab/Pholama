@@ -1,6 +1,18 @@
 {
- "latest": "0.9.11",
+ "latest": "0.9.12",
  "releases": [
+  {
+   "version": "0.9.12",
+   "date": "2026-10-04",
+   "title": "Fix: Studio and icons not updating, new llama logo",
+   "notes": [
+    "Fixed: after an update, Studio and the rest of the page could keep showing the OLD version. The PC now tells the browser to check for fresh files every time (a quick check, nothing is downloaded if nothing changed). Press Ctrl+F5 once after updating to 0.9.12",
+    "New llama logo: a llama in profile with two ears, an eye and a long neck, on a dark rounded tile like the original. It replaces the round face from the last design and is sharp from the 16 px browser tab up to the Windows desktop icon",
+    "Icons are now small (6 KB instead of 700 KB), the Windows desktop icon has every size, and phones get a proper home screen icon that is never cropped",
+    "The offline list now includes every page file, so the app also works without internet",
+    "Safer: the PC can no longer be tricked into reading a folder that just starts with the same name as the web folder"
+   ]
+  },
   {
    "version": "0.9.11",
    "date": "2026-10-04",
