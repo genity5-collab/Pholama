@@ -146,7 +146,7 @@ const list = () => { sweep(); return [...pending.values()].map(p => ({ id: p.id,
 
 // ---------- login bonus: +55 tool credits, once per account, granted by the server (never by this page) ----------
 function bonusState() { try { return JSON.parse(fs.readFileSync(BONUS_FILE, 'utf8')); } catch { return { users: {} }; } }
-function bonusTotal() { const s = bonusState(); return [...Object.values(s.users || {}), ...Object.values(s.github || {})].reduce((n, v) => n + (+v.credits || 0), 0); }
+function bonusTotal() { const s = bonusState(); return [...Object.values(s.users || {}), ...Object.values(s.github || {}), ...Object.values(s.rewards || {})].reduce((n, v) => n + (+v.credits || 0), 0); }
 // The page sends the login token. We ask the Pholama server ourselves, so a number sent by the page is never trusted.
 async function claimBonus(token) {
   if (!token || typeof token !== 'string' || token.length > 4000) throw new Error('Log in first.');
@@ -187,4 +187,26 @@ async function claimGithubBonus(token) {
   return { bonus: bonusTotal(), granted: true, both: true };
 }
 
-module.exports = { LIMITS, propose, approve, reject, list, stopRunning, checkCommand, readLog, clearLog, logEntry, claimBonus, claimGithubBonus, bonusTotal };
+// ---------- report rewards + moderator gifts: integration credits, claimed from the database with the person's own token ----------
+// The database decides how many credits are waiting and hands them over exactly once. This page/server never trusts a number from the browser.
+function rewardsTotal() { const s = bonusState(); return Object.values(s.rewards || {}).reduce((n, v) => n + (+v.credits || 0), 0); }
+async function claimRewards(token, fetchImpl = fetch) {
+  const anonKey = (fs.readFileSync(path.join(__dirname, '..', 'web', 'config.js'), 'utf8').match(/SUPABASE_ANON_KEY:\s*'([^']+)'/) || [])[1] || '';
+  if (!token || typeof token !== 'string' || token.length > 4000) throw new Error('Log in first.');
+  const h = { Authorization: 'Bearer ' + token, apikey: String(anonKey || ''), 'Content-Type': 'application/json' };
+  const who = await fetchImpl(SB_URL + '/auth/v1/user', { headers: h, signal: AbortSignal.timeout(10000) });
+  const user = await who.json().catch(() => null);
+  if (!who.ok || !user || !/^[0-9a-f-]{36}$/i.test(user.id || '')) throw new Error('Could not read your account.');
+  const r = await fetchImpl(SB_URL + '/rest/v1/rpc/pholama_claim_rewards', { method: 'POST', headers: h, body: '{}', signal: AbortSignal.timeout(10000) });
+  const n = await r.json().catch(() => null);
+  if (!r.ok || typeof n !== 'number') throw new Error('Could not collect your credits yet.');
+  const got = Math.max(0, Math.min(100000, Math.floor(n)));
+  if (got > 0) {   // each claim is recorded on its own, so adding the same claim twice is impossible (the database only pays once)
+    const s = bonusState(); s.rewards = s.rewards || {}; s.rewards[Date.now() + '-' + user.id] = { credits: got, at: new Date().toISOString() };
+    fs.mkdirSync(DIR, { recursive: true }); fs.writeFileSync(BONUS_FILE, JSON.stringify(s, null, 2));
+    logEntry({ kind: 'bonus', status: 'granted', credits: got });
+  }
+  return { granted: got, bonus: bonusTotal() };
+}
+
+module.exports = { LIMITS, propose, approve, reject, list, stopRunning, checkCommand, readLog, clearLog, logEntry, claimBonus, claimGithubBonus, claimRewards, bonusTotal };

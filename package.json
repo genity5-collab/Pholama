@@ -1,19 +1,20 @@
 {
- "name": "pholama",
- "version": "0.9.4",
- "description": "Pholama: run AI models on your own PC. CLI: pholama pull | chat | serve | rm | update.",
- "bin": {
-  "pholama": "server/cli.js",
-  "phollama": "server/cli.js",
-  "pholama-server": "server/server.js"
- },
- "scripts": {
-  "start": "node server/server.js",
-  "sync-site": "node scripts/sync-site.js",
-  "test": "node scripts/sync-site.js --check && node test/core.test.js"
- },
- "engines": {
-  "node": ">=18"
- },
- "license": "MIT"
+  "name": "pholama",
+  "version": "0.9.5",
+  "description": "Pholama: run AI models on your own PC. CLI: pholama pull | chat | serve | rm | update.",
+  "bin": {
+    "pholama": "server/cli.js",
+    "phollama": "server/cli.js",
+    "pholama-server": "server/server.js"
+  },
+  "scripts": {
+    "start": "node server/server.js",
+    "sync-site": "node scripts/sync-site.js",
+    "test": "node scripts/sync-site.js --check && node test/core.test.js && node test/recommend.test.js && node test/tools.test.js && node test/rewards-claim.test.js",
+    "test:e2e": "node test/lowram.e2e.js && node test/pricing.e2e.js && node test/sleep.e2e.js && node test/retry.e2e.js"
+  },
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
 }

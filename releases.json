@@ -1,6 +1,19 @@
 {
- "latest": "0.9.4",
+ "latest": "0.9.5",
  "releases": [
+  {
+   "version": "0.9.5",
+   "date": "2026-10-04",
+   "title": "Support tickets, moderator credit gifts, report rewards, 7 newer models, and gentler on low memory",
+   "notes": [
+    "Support: open a ticket from the Platform. Only moderators can reply. Moderators can close tickets, give integration credits, remove warnings and unban, all from an inbox without typing commands",
+    "Report a post that a moderator then removes and you earn 100 integration credits (max 500 a day, once per post, never for your own post). Moderator gifts and report rewards are collected together the next time you open Pholama on your PC",
+    "7 newer models: Qwen3.5 0.8B, 2B, 4B, 9B, 27B and 35B-A3B, plus Gemma 4 E4B. 4B and up run tools. The recommended model now grows with your memory (Qwen3.5 4B from 6 GB, 9B from 12 GB) instead of always being a 2024 model",
+    "Low memory: under 3 GB free, Pholama runs gently (smaller chat memory, compressed cache, fewer threads, short rests). Under 1.5 GB free it unloads the AI to give the memory back and loads it again on your next message. It never cuts off a reply",
+    "Pictures, pasted code and Studio messages now use integration credits (5 per picture, 2 per 1,000 characters of code up to 30, 3 per Studio message). Chat on your own model stays free, even at zero credits",
+    "File tools: a missing \"content\" no longer silently empties a file, Windows device names (CON, NUL, COM1...) are refused, and deleting a folder says so clearly"
+   ]
+  },
   {
    "version": "0.9.4",
    "date": "2026-10-04",

@@ -398,9 +398,11 @@ function stopGen() { if (busy && stopper) { stopped = true; try { stopper(); } c
 const pcModelNames = () => [...sel.options].filter(o => !o.disabled).map(o => o.value);
 
 // Talks to the PC server and streams the answer. Shared by the normal PC path and the Max fallback.
+let pendingImages = 0;   // pictures attached to the message being sent (a count only). Cleared after the first PC call so a fallback never charges twice.
 async function pcChat(model, msg, onText) {
+  const imagesNow = pendingImages; pendingImages = 0;
   const ac = new AbortController(); stopper = () => ac.abort();
-  const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: history, agent: true, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [] }) });
+  const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: history, agent: true, images: imagesNow, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [] }) });
   const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
   for (;;) {
     const { done, value } = await rd.read(); if (done) break;
@@ -434,6 +436,7 @@ async function send() {
   let shownText = text, attach = null;
   try {
     if (files.length) { attach = await prepare(text, history, m => msg.log('step', m, 0)); shownText = attach.content; }
+    pendingImages = attach && attach.hasImages ? Math.min(4, (attach.seen || []).length) : 0;
     history.push({ role: 'user', content: shownText }); clearAttachments();
     saveCurrentSession();
     const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');

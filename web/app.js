@@ -423,9 +423,11 @@ function stopGen() { if (busy && stopper) { stopped = true; try { stopper(); } c
 const pcModelNames = () => [...sel.options].filter(o => !o.disabled).map(o => o.value);
 
 // Talks to the PC server and streams the answer. Shared by the normal PC path and the Max fallback.
+let pendingImages = 0;   // pictures attached to the message being sent (a count only). Cleared after the first PC call so a fallback never charges twice.
 async function pcChat(model, msg, onText) {
+  const imagesNow = pendingImages; pendingImages = 0;
   const ac = new AbortController(); stopper = () => ac.abort();
-  const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: history, agent: true, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [], duo: duoOn(), duoHelper: duoHelperId() }) });
+  const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: history, agent: true, images: imagesNow, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [], duo: duoOn(), duoHelper: duoHelperId() }) });
   const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
   for (;;) {
     const { done, value } = await rd.read(); if (done) break;
@@ -463,6 +465,7 @@ async function send() {
       attach = await prepare(text, history, m => msg.log('step', m, 0));
       shownText = attach.content;
     }
+    pendingImages = attach && attach.hasImages ? Math.min(4, (attach.seen || []).length) : 0;
     history.push({ role: 'user', content: shownText }); clearAttachments();
     saveCurrentSession();
     const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');
@@ -563,7 +566,7 @@ async function afterAuth() {
   const u = Account.user();
   memOn = false; memories = [];
   if (u) claimBonus();
-  if (u) githubBothBonus();
+  if (u) { githubBothBonus(); collectRewards(); }
   if (u) shareRecentAis();
   if (u) { try { memOn = await Account.memoryOn(); if (memOn) memories = (await Account.list()).map(m => m.content); } catch {} }
 }
@@ -1284,6 +1287,15 @@ $('#clearHistBtn').onclick = () => {
 
 init().then(refreshCredits).then(() => showView('dash'));
 
+// ----- Report rewards + moderator gifts: the database says how many are waiting, the PC server collects them with your own login. -----
+async function collectRewards() {
+  if (!server || remoteBase()) return;
+  try {
+    const t = Account.token(); if (!t) return;
+    const r = await (await api('api/bonus/rewards', { method: 'POST', body: JSON.stringify({ token: t }) })).json();
+    if (r && r.granted > 0) { await refreshCredits(); add('sys', '+' + r.granted + ' integration credits added (report rewards and moderator gifts).'); }
+  } catch {}
+}
 // ----- GitHub on both: this page only reports where you signed in. The database decides, and the PC server grants the 250. -----
 async function githubBothBonus() {
   if (!server || remoteBase()) return;   // only the real PC app counts as the PC

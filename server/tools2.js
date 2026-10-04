@@ -11,12 +11,17 @@ function safe(rel) {
   const r = String(rel == null ? '' : rel).replace(/\\/g, '/').replace(/^\/+/, '');
   if (r.includes('\0') || r.split('/').some(p => p === '..')) throw new Error('that path is not allowed');
   if (/^[a-zA-Z]:/.test(r)) throw new Error('use a path inside the workspace, not a drive letter');
+  // Windows treats these names as devices (CON, NUL, COM1...), with or without an extension: they are never real files
+  if (r.split('/').some(p => /^(con|prn|aux|nul|com[0-9]|lpt[0-9])$/i.test(p.split('.')[0].replace(/[ ]+$/, '').trim()))) throw new Error('that file name is reserved by Windows. Pick another name.');
   const base = ensure(), full = path.resolve(base, r);
   if (full !== base && !full.startsWith(base + path.sep)) throw new Error('that path is outside the workspace');
   try { const real = fs.realpathSync(fs.existsSync(full) ? full : path.dirname(full)); const rb = fs.realpathSync(base); if (real !== rb && !real.startsWith(rb + path.sep)) throw new Error('that path leads outside the workspace'); } catch (e) { if (/outside/.test(e.message)) throw e; }
   return full;
 }
 const rel = p => path.relative(ROOT, p).split(path.sep).join('/') || '.';
+// A model that forgets "content" must not silently empty a file: an empty string is fine on purpose, a missing value is not.
+function needContent(a) { if (a.content == null) throw new Error('"content" is missing. Send the full text to write in "content" (use "" only to empty the file on purpose).'); return String(a.content); }
+function needFile(f, what) { if (f === ROOT) throw new Error('give a file name in "path", not the workspace folder itself'); return f; }
 function walk(dir, out, depth = 0) {
   if (out.length >= MAX_FILES || depth > 6) return;
   let ents = []; try { ents = fs.readdirSync(dir, { withFileTypes: true }); } catch { return; }
@@ -45,14 +50,14 @@ const TOOLS = {
     return t + '\n(' + total + ' lines in ' + rel(f) + ')';
   } },
   write_file: { desc: 'Create or replace a text file in the workspace (folders are created). args: {"path": string, "content": string}', run(a) {
-    const f = safe(a.path), c = String(a.content == null ? '' : a.content);
+    const f = needFile(safe(a.path)), c = needContent(a);
     if (Buffer.byteLength(c) > MAX_WRITE) throw new Error('file too big (max ' + MAX_WRITE + ' bytes)');
     if (/\.(exe|bat|cmd|com|scr|msi|dll|vbs|hta|ps1|lnk)$/i.test(f)) throw new Error('that file type is not allowed');
     fs.mkdirSync(path.dirname(f), { recursive: true }); const had = fs.existsSync(f); fs.writeFileSync(f, c);
     return (had ? 'Replaced ' : 'Created ') + rel(f) + ' (' + Buffer.byteLength(c) + ' bytes)';
   } },
   append_file: { desc: 'Add text to the end of a workspace file (created if missing). args: {"path": string, "content": string}', run(a) {
-    const f = safe(a.path), c = String(a.content == null ? '' : a.content);
+    const f = needFile(safe(a.path)), c = needContent(a);
     if (/\.(exe|bat|cmd|com|scr|msi|dll|vbs|hta|ps1|lnk)$/i.test(f)) throw new Error('that file type is not allowed');
     fs.mkdirSync(path.dirname(f), { recursive: true });
     if (fs.existsSync(f) && fs.statSync(f).size + Buffer.byteLength(c) > MAX_WRITE) throw new Error('file would get too big');
@@ -73,7 +78,7 @@ const TOOLS = {
   } },
   make_folder: { desc: 'Create a folder in the workspace. args: {"path": string}', run(a) { const f = safe(a.path); fs.mkdirSync(f, { recursive: true }); return 'Folder ready: ' + rel(f); } },
   delete_file: { desc: 'Delete ONE file from the workspace (not folders). args: {"path": string}', run(a) {
-    const f = safe(a.path); if (!fs.existsSync(f) || !fs.statSync(f).isFile()) throw new Error('file not found'); fs.unlinkSync(f); return 'Deleted ' + rel(f);
+    const f = safe(a.path); if (f === ROOT) throw new Error('give a file name in "path"'); if (fs.existsSync(f) && fs.statSync(f).isDirectory()) throw new Error(rel(f) + ' is a folder. This tool only deletes single files.'); if (!fs.existsSync(f)) throw new Error('file not found: ' + rel(f)); fs.unlinkSync(f); return 'Deleted ' + rel(f);
   } },
   json_tool: { desc: 'Check and pretty-print JSON, or read one value from it. args: {"text": string, "path": string (optional, like "a.b.0.c")}', run(a) {
     let j; try { j = JSON.parse(String(a.text || '')); } catch (e) { throw new Error('not valid JSON: ' + e.message); }

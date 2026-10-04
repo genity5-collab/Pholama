@@ -5,6 +5,9 @@
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path');
 const https = require('https'), { spawn, execSync } = require('child_process');
 const agent = require('./agent');
+const pricing = require('./pricing');
+const ram = require('./ram');
+const freeMem = () => (process.env.PHOLAMA_FAKE_FREEMEM_FILE ? (+String(require('fs').readFileSync(process.env.PHOLAMA_FAKE_FREEMEM_FILE, 'utf8')).trim() || os.freemem()) : os.freemem());   // test seam only
 const sec = require('./security');
 
 const PORT = +process.env.PORT || 11435;
@@ -48,13 +51,7 @@ function hardware() {
   if (!h.gpu && process.platform === 'darwin' && os.arch() === 'arm64') { h.gpu = 'Apple Silicon (unified memory)'; h.vramGB = h.ramGB; }
   return h;
 }
-// The RECOMMENDED model is the smallest one that can run tools (so Max-style actions work) and still fits this PC.
-// Computed from the catalog, never hard-coded, so it stays right when models are added.
-function pickRecommended(list, budget) {
-  const ok = list.filter(m => m.toolTier === 'good' && budget >= m.minRamGB);   // never recommend a model that cannot really run tools
-  ok.sort((a, b) => a.bytes - b.bytes);
-  return ok.length ? ok[0].id : null;
-}
+const { pickRecommended } = require('./recommend');
 function recommend(h) {
   const budget = h.vramGB && h.vramGB > 2 ? Math.max(h.vramGB, h.ramGB * 0.6) : h.ramGB;
   const recId = pickRecommended(CATALOG, budget);
@@ -100,6 +97,7 @@ const duoMod = require('./duo');
 const helperEng = require('./helper-engine').create({ findBin: () => findLlamaServer(), modelsDir: MODELS_DIR, get: u => get(u), log: m => console.log('  ' + m) });
 try { helperEng.cleanupStale(); } catch {}
 let llamaCtx = 4096, llamaReady = false, startChain = Promise.resolve();
+let lowRamRetry = false, lastRamLevel = 'normal', activeReplies = 0, lastReplyAt = Date.now(); const rest = { ms: 0 };   // rest.ms: short pause between replies when memory is low
 // Only ONE start/restart may run at a time. Two messages arriving together used to launch two engines on the same port;
 // the second one crashed ("couldn't bind") and the chat went dead. Later callers now wait their turn and re-check.
 function startLlama(file) {
@@ -109,7 +107,11 @@ function startLlama(file) {
 }
 async function startLlamaNow(file) {
   const cm = CATALOG.find(x => x.file === file);
-  const ctx = chooseContext(cm && cm.ctx, +(hardware().ramGB || 0));
+  let ctx = chooseContext(cm && cm.ctx, +(hardware().ramGB || 0));
+  // Short on free memory right now? Run gentler (smaller chat memory, compressed cache, fewer threads). At 3 GB free or more nothing changes.
+  const lvl = ram.levelFor(freeMem()), gentle = ram.settingsFor(lvl, ctx, (os.cpus() || []).length);
+  if (lvl !== 'normal') { ctx = gentle.ctx; if (lvl !== lastRamLevel) console.log('  ' + ram.describe(lvl, freeMem())); }
+  lastRamLevel = lvl; rest.ms = gentle.restMs;
   if (llama && llamaReady && llamaModel === file && llamaCtx === ctx) {
     try { if ((await get(`http://127.0.0.1:${LLAMA_PORT}/health`)).status === 200) return; } catch {}   // looks alive but is not answering: restart it
   }
@@ -121,13 +123,14 @@ async function startLlamaNow(file) {
     bin = findLlamaServer();
     if (!bin) throw new Error('The AI engine (llama.cpp) could not be set up automatically' + (inst.error ? ': ' + inst.error : '') + '. Check your internet connection and try again, or install Ollama from ollama.com and leave it running.');
   }
-  const args = ['-m', path.join(MODELS_DIR, file), '--port', String(LLAMA_PORT), '-c', String(ctx), '-ngl', '99', '--embeddings', '--pooling', 'mean'];
+  const baseArgs = ['-m', path.join(MODELS_DIR, file), '--port', String(LLAMA_PORT), '-c', String(ctx), '-ngl', '99', '--embeddings', '--pooling', 'mean'];
+  let args = lvl === 'normal' || lowRamRetry ? baseArgs : [...baseArgs, ...ram.engineArgs(gentle)];
   llamaCtx = ctx;
   // No console window (Windows would open a black terminal for the engine) - its output goes to a log file instead.
   const logPath = path.join(os.homedir(), '.pholama', 'engine.log');
   let logFd = 'ignore';
   try { fs.mkdirSync(path.dirname(logPath), { recursive: true }); if (fs.existsSync(logPath) && fs.statSync(logPath).size > 2 * 1024 * 1024) fs.writeFileSync(logPath, ''); logFd = fs.openSync(logPath, 'a'); fs.writeSync(logFd, '\n--- ' + new Date().toISOString() + ' starting ' + file + '\n'); } catch {}
-  llama = spawn(bin, args, { stdio: ['ignore', logFd, logFd], windowsHide: true }); const me0 = llama; llamaModel = file; llamaStartedAt = Date.now();
+  llama = spawn(bin, args, { stdio: ['ignore', logFd, logFd], windowsHide: true }); lastReplyAt = Date.now(); const me0 = llama; llamaModel = file; llamaStartedAt = Date.now();
   if (typeof logFd === 'number') llama.once('spawn', () => { try { fs.closeSync(logFd); } catch {} });
   try { fs.mkdirSync(path.dirname(PIDFILE), { recursive: true }); fs.writeFileSync(PIDFILE, String(llama.pid)); } catch {}
   llama.on('exit', () => { if (llama === me0 || llama === null) { llama = null; llamaModel = null; llamaReady = false; try { fs.unlinkSync(PIDFILE); } catch {} } });
@@ -136,6 +139,12 @@ async function startLlamaNow(file) {
     try { if ((await get(`http://127.0.0.1:${LLAMA_PORT}/health`)).status === 200) { llamaReady = true; return; } } catch {}
     if (llama !== me) break;   // the engine already exited (damaged model, out of memory): no point waiting
     await new Promise(r => setTimeout(r, i < 10 ? 300 : 1000));
+  }
+  // The engine died right away while running with the extra low-memory flags: an older engine may not know one of them.
+  // Try once more with the plain settings so a flag can never make a model unusable.
+  if (llama !== me && args !== baseArgs && !lowRamRetry) {
+    console.log('  The engine did not accept the low-memory settings. Starting it again with plain settings.');
+    lowRamRetry = true; try { return await startLlamaNow(file); } finally { lowRamRetry = false; }
   }
   let why = ''; try { why = fs.readFileSync(logPath, 'utf8').split('\n').filter(Boolean).slice(-4).join(' | ').slice(-300); } catch {}
   throw new Error((llama === me ? 'The AI engine did not start in time.' : 'The AI engine stopped right after starting (the model file may be damaged, or there is not enough free memory).') + (why ? ' Last engine message: ' + why : '') + ' Full log: ' + logPath);
@@ -341,6 +350,7 @@ async function chat(req, res, b) {
   const ac = new AbortController(); res.on('close', () => ac.abort());
   try {
     log('step', 'Got your message. Model: ' + model.replace(/^(gguf|ollama):/, ''));
+    if (memUnloaded) { log('step', memUnloaded); memUnloaded = ''; }   // explain why the AI had to load again
     const allow = b.agent ? agent.allowed() : { search: false, tools: false, mcp: false, thinking: false };
     // 1) The model must be able to do it. 2) The per-message switch in the page must be on. 3) Credits (already in `allow`).
     const caps = await modelCaps(model), sw = b.switches || {};
@@ -375,6 +385,22 @@ async function chat(req, res, b) {
         line({ credits: { spent: price.total, left: left() } });
       }
     } else { thinking = false; effortUse = 'normal'; }
+    // Extras: pictures, pasted code and Studio messages use integration credits too. Pasted code is measured here from the real message.
+    // If they do not fit in what is left, the chat still goes through (local chat is always free), just without the extra.
+    let extraSpent = 0;
+    if (b.agent) {
+      const lastUser = (() => { const u = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return u ? String(u.content) : ''; })();
+      const want = pricing.extraCost({ images: b.images, codeChars: pricing.codeCharsIn(lastUser), studio: inStudio });
+      if (want.total > 0) {
+        if (agent.credits().left >= want.total && agent.spend(want.total)) {
+          extraSpent = want.total;
+          log('step', `Spent ${want.total} credits (${pricing.describe(want)}). ${agent.credits().left} left.`);
+          line({ credits: { spent: want.total, left: agent.credits().left } });
+        } else {
+          log('error', `Not enough credits for ${pricing.describe(want)} (${want.total} needed, ${agent.credits().left} left). Your chat still works. It is free on your own model.`);
+        }
+      }
+    }
     let thinkBilled = false, thinkSeen = false;
     // more room to answer at higher effort (Normal leaves the model's own default alone)
     const opts = { ...(b.options || {}) }; if (effortUse !== 'normal') opts.num_predict = effortUse === 'max' ? 2048 : 1024;
@@ -706,7 +732,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/github/approve' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ok: true, text: await agent.github.confirm(String(req.headers['x-github-token'] || ''), String(b.id || ''), b.approve === true) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); } }
     // ---- commands the AI proposes: run only after the user clicks Allow, only from this PC's own page ----
-    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/bonus' || p === '/api/bonus/github') {
+    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/bonus' || p === '/api/bonus/github' || p === '/api/bonus/rewards') {
       if (req.who !== 'local') return json(res, 403, { error: 'This can only be done on the PC itself.' });
       const o = req.headers.origin;   // the public website is allowed to chat with this PC, but never to approve or stop commands
       if (o && !new RegExp('^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\]):' + PORT + '$').test(o)) return json(res, 403, { error: 'Approve commands in the Pholama window on this PC.' });
@@ -722,6 +748,7 @@ const server = http.createServer(async (req, res) => {
       if (p === '/api/editlog' && req.method === 'DELETE') return json(res, 200, { ok: agent.power.clearLog() });
       if (p === '/api/bonus' && req.method === 'POST') { try { return json(res, 200, await agent.power.claimBonus(String((await body(req)).token || ''))); } catch (e) { return json(res, 200, { error: e.message, bonus: agent.power.bonusTotal() }); } }
       if (p === '/api/bonus/github' && req.method === 'POST') { try { return json(res, 200, await agent.power.claimGithubBonus(String((await body(req)).token || ''))); } catch (e) { return json(res, 400, { error: e.message }); } }
+      if (p === '/api/bonus/rewards' && req.method === 'POST') { try { return json(res, 200, await agent.power.claimRewards(String((await body(req)).token || ''))); } catch (e) { return json(res, 200, { error: String(e.message || e) }); } }
       if (p === '/api/bonus' && req.method === 'GET') return json(res, 200, { bonus: agent.power.bonusTotal() });
     }
     if (p === '/api/credits') return json(res, 200, { ...agent.credits(), allowed: agent.allowed() });
@@ -750,7 +777,9 @@ const server = http.createServer(async (req, res) => {
       const cb = await body(req);
       // Remote callers get plain chat only: the tools, terminal, GitHub and memory never run for a key holder.
       if (req.who !== 'local') { cb.agent = false; cb.memory = false; delete cb.switches; delete cb.tools; }
-      return chat(req, res, cb);
+      if (rest.ms > 0 && Date.now() - lastReplyAt < rest.ms) await new Promise(r => setTimeout(r, rest.ms - (Date.now() - lastReplyAt)));   // low memory: a short rest between replies
+      activeReplies++;
+      try { return await chat(req, res, cb); } finally { activeReplies--; lastReplyAt = Date.now(); }
     }
     // ---- Ollama / OpenAI style extras so games and sites can use this PC's AI the way they would use Ollama ----
     if (p === '/api/version') return json(res, 200, { version: require('../package.json').version, name: 'pholama' });
@@ -815,6 +844,18 @@ const sleeper = require('./sleep').create({
   onWake: () => console.log('\n  Pholama is awake.\n'),
 });
 sleeper.start(+process.env.PHOLAMA_SLEEP_CHECK_MS || 60000);
+// ---------- memory guard: when free memory gets very low (or the AI sat unused for a while) give the memory back. It loads again on the next message. ----------
+let memUnloaded = '';
+const memTimer = setInterval(async () => {
+  try {
+    if (!llama || sleeper.isAsleep()) return;
+    const level = ram.levelFor(freeMem());
+    if (!ram.shouldUnload(level, lastReplyAt, Date.now(), activeReplies > 0)) return;
+    const why = level === 'critical' ? ram.describe(level, freeMem()) : 'The AI sat unused for a while, so Pholama unloaded it to free memory. It loads again on your next message.';
+    await stopLlama(); llamaReady = false; memUnloaded = why; console.log('\n  ' + why + '\n');
+  } catch {}
+}, +process.env.PHOLAMA_MEM_CHECK_MS || 30000);
+if (memTimer.unref) memTimer.unref();
 
 // ---------- reaper: if Pholama is killed hard (End task, crash), this tiny separate watcher still stops the AI engines ----------
 // Started once, detached and hidden. It exits by itself as soon as it has done its job.
@@ -833,6 +874,7 @@ function closeAll(code) {
   if (closing) return; closing = true;
   try { guard.stop(); } catch {}
   try { sleeper.stop(); } catch {}
+  try { clearInterval(memTimer); } catch {}
   killLocalNow();
   for (const m of ollamaUsed) { try { require('child_process').spawnSync(process.execPath, ['-e', `fetch(${JSON.stringify(OLLAMA + '/api/generate')},{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:${JSON.stringify(m)},keep_alive:0})}).catch(()=>{})`], { timeout: 3000 }); } catch {} }
   process.exit(code || 0);

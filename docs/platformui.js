@@ -1,6 +1,6 @@
 // Pholama Platform screen. Posts, names and bios come from other people, so every piece of text is set with
 // textContent. Nothing from the network is ever put into innerHTML.
-import { makePlatform, REACTIONS, timeLeft, friendly, banText, MAX_POST, MAX_BIO, MAX_NAME, MAX_PROJ_IMAGES } from './platform.js';
+import { TICKET_CATEGORIES, MAX_TICKET_SUBJECT, MAX_TICKET_BODY, ticketProblem, ticketStatusText, rewardText, makePlatform, REACTIONS, timeLeft, friendly, banText, MAX_POST, MAX_BIO, MAX_NAME, MAX_PROJ_IMAGES } from './platform.js';
 
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 const btn = (label, fn, cls) => { const b = el('button', cls || '', label); b.type = 'button'; b.onclick = fn; return b; };
@@ -32,12 +32,13 @@ export async function mountPlatform(host, ctx) {
   async function load() {
     try { prof = await P.profile(); mod = await P.isMod(); } catch (e) { body.textContent = ''; body.append(el('p', 'dmut', friendly(e))); return; }
     ctx.onProfile && ctx.onProfile(prof && prof.platform_name);
+    collectCredits();
     body.textContent = '';
     if (!prof) return body.append(setupCard());
     const ban = banText(prof); if (ban) { const c = el('section', 'dcard'); c.append(el('h3', null, 'You cannot post right now'), el('p', 'dmut', ban)); body.append(c); }
     const tabs = el('div', 'platnav'); tabs.setAttribute('role', 'tablist');
     const pane = el('div', 'platpane');
-    const defs = [['home', 'Home', paintHome], ['posts', 'Posts', paintPosts], ['projects', 'Projects', paintProjects], ['rules', 'Rules', paintRules]];
+    const defs = [['home', 'Home', paintHome], ['posts', 'Posts', paintPosts], ['projects', 'Projects', paintProjects], ['rules', 'Rules', paintRules], ['support', 'Support', paintSupport]];
     if (mod) defs.push(['mod', 'Moderator', paintMod]);
     const show = async id => { for (const b of tabs.children) { const on = b.dataset.id === id; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } pane.textContent = ''; say(''); const d = defs.find(x => x[0] === id); try { await d[2](pane); } catch (e) { pane.append(el('p', 'dmut', friendly(e))); } };
     for (const [id, label] of defs) { const b = btn(label, () => show(id), 'elf'); b.dataset.id = id; b.setAttribute('role', 'tab'); tabs.append(b); }
@@ -61,6 +62,75 @@ export async function mountPlatform(host, ctx) {
   }
 
   async function paintPosts(pane) { pane.append(communityBar(), composer(), (feedBox = el('div', 'platfeed'))); await paintFeed(); }
+
+  // ----- credits waiting (report rewards + moderator gifts) are collected when the Platform opens -----
+  async function collectCredits() {
+    const n = await P.waitingCredits(); if (!(n > 0)) return;
+    if (ctx.addCredits) { try { const got = await P.claimCredits(); if (got > 0) await ctx.addCredits(got); say(rewardText(got)); } catch {} }
+    else say('You have ' + n + ' integration credits waiting. Open the PC app or the site while signed in to collect them.');
+  }
+
+  // ----- one ticket conversation. Moderators get reply / close / reopen; everyone else can only add a note while it is open -----
+  function thread(t, isModView, after) {
+    const box = el('div', 'tkt'); const list = el('div'); box.append(list);
+    async function paint() {
+      const m = await P.ticketMessages(t.id).catch(() => []); list.textContent = '';
+      for (const x of m) { const b = el('div', 'tmsg' + (x.from_mod ? ' tmod' : '')); b.append(el('b', null, x.from_mod ? 'Moderator' : 'Member'), el('span', 'dmut', ' ' + new Date(x.created_at).toLocaleString()), el('p', 'plbody', x.body)); list.append(b); }
+    }
+    const ta = el('textarea'); ta.maxLength = MAX_TICKET_BODY; ta.rows = 3; ta.setAttribute('aria-label', isModView ? 'Reply as moderator' : 'Add a note');
+    ta.placeholder = isModView ? 'Reply to this member...' : 'Add a note for the moderators...';
+    const row = el('div', 'dact');
+    const send = btn(isModView ? 'Reply' : 'Send note', async () => { const v = ta.value.trim(); if (!v) return; send.disabled = true; try { await P.say(t.id, v); ta.value = ''; await paint(); after && after(); } catch (e) { say(friendly(e)); } send.disabled = false; }, 'p');
+    row.append(send);
+    if (isModView) row.append(btn(t.status === 'closed' ? 'Reopen' : 'Close ticket', async () => { try { await P.closeTicket(t.id, t.status !== 'closed'); after && after(); } catch (e) { say(friendly(e)); } }));
+    if (t.status !== 'closed' || isModView) box.append(ta, row); else box.append(el('p', 'dmut', 'This ticket is closed. Open a new one if you still need help.'));
+    paint(); return box;
+  }
+
+  async function paintSupport(pane) {
+    const c = el('section', 'dcard'); c.append(el('h3', null, 'Contact support'), el('p', 'dmut', 'Open a ticket and a moderator will answer here. Only moderators can reply. You can have 3 open at once.'));
+    const subj = el('input'); subj.maxLength = MAX_TICKET_SUBJECT; subj.placeholder = 'Short title'; subj.setAttribute('aria-label', 'Ticket title');
+    const cat = el('select'); cat.setAttribute('aria-label', 'Ticket topic'); for (const [v, l] of TICKET_CATEGORIES) { const o = el('option', null, l); o.value = v; cat.append(o); }
+    const txt = el('textarea'); txt.maxLength = MAX_TICKET_BODY; txt.rows = 4; txt.placeholder = 'What do you need help with?'; txt.setAttribute('aria-label', 'Ticket message');
+    const go1 = btn('Open ticket', async () => { const bad = ticketProblem(subj.value, txt.value); if (bad) return say(bad); go1.disabled = true; try { await P.openTicket(subj.value.trim(), cat.value, txt.value.trim()); subj.value = ''; txt.value = ''; say('Ticket opened. A moderator will reply here.'); await list(); } catch (e) { say(friendly(e)); } go1.disabled = false; }, 'p');
+    c.append(subj, cat, txt, go1); pane.append(c);
+    const lc = el('section', 'dcard'); lc.append(el('h3', null, 'Your tickets')); const box = el('div'); lc.append(box); pane.append(lc);
+    async function list() {
+      const ts = await P.myTickets().catch(() => []); box.textContent = '';
+      if (!ts.length) return box.append(el('p', 'dmut', 'No tickets yet.'));
+      for (const t of ts) {
+        const d = el('details', 'tk'); const sm = el('summary'); sm.append(el('b', null, t.subject), el('span', 'dmut', '  ' + ticketStatusText(t.status))); d.append(sm);
+        let built = false; d.ontoggle = () => { if (d.open && !built) { built = true; d.append(thread(t, false, list)); } }; box.append(d);
+      }
+    }
+    await list();
+  }
+
+  // ----- moderator inbox: every open ticket, with quick actions on the member -----
+  async function inbox(pane) {
+    const c = el('section', 'dcard'); c.append(el('h3', null, 'Support inbox'), el('p', 'dmut', 'Open tickets. Reply, close, give credits, unwarn or unban without typing commands.'));
+    const sel = el('select'); sel.setAttribute('aria-label', 'Which tickets'); for (const [v, l] of [['', 'Open and answered'], ['open', 'Waiting for a reply'], ['closed', 'Closed']]) { const o = el('option', null, l); o.value = v; sel.append(o); }
+    const box = el('div'); c.append(sel, box); pane.append(c);
+    async function list() {
+      const ts = await P.allTickets(sel.value).catch(() => []); box.textContent = '';
+      if (!ts.length) return box.append(el('p', 'dmut', 'Nothing here. Nice.'));
+      for (const t of ts) {
+        const d = el('details', 'tk'); const sm = el('summary'); sm.append(el('b', null, t.subject), el('span', 'dmut', '  ' + t.category + ' - ' + ticketStatusText(t.status) + ' - ' + new Date(t.updated_at).toLocaleString())); d.append(sm);
+        let built = false;
+        d.ontoggle = () => {
+          if (!d.open || built) return; built = true;
+          const tools = el('div', 'dact'); const id = el('code', null, t.user_id); id.title = 'Member id';
+          const n = el('input'); n.type = 'number'; n.min = 1; n.max = 500; n.placeholder = 'Credits (1-500)'; n.setAttribute('aria-label', 'Credits to give');
+          const act = (label, fn) => btn(label, async () => { try { say(await fn()); } catch (e) { say(friendly(e)); } });
+          tools.append(act('Unban', async () => { await P.modBan(t.user_id, false); return 'Unbanned.'; }), act('Remove newest warning', async () => String(await P.modCmd('unwarn ' + t.user_id)))
+            , n, act('Give credits', async () => { const v = Math.floor(+n.value); if (!(v >= 1 && v <= 500)) throw new Error('Give between 1 and 500 credits.'); await P.modCmd('give ' + t.user_id + ' ' + v + ' ticket ' + t.id.slice(0, 8)); n.value = ''; return v + ' credits given.'; }));
+          d.append(el('small', 'dmut', 'Member id: '), id, tools, thread(t, true, list));
+        };
+        box.append(d);
+      }
+    }
+    sel.onchange = list; await list();
+  }
 
   async function paintRules(pane) {
     const c = el('section', 'dcard'); c.append(el('h3', null, 'Community rules'));
@@ -90,6 +160,7 @@ export async function mountPlatform(host, ctx) {
   }
 
   async function paintMod(pane) {
+    await inbox(pane);
     const c = el('section', 'dcard'); c.append(el('h3', null, 'Moderator console'), el('p', 'dmut', 'Type help to see every command. Each one is checked by the database, so only moderators can use it.'));
     const inp = el('input'); inp.placeholder = 'ban Zed 24 spamming'; inp.setAttribute('aria-label', 'Moderator command'); inp.maxLength = 700; inp.autocomplete = 'off'; inp.spellcheck = false;
     const out = el('pre', 'cmdcode'); out.textContent = 'Ready.';

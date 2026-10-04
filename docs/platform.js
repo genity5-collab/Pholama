@@ -56,8 +56,23 @@ export function banText(p, now = Date.now()) {
   return 'Banned' + (p.banned_until ? ' until ' + new Date(p.banned_until).toLocaleString() : ' permanently') + (p.ban_reason ? '. Reason: ' + p.ban_reason : '.');
 }
 // Moderator command line: only these words are sent, and the database checks you are a moderator.
-export const MOD_WORDS = ['help', 'whois', 'warn', 'ban', 'unban', 'takedown', 'restore', 'delete', 'edit', 'project', 'daily'];
+export const MOD_WORDS = ['help', 'whois', 'warn', 'unwarn', 'ban', 'unban', 'takedown', 'restore', 'delete', 'edit', 'project', 'daily', 'give', 'credits', 'tickets', 'reply', 'close', 'reopen'];
 export function modCommandProblem(line) { const w = String(line || '').trim().split(/\s+/); if (!w[0]) return 'Type a command. Try: help'; if (!MOD_WORDS.includes(w[0].toLowerCase())) return 'Unknown command. Try: help'; if (String(line).length > 700) return 'Too long.'; return ''; }
+
+// ---------- tickets (pure helpers) ----------
+export const TICKET_CATEGORIES = [['account', 'My account'], ['ban', 'Appeal a ban'], ['credits', 'Credits'], ['bug', 'Report a bug'], ['other', 'Something else']];
+export const MAX_TICKET_SUBJECT = 80, MAX_TICKET_BODY = 1000;
+export function ticketProblem(subject, body) {
+  const s = String(subject || '').trim(), b = String(body || '').trim();
+  if (s.length < 3) return 'Give the ticket a short title (3+ characters).';
+  if (s.length > MAX_TICKET_SUBJECT) return 'Keep the title under ' + MAX_TICKET_SUBJECT + ' characters.';
+  if (!b) return 'Describe what you need help with.';
+  if (b.length > MAX_TICKET_BODY) return 'Keep the message under ' + MAX_TICKET_BODY + ' characters.';
+  return '';
+}
+export const ticketStatusText = s => ({ open: 'Waiting for a moderator', answered: 'A moderator replied', closed: 'Closed' }[s] || s);
+// Credits waiting for me become a short sentence; 0 means say nothing.
+export const rewardText = n => (+n > 0 ? '+' + Math.floor(+n) + ' integration credits added (report rewards and moderator gifts).' : '');
 
 // ---------- data layer (needs an Account with a rest() helper) ----------
 export function makePlatform(Account, cfg) {
@@ -106,6 +121,16 @@ export function makePlatform(Account, cfg) {
     async isMod() { try { const r = await Account.rest('pholama_moderators?select=user_id&limit=1'); return !!(r && r.length); } catch { return false; } },
     modHide: (id, hidden) => Account.rest('rpc/pholama_mod_hide', { method: 'POST', body: JSON.stringify({ p_post: id, p_hidden: !!hidden }) }),
     modBan: (uid, banned, reason = null, hours = null) => Account.rest('rpc/pholama_mod_ban', { method: 'POST', body: JSON.stringify({ p_user: uid, p_banned: !!banned, p_reason: reason, p_hours: hours }) }),
+    // --- support tickets: anyone opens and reads their own; only moderators reply (the database enforces it) ---
+    openTicket: (subject, category, body) => Account.rest('rpc/pholama_ticket_open', { method: 'POST', body: JSON.stringify({ p_subject: subject, p_category: category, p_body: body }) }),
+    async myTickets() { return (await Account.rest('pholama_tickets?select=*&user_id=eq.' + encodeURIComponent(me()) + '&order=updated_at.desc&limit=30')) || []; },
+    async allTickets(status) { return (await Account.rest('pholama_tickets?select=*&' + (status ? 'status=eq.' + status + '&' : 'status=neq.closed&') + 'order=updated_at.desc&limit=50')) || []; },
+    async ticketMessages(id) { return (await Account.rest('pholama_ticket_messages?select=id,from_mod,body,created_at&ticket_id=eq.' + encodeURIComponent(id) + '&order=id.asc')) || []; },
+    say: (id, body) => Account.rest('rpc/pholama_ticket_say', { method: 'POST', body: JSON.stringify({ p_ticket: id, p_body: body }) }),
+    closeTicket: (id, closed = true) => Account.rest('rpc/pholama_ticket_close', { method: 'POST', body: JSON.stringify({ p_ticket: id, p_closed: !!closed }) }),
+    // Report rewards + moderator gifts: how many are waiting, and collect them (the database makes sure it only happens once).
+    waitingCredits: async () => { try { const n = await Account.rest('rpc/pholama_my_rewards', { method: 'POST', body: '{}' }); return +n || 0; } catch { return 0; } },
+    claimCredits: async () => { const n = await Account.rest('rpc/pholama_claim_rewards', { method: 'POST', body: '{}' }); return +n || 0; },
     rules: async () => (await Account.rest('pholama_rules?select=*&order=n.asc')) || [],
     daily: async () => { const r = await Account.rest('pholama_daily?select=*&order=day.desc&limit=1'); return r && r[0] || null; },
     async warnings() { return (await Account.rest('pholama_warnings?select=id,reason,created_at,seen&user_id=eq.' + encodeURIComponent(me()) + '&order=created_at.desc&limit=10')) || []; },
