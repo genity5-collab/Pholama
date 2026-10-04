@@ -1,6 +1,24 @@
 {
- "latest": "0.9.14",
+ "latest": "0.9.16",
  "releases": [
+  {
+   "version": "0.9.16",
+   "date": "2026-10-04",
+   "title": "Studio graphite contrast refresh",
+   "notes": [
+    "Rebalanced the PC Studio surfaces so the editor, output log, AI panel and controls are visible instead of collapsing into near-black",
+    "Kept the quiet monochrome mascot and restrained product chrome while improving hierarchy and focus states"
+   ]
+  },
+  {
+   "version": "0.9.15",
+   "date": "2026-10-04",
+   "title": "Studio contrast and mascot polish",
+   "notes": [
+    "Raised contrast across the PC Studio editor, preview, output log and AI panel so text remains readable in dark mode",
+    "Kept the monochrome, local-first mascot treatment consistent across the PC app and public site"
+   ]
+  },
   {
    "version": "0.9.14",
    "date": "2026-10-04",

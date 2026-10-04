@@ -86,21 +86,23 @@ header{border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);ba
 .st-aibox textarea{padding:8px!important}.st-aibox button{border-radius:9px!important}
 @media(max-width:760px){.st-main{min-height:0!important}.st-code{min-height:360px!important}.st-right iframe{min-height:300px}}
 
-/* Studio readability: keep the cinematic dark workspace, but make code and logs easy to scan. */
-:root{--studio:#151b26;--studio-line:#3a465b;--studio-panel:#1d2634}
-.st-left,.st-right{background:var(--studio-panel)!important}
-.st-tabs,.st-prevhead,.st-conhead{background:#111722!important;border-color:var(--studio-line)!important}
-.st-tab{color:#b8c3d4!important}.st-tab.on{color:#ffffff!important;background:#263247!important}
-.st-code{background:#182130!important;color:#f3f6fb!important;border-color:var(--studio-line)!important;text-shadow:0 0 1px rgba(255,255,255,.12)}
-.st-code::selection{background:#5267a8!important;color:#fff!important}
-.st-prevhead b,.st-conhead b{color:#c5cfdd!important}
-.st-con,.st-ailog{background:#111722!important;color:#e5ebf4!important;border-color:var(--studio-line)!important}
-.st-l{color:#dbe4f0!important}.st-l.info{color:#b9d4ff!important}.st-l.warn{color:#ffd28a!important}.st-l.error{color:#ff9daa!important}
-.st-ai{background:#182130!important;border-color:var(--studio-line)!important}.st-aibox{background:#111722!important;border-color:var(--studio-line)!important}.st-aibox textarea{color:#f3f6fb!important}
-.st-bar{border-color:var(--studio-line)!important}.st-bar select{color:#f3f6fb!important;background:#111722!important}
-.st-main button,.st-bar button{color:#dce5f1;border-color:var(--studio-line)}
-.st-main button:hover,.st-bar button:hover{background:#2a364b}
-.st-main button.p,.st-bar button.p{color:#fff;background:var(--acc);border-color:var(--acc)}
+/* Studio readability: a graphite workspace with Ollama-like restraint and genuinely readable controls. */
+:root{--studio:#30343b;--studio-line:#68717e;--studio-panel:#3b414a}
+#studio{color:#f8fafc;background:linear-gradient(180deg,#272b32 0,#30343b 220px,transparent 520px)!important}
+.st-left,.st-right{background:var(--studio-panel)!important;border-color:var(--studio-line)!important}
+.st-tabs,.st-prevhead,.st-conhead{background:#24282f!important;border-color:var(--studio-line)!important}
+.st-tab{color:#e3e8ef!important}.st-tab.on{color:#fff!important;background:#505966!important}
+.st-code{background:#343a43!important;color:#fff!important;border-color:var(--studio-line)!important;text-shadow:none!important}
+.st-code::selection{background:#8496bd!important;color:#fff!important}
+.st-prevhead b,.st-conhead b{color:#f1f4f8!important}
+.st-con,.st-ailog{background:#24282f!important;color:#f8fafc!important;border-color:var(--studio-line)!important}
+.st-l{color:#f8fafc!important}.st-l.info{color:#d6e5ff!important}.st-l.warn{color:#ffe0a3!important}.st-l.error{color:#ffb8c2!important}
+.st-ai{background:#343a43!important;border-color:var(--studio-line)!important}.st-aibox{background:#24282f!important;border-color:var(--studio-line)!important}.st-aibox textarea{color:#fff!important}
+.st-bar{border-color:var(--studio-line)!important}.st-bar select{color:#fff!important;background:#24282f!important}
+.st-main button,.st-bar button{color:#f5f7fa!important;border-color:var(--studio-line)!important}
+.st-main button:hover,.st-bar button:hover{background:#505966!important}
+.st-main button.p,.st-bar button.p{color:#fff!important;background:var(--acc)!important;border-color:var(--acc)!important}
+.st-stat,.st-foot{color:#d8dee7!important}
 
 
 /* Settings tabs & progress bars */
