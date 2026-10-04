@@ -268,3 +268,13 @@ body.plat-on #dash{display:none!important}
 .platpane{margin-top:6px}.plwarn{border-color:var(--warn)}
 .plproj{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:12px}.plproj .dcard{margin:0}
 .plimgs{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:8px 0}.plimgs img{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:8px;border:1px solid var(--line)}
+
+/* The website is a dashboard, not a chat. The PC app (which has a local server) keeps chat and every model. */
+body.site-only #chat,body.site-only footer,body.site-only #vChat,body.site-only #model,body.site-only #mgr,body.site-only #whoami~.sp,body.site-only #opt,body.site-only #aiwarn,body.site-only #cr,body.site-only #sunset{display:none!important}
+body.site-only #dash,body.site-only #plat{display:block}
+body.site-only #dash[hidden],body.site-only #plat[hidden]{display:none!important}
+
+body.site-only header{flex-wrap:nowrap;gap:8px}
+body.site-only .viewsw{flex:none}
+body.site-only .whoami{margin-left:auto}
+@media(max-width:560px){body.site-only .brand span,body.site-only .brand b{display:none}}

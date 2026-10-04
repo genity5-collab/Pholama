@@ -842,6 +842,7 @@ async function refreshModels() {
     if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json();
     else server = null;
   } catch { server = null; }
+  markSite();
   await refreshSelect(); render();
 }
 function row(title, sub, btn) {
@@ -866,7 +867,7 @@ async function ensureEngineWithBar(id, r) {
   engineModel = id; markReady(id);
 }
 
-$('#mgr').onclick = () => { render(); dlg.showModal(); };
+$('#mgr').onclick = () => { if (siteOnly()) return; render(); dlg.showModal(); };   // the website has one model and nothing to pick
 $('#close').onclick = () => { dlg.close(); refreshSelect(); };
 $('#tBrowser').onclick = () => { tab = 'browser'; render(); };
 $('#tLocal').onclick = () => { tab = 'local'; render(); };
@@ -1199,6 +1200,7 @@ $('#clearHistBtn').onclick = () => {
 
 // ---------- views: the Dashboard is the landing page, Chat is one tap away ----------
 function showView(name) {
+  if (siteOnly() && name === 'chat') name = 'plat';            // the website has no chat
   const dh = name === 'dash', ph = name === 'plat';
   document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph);
   const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph;
@@ -1206,6 +1208,9 @@ function showView(name) {
   if (dh) paintDashboard();
   if (ph) paintPlatform();
 }
+// The website (no PC server) is only the Platform and info pages. Chat, tools and big models are in the PC app.
+const siteOnly = () => !server;
+function markSite() { document.body.classList.toggle('site-only', siteOnly()); }
 let platMod = null;
 async function paintPlatform() {
   const host = $('#platHost'); if (!host) return;
@@ -1233,7 +1238,7 @@ async function paintDashboard() {
 $('#vDash').onclick = () => showView('dash');
 $('#vChat').onclick = () => showView('chat');
 $('#vPlat').onclick = () => showView('plat');
-init().then(refreshCredits).then(() => showView('dash'));
+init().then(refreshCredits).then(() => { markSite(); showView(siteOnly() ? 'plat' : 'dash'); });
 
 // ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----
 // ----- GitHub on both: the site only reports that you signed in here. The 250 is granted by the PC app once the database sees both. -----

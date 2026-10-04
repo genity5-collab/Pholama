@@ -55,6 +55,8 @@ export async function mountPlatform(host, ctx) {
     if (w.length) { const wc = el('section', 'dcard plwarn'); wc.append(el('h3', null, fresh.length ? 'You have a warning' : 'Past warnings')); for (const x of w.slice(0, 3)) wc.append(el('p', 'plbody', x.reason)); if (fresh.length) wc.append(btn('I understand', async () => { try { await P.markWarningsSeen(); await go('home'); } catch (e) { say(friendly(e)); } }, 'p')); grid.append(wc); }
     const quick = el('section', 'dcard'); quick.append(el('h3', null, 'Quick links'));
     const row = el('div', 'dact'); row.append(btn('Write a post', () => go('posts'), 'p'), btn('Show a project', () => go('projects')), btn('Read the rules', () => go('rules'))); quick.append(row); grid.append(quick);
+    const ai = el('section', 'dcard'); ai.append(el('h3', null, 'Pholama assistant'), el('p', 'dmut', 'The website keeps one small assistant (Qwen2.5 0.5B). It only chats: no tools, no files. For chat with bigger models, tools, web search and Roblox Studio, use the PC app.'));
+    const a = el('a', 'btnlink', 'Get the PC app'); a.href = 'https://github.com/genity5-collab/Pholama#on-your-pc-more-power-tools-web-search'; a.target = '_blank'; a.rel = 'noopener'; ai.append(a); grid.append(ai);
     pane.append(grid, profileCard(), await recentCard());
   }
 

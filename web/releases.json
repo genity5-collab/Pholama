@@ -1,6 +1,17 @@
 {
- "latest": "0.9.1",
+ "latest": "0.9.2",
  "releases": [
+  {
+   "version": "0.9.2",
+   "date": "2026-10-04",
+   "title": "The website is now a clean dashboard",
+   "notes": [
+    "The website no longer has chat. It is the Platform: profile, posts, projects, rules and guides. Chat, tools and big models live in the PC app",
+    "The website keeps exactly one small assistant (Qwen2.5 0.5B). There is no model list to pick from",
+    "A much cleaner header: one row with your name and settings",
+    "Connecting the website to a PC brings chat back, and the PC app is unchanged"
+   ]
+  },
   {
    "version": "0.9.1",
    "date": "2026-10-04",

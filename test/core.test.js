@@ -286,6 +286,21 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
     ok('bans: permanent, timed and expired text', /permanently/.test(PL.banText({ banned: true })) && /until/.test(PL.banText({ banned: true, banned_until: '2999-01-01T00:00:00Z' })) && PL.banText({ banned: true, banned_until: '2000-01-01T00:00:00Z' }) === '');
     ok('console: only known words are sent', PL.modCommandProblem('ban Zed 24 spam') === '' && !!PL.modCommandProblem('drop table x') && !!PL.modCommandProblem('') && PL.modCommandProblem('HELP') === '');
   }
+  // ---- the website is a dashboard: no chat, one model. The PC app keeps everything. ----
+  {
+    const siteM = JSON.parse(fs.readFileSync(path.join(root, 'docs', 'models.json'), 'utf8')), pcM = JSON.parse(fs.readFileSync(path.join(root, 'web', 'models.json'), 'utf8'));
+    const css = fs.readFileSync(path.join(root, 'docs', 'style.css'), 'utf8'), js = fs.readFileSync(path.join(root, 'docs', 'app.js'), 'utf8'), webJs = fs.readFileSync(path.join(root, 'web', 'app.js'), 'utf8');
+    ok('website is a dashboard: the model list has exactly ONE model', siteM.browser.length === 1, String(siteM.browser.length));
+    ok('website: that one model is small and chat only', !(siteM.browser[0].caps || []).includes('tools') && /0\.5B/.test(siteM.browser[0].name));
+    ok('PC app keeps its full model list', pcM.browser.length > 1 && (pcM.local || []).length > 10);
+    ok('website: chat, composer, model picker and Chat tab are removed', /body\.site-only #chat,body\.site-only footer,body\.site-only #vChat,body\.site-only #model/.test(css));
+    ok('website: Models button is hidden (one model, nothing to pick)', /body\.site-only #mgr/.test(css));
+    ok('website: the Models manager cannot be opened', /onclick = \(\) => \{ if \(siteOnly\(\)\) return; render\(\); dlg\.showModal/.test(js));
+    ok('website: the chat view can never be opened', /if \(siteOnly\(\) && name === 'chat'\) name = 'plat'/.test(js) && /const siteOnly = \(\) => !server/.test(js));
+    ok('website: Platform is the home screen', /showView\(siteOnly\(\) \? 'plat' : 'dash'\)/.test(js));
+    ok('website: connecting to a PC brings chat back', /markSite\(\);\s*await refreshSelect\(\); render\(\);/.test(js));
+    ok('PC app has no site-only switch', !/site-only/.test(webJs) && !/site-only/.test(fs.readFileSync(path.join(root, 'web', 'style.css'), 'utf8')));
+  }
   // ---- syntax of every file ----
   for (const f of fs.readdirSync(path.join(root, 'server'))) if (f.endsWith('.js')) { try { new (require('vm').Script)(fs.readFileSync(path.join(root, 'server', f), 'utf8').replace(/^#!.*/, '')); P++; } catch (e) { F++; console.log('FAIL syntax', f, e.message); } }
   await new Promise(r => setTimeout(r, 300)); console.log(`${P} passed, ${F} failed`); process.exit(F ? 1 : 0);
