@@ -1,6 +1,18 @@
 {
- "latest": "0.9.18",
+ "latest": "0.9.19",
  "releases": [
+  {
+   "version": "0.9.19",
+   "date": "2026-10-04",
+   "title": "Studio feels more like a local coding workbench",
+   "notes": [
+    "Studio now has a live Activity panel with AI file edits, checks, failures and command outcomes, while the PC Chat edit log remains available for the full history.",
+    "Local models can use more tool-call formats reliably, including function tags and fenced JSON, and Studio gives them a diagnose tool plus stronger duplicate-ID and project checks.",
+    "Preview warnings and runtime errors are included in the next Studio request so the local AI can debug what is actually running instead of guessing.",
+    "Added an optional local Pholama companion in Studio Settings: it follows the cursor and can be petted, stays off by default, and respects reduced-motion settings.",
+    "Added a one-click Diagnose action and clearer workbench guidance for inspect, edit, test and fix loops."
+   ]
+  },
   {
    "version": "0.9.18",
    "date": "2026-10-04",

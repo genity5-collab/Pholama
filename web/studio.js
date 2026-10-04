@@ -50,16 +50,18 @@ export function mergeIncoming(local, server, dirtyNames) {
 
 export function createStudio(env) {
   const { api, $, ghHeaders, getModel, mount } = env;
-  const S = { project: null, files: [], current: null, dirty: new Set(), log: [], busy: false, stopper: null, timers: {} };
+  const S = { project: null, files: [], current: null, dirty: new Set(), log: [], activity: [], busy: false, stopper: null, timers: {}, companion: false };
   const el = {};
 
   mount.innerHTML = `
   <div class="st-bar">
     <select id="stProj" title="Project"></select>
-    <button id="stNew">New</button><button id="stDel" title="Delete this project">Delete</button><button id="stRefresh" title="Pull the latest files from the local Pholama server">Refresh files</button>
+    <button id="stNew">New</button><button id="stDel" title="Delete this project">Delete</button><button id="stRefresh" title="Pull the latest files from the local Pholama server">Refresh files</button><button id="stActivity" title="Show AI edits, checks and commands">Activity</button><button id="stSettings" title="Studio settings">Settings</button>
     <span class="sp"></span>
     <button id="stPublish" class="p" title="Put this project on GitHub">Publish</button>
   </div>
+  <div id="stActivityPanel" class="st-activity" hidden><div class="st-panelhead"><b>Activity</b><span class="sp"></span><button id="stActivityRefresh">Refresh</button></div><div id="stActivityList" class="st-activitylist">Loading...</div></div>
+  <div id="stSettingsPanel" class="st-settings" hidden><div class="st-panelhead"><b>Studio settings</b><span class="sp"></span><button id="stSettingsClose">Close</button></div><label class="st-setting"><input id="stCompanion" type="checkbox"><span><b>Pholama companion</b><small>A tiny local llama follows your cursor. Click it to pet it. It never reads the page or sends anything.</small></span></label><div class="sys">The companion is off by default and can be turned off at any time.</div></div>
   <div class="st-main">
     <div class="st-left">
       <div class="st-tabs" id="stTabs"></div>
@@ -75,10 +77,27 @@ export function createStudio(env) {
   </div>
   <div class="st-ai">
     <div id="stAiLog" class="st-ailog"></div>
-    <div class="st-aibox"><textarea id="stAsk" rows="2" placeholder="Ask the AI to build, fix or explain anything..."></textarea><button id="stSend" class="p">Send</button></div>
+    <div class="st-aibox"><textarea id="stAsk" rows="2" placeholder="Ask the AI to build, fix or explain anything..."></textarea><button id="stDiagnose" title="Check the project and explain the next fix">Diagnose</button><button id="stSend" class="p">Send</button></div>
   </div>`;
-  for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stPublish', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stSend']) el[id] = mount.querySelector('#' + id);
+  for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stActivity', 'stSettings', 'stActivityPanel', 'stActivityRefresh', 'stActivityList', 'stSettingsPanel', 'stSettingsClose', 'stCompanion', 'stPublish', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stDiagnose', 'stSend']) el[id] = mount.querySelector('#' + id);
   const fx = createFx({ host: el.stCode.parentElement, code: el.stCode, tabs: el.stTabs, frame: el.stFrame });   // the 'AI is editing' animation
+  const activityTitle = e => e.kind === 'file' ? ((e.status === 'working' ? 'Working on ' : e.status === 'failed' ? 'Failed: ' : 'Changed ') + (e.path || 'a file')) : e.kind === 'command' ? (e.status === 'ok' ? 'Command finished' : e.status === 'proposed' ? 'Command waiting for approval' : 'Command ' + (e.status || 'updated')) : (e.text || e.status || e.kind || 'Activity');
+  const paintActivity = () => { const box = el.stActivityList; if (!box) return; box.textContent = ''; if (!S.activity.length) { box.textContent = 'No Studio activity yet.'; return; } for (const e of S.activity.slice(0, 80)) { const d = document.createElement('details'); d.className = 'st-activityrow ' + (e.status === 'failed' || e.status === 'error' ? 'bad' : e.status === 'working' || e.status === 'proposed' ? 'wait' : 'good'); const s = document.createElement('summary'); const time = e.t ? new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''; s.textContent = (e.status || 'event') + ' · ' + activityTitle(e) + (time ? ' · ' + time : ''); d.appendChild(s); const body = document.createElement('div'); body.className = 'st-activitybody'; const bits = []; if (e.project) bits.push('Project: ' + e.project); if (e.added != null || e.removed != null) bits.push('Lines: +' + (e.added || 0) + ' / -' + (e.removed || 0)); if (e.error) bits.push('Error: ' + e.error); if (e.cmd) bits.push(e.cmd); body.textContent = bits.join('\n') || 'No additional details.'; d.appendChild(body); box.appendChild(d); } };
+  const loadActivity = async () => { try { const j = await jget('api/editlog?n=160'); S.activity = j.entries || []; paintActivity(); } catch (e) { if (el.stActivityList) el.stActivityList.textContent = 'Activity is unavailable: ' + e.message; } };
+  const openPanel = (panel, other) => { panel.hidden = !panel.hidden; if (!panel.hidden && other) other.hidden = true; };
+  el.stActivity.onclick = () => { openPanel(el.stActivityPanel, el.stSettingsPanel); if (!el.stActivityPanel.hidden) loadActivity(); };
+  el.stActivityRefresh.onclick = loadActivity;
+  el.stSettings.onclick = () => openPanel(el.stSettingsPanel, el.stActivityPanel);
+  el.stSettingsClose.onclick = () => { el.stSettingsPanel.hidden = true; };
+  const companionKey = 'pholama_studio_companion';
+  const companionOn = () => { try { return localStorage.getItem(companionKey) === 'on'; } catch { return false; } };
+  let petCount = 0, companionEl = null, companionTarget = { x: window.innerWidth - 80, y: window.innerHeight - 130 }, companionPos = { x: companionTarget.x, y: companionTarget.y };
+  const makeCompanion = () => { if (companionEl || !S.companion) return; companionEl = document.createElement('button'); companionEl.className = 'st-companion'; companionEl.type = 'button'; companionEl.title = 'Pet Pholama'; companionEl.innerHTML = '<img src="icon.svg" alt="Pholama companion"><span>pet</span>'; companionEl.onclick = () => { petCount++; companionEl.classList.remove('pet'); void companionEl.offsetWidth; companionEl.classList.add('pet'); companionEl.title = 'Pholama liked that (' + petCount + ')'; }; document.body.appendChild(companionEl); };
+  const removeCompanion = () => { if (companionEl) { companionEl.remove(); companionEl = null; } };
+  const companionFrame = () => { if (companionEl) companionEl.style.display = S.companion && document.body.classList.contains('studio-on') ? '' : 'none'; if (companionEl && S.companion && document.body.classList.contains('studio-on')) { companionPos.x += (companionTarget.x - companionPos.x) * .12; companionPos.y += (companionTarget.y - companionPos.y) * .12; companionEl.style.transform = `translate3d(${companionPos.x}px,${companionPos.y}px,0)`; } requestAnimationFrame(companionFrame); };
+  document.addEventListener('pointermove', e => { companionTarget.x = Math.min(window.innerWidth - 68, Math.max(8, e.clientX + 18)); companionTarget.y = Math.min(window.innerHeight - 76, Math.max(8, e.clientY + 18)); }, { passive: true });
+  S.companion = companionOn(); el.stCompanion.checked = S.companion; el.stCompanion.onchange = () => { S.companion = el.stCompanion.checked; try { localStorage.setItem(companionKey, S.companion ? 'on' : 'off'); } catch {} if (S.companion) makeCompanion(); else removeCompanion(); };
+  if (S.companion) makeCompanion(); companionFrame();
   let fxOpen = 0, fxShow = false;   // fxShow stays true through the last refresh after a run, so the final change still flashes
 
   const say = (txt, cls = '') => { const d = document.createElement('div'); d.className = 'st-msg ' + cls; d.textContent = txt; el.stAiLog.appendChild(d); while (el.stAiLog.childElementCount > 150) el.stAiLog.firstChild.remove(); el.stAiLog.scrollTop = 1e9; return d; };
@@ -166,8 +185,10 @@ export function createStudio(env) {
     if (!S.project) { say('Make a project first: press New.', 'err'); return; }
     save.flush(); await new Promise(r => setTimeout(r, 60));   // make sure the AI sees what the user just typed
     const model = getModel(); if (!model) { say('Pick a model at the top first.', 'err'); return; }
+    const previewErrors = S.log.filter(x => x.kind === 'error' || x.kind === 'warn').slice(-8).map(x => x.kind.toUpperCase() + ': ' + x.text).join('\n');
+    const modelText = previewErrors ? text + '\n\n[Preview diagnostics from the running app]\n' + previewErrors + '\n[/Preview diagnostics]' : text;
     if (model === 'cloud:pholama' && !S.maxWarned) { S.maxWarned = true; say('Agent Max in Studio costs more: about 23 credits a message, plus up to 8 Max messages from your daily and monthly allowance. If Max runs out, your own model on this PC takes over for free.', 'warn'); }
-    S.busy = true; el.stSend.textContent = 'Stop'; say(text, 'me'); hist.push({ role: 'user', content: text }); if (hist.length > 8) hist.splice(0, hist.length - 8);
+    S.busy = true; el.stSend.textContent = 'Stop'; say(text, 'me'); hist.push({ role: 'user', content: modelText }); if (hist.length > 8) hist.splice(0, hist.length - 8);
     const ac = new AbortController(); S.stopper = () => ac.abort(); let reply = '', node = null, srcCard = null, thinkNode = null;
     try {
       const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: hist, agent: true, stream: true, studio: { project: S.project }, switches: { search: true, tools: true } }) });
@@ -180,7 +201,7 @@ export function createStudio(env) {
           if (j.log && j.log.kind === 'thought') { if (!thinkNode) thinkNode = say(j.log.text, 'think'); else thinkNode.textContent = j.log.text; }   // live: one line that updates while the model thinks
           else if (j.log && (j.log.kind === 'action' || j.log.kind === 'error')) { thinkNode = null; say(j.log.text, j.log.kind === 'error' ? 'err' : 'act'); }
           else if (j.toolStart) { fxOpen++; fx.working(toolStatus(j.toolStart)); }   // the AI just started a tool: light up the editor and name the file
-          else if (j.tool) { thinkNode = null; say(toolLine(j.tool), 'tool'); if (fxOpen > 0) { fxOpen--; fx.idle(); } }   // it finished: the strip fades, the changed lines flash when they arrive
+          else if (j.tool) { thinkNode = null; say(toolLine(j.tool), 'tool'); if (fxOpen > 0) { fxOpen--; fx.idle(); } loadActivity(); }   // it finished: the strip fades, the changed lines flash when they arrive
           else if (j.sources) { if (!srcCard) { srcCard = sourcesCard([]); el.stAiLog.appendChild(srcCard.el); } srcCard.update(j.sources); el.stAiLog.scrollTop = 1e9; }
           else if (j.studio) refreshSoon();
           else if (j.approve) approve(j.approve);
@@ -194,6 +215,7 @@ export function createStudio(env) {
     finally { while (fxOpen > 0) { fxOpen--; fx.idle(); } S.busy = false; S.stopper = null; el.stSend.textContent = 'Send'; fxShow = true; try { await refreshFromServer(); } finally { fxShow = false; } }
   }
   const toolLine = t => { const a = t.args || {}; const f = a.file ? ' ' + a.file : ''; return (t.name || 'tool').replace(/^studio_/, '').replace(/_/g, ' ') + f + (t.result ? ': ' + String(t.result).split('\n')[0].slice(0, 100) : ''); };
+  el.stDiagnose.onclick = () => { if (!S.busy) ask('Diagnose the current project, inspect the preview problems, and tell me the most useful next fix.'); };
   el.stSend.onclick = () => { if (S.busy) { if (S.stopper) S.stopper(); } else { const t = el.stAsk.value; el.stAsk.value = ''; ask(t); } };
   el.stAsk.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); el.stSend.onclick(); } });
 
@@ -214,5 +236,5 @@ export function createStudio(env) {
     ask('Publish my project "' + S.project + '" to GitHub. ' + (repo.includes('/') ? 'Use the repository ' + repo + '.' : 'Create a ' + (priv ? 'private' : 'public') + ' repository named ' + repo + ', then publish all project files to it.') + ' Use github_create_repo if needed and then github_publish_project with all the files.');
   };
 
-  return { open: async () => { try { await loadProjects(localStorage.getItem('pholama_studio_proj') || undefined); } catch (e) { say('Studio could not start: ' + e.message, 'err'); if (/still the old version/.test(e.message)) { const b = document.createElement('button'); b.textContent = 'Restart Pholama now'; b.className = 'st-restart'; b.onclick = () => window.restartPholama && window.restartPholama(b); el.stAiLog.appendChild(b); } } }, state: S, ask, refreshFromServer };
+  return { open: async () => { try { await loadProjects(localStorage.getItem('pholama_studio_proj') || undefined); await loadActivity(); } catch (e) { say('Studio could not start: ' + e.message, 'err'); if (/still the old version/.test(e.message)) { const b = document.createElement('button'); b.textContent = 'Restart Pholama now'; b.className = 'st-restart'; b.onclick = () => window.restartPholama && window.restartPholama(b); el.stAiLog.appendChild(b); } } }, state: S, ask, refreshFromServer };
 }

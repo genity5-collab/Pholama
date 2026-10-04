@@ -140,10 +140,12 @@ function runJs(code, ms = 1500) {
 // Quick sanity check of a project so the AI (and user) can see mistakes without a browser.
 function check(p) {
   const files = snapshot(p), names = new Set(files.map(f => f.name)), issues = [];
+  const htmlIds = new Map();
   for (const f of files) {
     if (/\.html?$/i.test(f.name)) {
       for (const m of f.content.matchAll(/<(?:script|link|img)[^>]+(?:src|href)=["']([^"':#?]+)["']/gi)) if (!names.has(m[1].replace(/^\.\//, ''))) issues.push(`${f.name} points to ${m[1]} which does not exist`);
       if (!/<html|<body|<!doctype/i.test(f.content)) issues.push(f.name + ' has no <html> or <body>');
+      for (const m of f.content.matchAll(/\bid=["']([^"']+)["']/gi)) { const id = m[1]; if (!htmlIds.has(id)) htmlIds.set(id, f.name); else issues.push(`${f.name} repeats id=\"${id}\" (already in ${htmlIds.get(id)})`); }
     }
     if (/\.m?js$/.test(f.name)) { try { new vm.Script(f.content, { filename: f.name }); } catch (e) { if (!/import|export|await/.test(e.message)) issues.push(`${f.name}: ${e.message}`); } }
   }
@@ -161,6 +163,18 @@ function check(p) {
   }
   return issues.length ? issues : ['No problems found.'];
 }
+function diagnose(p) {
+  const files = snapshot(p), issues = check(p).filter(x => x !== 'No problems found.');
+  const html = files.filter(f => /\.html?$/i.test(f.name)).length;
+  const js = files.filter(f => /\.m?js$/i.test(f.name)).length;
+  const css = files.filter(f => /\.css$/i.test(f.name)).length;
+  const total = files.reduce((n, f) => n + f.size, 0);
+  const out = [`Project: ${projName(p)}`, `Files: ${files.length} (${html} HTML, ${css} CSS, ${js} JS)`, `Size: ${total} bytes`];
+  if (!files.some(f => /^index\.html?$/i.test(f.name))) out.push('Advice: add an index.html entry page so Preview opens predictably.');
+  if (issues.length) out.push('Problems found:', ...issues.slice(0, 20).map(x => '- ' + x));
+  else out.push('No static problems found. Use the Preview Output panel for runtime errors, then ask Pholama to fix the exact error.');
+  return out.join('\n');
+}
 
 // ---------- tools the AI can call (all local and free) ----------
 const TOOLS = {
@@ -173,11 +187,12 @@ const TOOLS = {
   studio_read_numbered: { desc: 'Read a file with line numbers, to edit it by line. args: {"project": string, "file": string}', run: a => readNumbered(a.project, a.file) },
   studio_lines: { desc: 'Edit an existing file by line number. Replace lines from..to with text, or insert before a line (leave "to" out), or delete lines (leave "text" empty). args: {"project": string, "file": string, "from": number, "to": number, "text": string}', run: a => editLines(a.project, a.file, a.from, a.to, a.text) },
   studio_delete: { desc: 'Delete one file. args: {"project": string, "file": string}', run: a => deleteFile(a.project, a.file) },
-  studio_check: { desc: 'Check a project for broken links and script errors. args: {"project": string}', run: a => check(a.project).join('\n') },
+  studio_check: { desc: 'Check a project for broken links, duplicate HTML ids and script errors. args: {"project": string}', run: a => check(a.project).join('\n') },
+  studio_diagnose: { desc: 'Diagnose a Studio project and return its file summary, problems and practical next step. args: {"project": string}', run: a => diagnose(a.project) },
   studio_run_js: { desc: 'Run a short piece of plain JavaScript and get its printed output (no page, no network). args: {"code": string}', run: a => { const r = runJs(a.code); return r.ok ? r.output : (r.output ? r.output + '\n' : '') + 'ERROR: ' + r.error; } },
 };
 const tools = () => Object.entries(TOOLS).map(([name, t]) => ({ name, desc: t.desc, kind: 'studio' }));
 const isStudio = n => Object.prototype.hasOwnProperty.call(TOOLS, n);
 const run = (name, args) => { if (!isStudio(name)) throw new Error('unknown studio tool'); return TOOLS[name].run(args && typeof args === 'object' ? args : {}); };
 
-module.exports = { tools, isStudio, run, listProjects, createProject, deleteProject, readFile, writeFile, deleteFile, patchFile, snapshot, runJs, check, projName, fileName, ROOT, LIMITS: { MAX_FILE, MAX_FILES, MAX_TOTAL } };
+module.exports = { tools, isStudio, run, listProjects, createProject, deleteProject, readFile, writeFile, deleteFile, patchFile, snapshot, runJs, check, diagnose, projName, fileName, ROOT, LIMITS: { MAX_FILE, MAX_FILES, MAX_TOTAL } };
