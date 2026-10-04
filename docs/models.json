@@ -1,19 +1,6 @@
 {
  "browser": [
   {
-   "id": "SmolLM2-360M-Instruct-q4f16_1-MLC",
-   "name": "SmolLM2 360M",
-   "size": "~0.4 GB",
-   "tier": 1,
-   "caps": [
-    "chat",
-    "fast"
-   ],
-   "note": "Smallest and fastest. Simple chat and short answers.",
-   "fallback": "SmolLM2-360M-Instruct-q4f32_1-MLC",
-   "needsF16": true
-  },
-  {
    "id": "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
    "name": "Qwen2.5 0.5B",
    "size": "~0.9 GB",
@@ -48,42 +35,6 @@
    "fallback": "Llama-3.2-1B-Instruct-q4f32_1-MLC"
   },
   {
-   "id": "Qwen2.5-Coder-0.5B-Instruct-q4f16_1-MLC",
-   "name": "Qwen2.5 Coder 0.5B",
-   "size": "~0.9 GB",
-   "tier": 1,
-   "caps": [
-    "code"
-   ],
-   "note": "Tiny helper for code snippets."
-  },
-  {
-   "id": "Qwen3-0.6B-q4f16_1-MLC",
-   "name": "Qwen3 0.6B (thinks)",
-   "size": "~1.4 GB",
-   "tier": 2,
-   "caps": [
-    "chat",
-    "thinking",
-    "multilingual"
-   ],
-   "note": "Shows its thinking before answering.",
-   "fallback": "Qwen3-0.6B-q4f32_1-MLC"
-  },
-  {
-   "id": "Qwen2.5-1.5B-Instruct-q4f16_1-MLC",
-   "name": "Qwen2.5 1.5B",
-   "size": "~1.6 GB",
-   "tier": 2,
-   "caps": [
-    "chat",
-    "multilingual",
-    "tools"
-   ],
-   "note": "Best small model for following instructions.",
-   "fallback": "Qwen2.5-1.5B-Instruct-q4f32_1-MLC"
-  },
-  {
    "id": "Qwen2.5-Math-1.5B-Instruct-q4f16_1-MLC",
    "name": "Qwen2.5 Math 1.5B",
    "size": "~1.6 GB",
@@ -92,18 +43,6 @@
     "math"
    ],
    "note": "Made for math problems."
-  },
-  {
-   "id": "SmolLM2-1.7B-Instruct-q4f16_1-MLC",
-   "name": "SmolLM2 1.7B",
-   "size": "~1.8 GB",
-   "tier": 2,
-   "caps": [
-    "chat",
-    "writing"
-   ],
-   "note": "Bigger SmolLM2. Needs a phone GPU with f16.",
-   "needsF16": true
   },
   {
    "id": "Qwen3-1.7B-q4f16_1-MLC",
@@ -119,159 +58,6 @@
    "note": "Thinks step by step. Best mid-size pick."
   },
   {
-   "id": "gemma-2-2b-it-q4f16_1-MLC-1k",
-   "name": "Gemma 2 2B",
-   "size": "~1.6 GB",
-   "tier": 3,
-   "caps": [
-    "chat",
-    "writing"
-   ],
-   "note": "Higher quality writing. 6 GB+ RAM phone.",
-   "fallback": "gemma-2-2b-it-q4f32_1-MLC-1k",
-   "needsF16": true
-  },
-  {
-   "id": "Llama-3.2-3B-Instruct-q4f16_1-MLC",
-   "name": "Llama 3.2 3B",
-   "size": "~2.3 GB",
-   "tier": 4,
-   "caps": [
-    "chat",
-    "summaries",
-    "tools"
-   ],
-   "note": "Strong quality. Flagship phones."
-  },
-  {
-   "id": "Qwen2.5-3B-Instruct-q4f16_1-MLC",
-   "name": "Qwen2.5 3B",
-   "size": "~2.5 GB",
-   "tier": 4,
-   "caps": [
-    "chat",
-    "multilingual",
-    "tools",
-    "code"
-   ],
-   "note": "Strong all-rounder. Flagship phones."
-  },
-  {
-   "id": "Phi-3.5-mini-instruct-q4f16_1-MLC-1k",
-   "name": "Phi 3.5 mini",
-   "size": "~2.5 GB",
-   "tier": 4,
-   "caps": [
-    "chat",
-    "reasoning",
-    "code"
-   ],
-   "note": "Good at reasoning. Flagship phones."
-  },
-  {
-   "id": "Qwen3-4B-q4f16_1-MLC",
-   "name": "Qwen3 4B (thinks)",
-   "size": "~3.4 GB",
-   "tier": 4,
-   "caps": [
-    "chat",
-    "thinking",
-    "reasoning",
-    "tools",
-    "code"
-   ],
-   "note": "Smartest phone model here. 8 GB+ RAM only."
-  },
-  {
-   "id": "Qwen2-0.5B-Instruct-q4f16_1-MLC",
-   "name": "Qwen2 0.5B",
-   "size": "~0.3 GB",
-   "tier": 1,
-   "caps": [
-    "chat",
-    "fast",
-    "multilingual"
-   ],
-   "note": "Tiny and quick. Good for older phones and short chats.",
-   "needsF16": true
-  },
-  {
-   "id": "Qwen3.5-0.8B-q4f16_1-MLC",
-   "name": "Qwen3.5 0.8B",
-   "size": "~0.5 GB",
-   "tier": 2,
-   "caps": [
-    "chat",
-    "fast",
-    "multilingual",
-    "thinking"
-   ],
-   "note": "Newer tiny model. Can think step by step.",
-   "needsF16": true
-  },
-  {
-   "id": "OLMo-2-0425-1B-Instruct-q4f16_1-MLC",
-   "name": "OLMo 2 1B",
-   "size": "~0.9 GB",
-   "tier": 2,
-   "caps": [
-    "chat"
-   ],
-   "note": "Fully open model from Ai2. Plain chat.",
-   "needsF16": true
-  },
-  {
-   "id": "Qwen2.5-Coder-1.5B-Instruct-q4f16_1-MLC",
-   "name": "Qwen2.5 Coder 1.5B",
-   "size": "~0.9 GB",
-   "tier": 2,
-   "caps": [
-    "code",
-    "chat"
-   ],
-   "note": "Writes and explains code on your phone.",
-   "needsF16": true
-  },
-  {
-   "id": "Qwen3.5-2B-q4f16_1-MLC",
-   "name": "Qwen3.5 2B",
-   "size": "~1.1 GB",
-   "tier": 3,
-   "caps": [
-    "chat",
-    "multilingual",
-    "thinking",
-    "writing"
-   ],
-   "note": "Newer mid-size model. Can think step by step.",
-   "needsF16": true
-  },
-  {
-   "id": "Qwen2.5-Coder-3B-Instruct-q4f16_1-MLC",
-   "name": "Qwen2.5 Coder 3B",
-   "size": "~1.7 GB",
-   "tier": 3,
-   "caps": [
-    "code",
-    "chat"
-   ],
-   "note": "Stronger coding help. Needs a good phone.",
-   "needsF16": true
-  },
-  {
-   "id": "Ministral-3-3B-Instruct-2512-BF16-q4f16_1-MLC",
-   "name": "Ministral 3 3B",
-   "size": "~2.0 GB",
-   "tier": 3,
-   "caps": [
-    "chat",
-    "writing",
-    "multilingual"
-   ],
-   "note": "Mistral's small chat model.",
-   "needsF16": true
-  },
-  {
    "id": "Phi-4-mini-instruct-q4f16_1-MLC",
    "name": "Phi-4 mini 3.8B",
    "size": "~2.2 GB",
@@ -282,21 +68,6 @@
     "math"
    ],
    "note": "Strong at reasoning and maths. Flagship phones.",
-   "needsF16": true
-  },
-  {
-   "id": "Qwen3.5-4B-q4f16_1-MLC",
-   "name": "Qwen3.5 4B",
-   "size": "~2.4 GB",
-   "tier": 4,
-   "caps": [
-    "chat",
-    "multilingual",
-    "thinking",
-    "writing",
-    "reasoning"
-   ],
-   "note": "Best all-rounder here. Flagship phones.",
    "needsF16": true
   },
   {
@@ -312,60 +83,6 @@
    ],
    "note": "Thinks step by step before it answers. Good for logic and maths.",
    "fallback": "DeepSeek-R1-Distill-Qwen-1.5B-q4f32_1-MLC"
-  },
-  {
-   "id": "TinyLlama-1.1B-Chat-v1.0-q4f16_1-MLC",
-   "name": "TinyLlama 1.1B",
-   "size": "~0.7 GB",
-   "tier": 1,
-   "caps": [
-    "chat",
-    "fast"
-   ],
-   "note": "Very light and quick. Easy chat on almost any phone.",
-   "fallback": "TinyLlama-1.1B-Chat-v1.0-q4f32_1-MLC",
-   "needsF16": true
-  },
-  {
-   "id": "Qwen2-1.5B-Instruct-q4f16_1-MLC",
-   "name": "Qwen2 1.5B",
-   "size": "~1.6 GB",
-   "tier": 2,
-   "caps": [
-    "chat",
-    "multilingual",
-    "summaries",
-    "code"
-   ],
-   "note": "Solid all-rounder. Many languages, summaries and simple code.",
-   "fallback": "Qwen2-1.5B-Instruct-q4f32_1-MLC"
-  },
-  {
-   "id": "gemma-2b-it-q4f16_1-MLC",
-   "name": "Gemma 2B",
-   "size": "~1.5 GB",
-   "tier": 2,
-   "caps": [
-    "chat",
-    "writing",
-    "summaries"
-   ],
-   "note": "Google's model. Clear, well-organised writing and explanations.",
-   "fallback": "gemma-2b-it-q4f32_1-MLC",
-   "needsF16": true
-  },
-  {
-   "id": "stablelm-2-zephyr-1_6b-q4f16_1-MLC",
-   "name": "StableLM Zephyr 1.6B",
-   "size": "~2.1 GB",
-   "tier": 3,
-   "caps": [
-    "chat",
-    "writing",
-    "multilingual"
-   ],
-   "note": "Friendly assistant style. Speaks English, German, Spanish, French, Italian, Dutch and Portuguese.",
-   "fallback": "stablelm-2-zephyr-1_6b-q4f32_1-MLC"
   }
  ],
  "local": [
@@ -1661,17 +1378,6 @@
  ],
  "cpu": [
   {
-   "id": "HuggingFaceTB/SmolLM2-135M-Instruct",
-   "name": "SmolLM2 135M (CPU)",
-   "size": "~0.15 GB",
-   "tier": 1,
-   "caps": [
-    "chat",
-    "fast"
-   ],
-   "note": "Tiniest. For very old phones. Answers are basic."
-  },
-  {
    "id": "HuggingFaceTB/SmolLM2-360M-Instruct",
    "name": "SmolLM2 360M (CPU)",
    "size": "~0.4 GB",
@@ -1694,18 +1400,6 @@
    "note": "Many languages. Slower than GPU."
   },
   {
-   "id": "onnx-community/Qwen3-0.6B-ONNX",
-   "name": "Qwen3 0.6B (CPU, thinks)",
-   "size": "~0.6 GB",
-   "tier": 2,
-   "caps": [
-    "chat",
-    "thinking",
-    "multilingual"
-   ],
-   "note": "Shows its thinking. Slow on CPU."
-  },
-  {
    "id": "onnx-community/Qwen2.5-1.5B-Instruct",
    "name": "Qwen2.5 1.5B (CPU)",
    "size": "~1.2 GB",
@@ -1716,17 +1410,6 @@
     "tools"
    ],
    "note": "Smarter but slow. 4 GB+ RAM."
-  },
-  {
-   "id": "onnx-community/Llama-3.2-1B-Instruct",
-   "name": "Llama 3.2 1B (CPU)",
-   "size": "~1.0 GB",
-   "tier": 2,
-   "caps": [
-    "chat",
-    "summaries"
-   ],
-   "note": "Good quality but slow. 4 GB+ RAM."
   }
  ],
  "tiers": {

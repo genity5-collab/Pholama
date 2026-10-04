@@ -154,7 +154,11 @@ function makeMsg() {
 function addUser(text) { const d = document.createElement('div'); d.className = 'm u'; const b = document.createElement('div'); b.className = 'bub'; b.textContent = text; d.appendChild(b); chatEl.appendChild(d); chatEl.scrollTop = 1e9; return d; }
 function hideHero() { const h = $('#hero'); if (h) h.remove(); }
 const add = (cls, txt) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; chatEl.appendChild(d); chatEl.scrollTop = 1e9; return d; };
-const saved = () => JSON.parse(localStorage.getItem('pholama.ready') || '[]');
+const saved = () => {   // only models this site still offers (older visits may have saved ones that were removed)
+  let l = []; try { l = JSON.parse(localStorage.getItem('pholama.ready') || '[]'); } catch {}
+  if (!catalog) return l;
+  return l.filter(id => catalog.browser.some(x => x.id === id || x.fallback === id) || (catalog.cpu || []).some(x => 'cpu:' + x.id === id));
+};
 const markReady = id => { const s = new Set(saved()); s.add(id); localStorage.setItem('pholama.ready', JSON.stringify([...s])); };
 
 async function init() {
@@ -186,7 +190,6 @@ async function refreshSelect() {
     const t = await (await api('api/tags')).json();
     for (const m of t.models) sel.add(new Option('💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
   } catch {}
-  sel.add(new Option('☁ ' + MAX_NAME + ' (cloud, no download)', CLOUD_ID));
   const first = [...sel.options].findIndex(o => !o.disabled); if (first >= 0) sel.selectedIndex = first;
   paintSwitches(); paintEffort(); paintComposerPill();
 }

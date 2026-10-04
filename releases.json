@@ -1,6 +1,17 @@
 {
- "latest": "0.6.1",
+ "latest": "0.6.2",
  "releases": [
+  {
+   "version": "0.6.2",
+   "date": "2026-10-04",
+   "title": "Phone support is ending",
+   "notes": [
+    "Phone support ends today: Pholama is moving to the PC app, with bigger models, tools, web search and Roblox Studio",
+    "The phone site is now a small helper for daily chat and maths, with 7 models from 0.7 to 2.2 GB",
+    "Agent Max and credits are removed from the phone site",
+    "Images and Gemma 4B are not available on phones, so there is no Android app"
+   ]
+  },
   {
    "version": "0.6.1",
    "date": "2026-10-04",
