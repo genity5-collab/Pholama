@@ -1,6 +1,15 @@
 {
- "latest": "0.9.11",
+ "latest": "0.9.12",
  "releases": [
+  {
+   "version": "0.9.12",
+   "date": "2026-10-04",
+   "title": "Fix live site and Studio updates",
+   "notes": [
+    "The PC updater now detects this release instead of reporting an older install as current",
+    "The website and PC Studio use a new cache generation so updated files and branding are picked up after deployment"
+   ]
+  },
   {
    "version": "0.9.11",
    "date": "2026-10-04",
