@@ -1,6 +1,17 @@
 {
- "latest": "0.9.6",
+ "latest": "0.9.7",
  "releases": [
+  {
+   "version": "0.9.7",
+   "date": "2026-10-04",
+   "title": "Fixed tool calls written as text, and a live edit log",
+   "notes": [
+    "Fixed: some models (including tool-capable Llama) typed a tool call as plain text, like <web_search {\"query\": ...}>, and then made up an answer. Pholama now recognises that form, plus function style, Mistral and Llama forms. The search really runs, the raw text is never shown, and the answer comes from the real result. Only real tool names are matched, so normal text and HTML are untouched",
+    "The edit log is now live: new entries appear by themselves, with no need to press Refresh. It reconnects if the link drops and only works on the PC itself",
+    "Every file edit the AI makes in Studio shows up live as Working, then Done with how many lines were added and removed, including the quick one-line edits",
+    "Studio chat now shows the model's thinking live as it happens"
+   ]
+  },
   {
    "version": "0.9.6",
    "date": "2026-10-04",

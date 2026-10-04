@@ -487,7 +487,7 @@ async function chat(req, res, b) {
         let got = ''; try { await streamTurn(model, [{ role: 'system', content: 'You edit one line of code. Reply with the single new line only. No explanation, no quotes, no code fence.' }, { role: 'user', content: plan.prompt }], { ...opts, temperature: 0.1, num_predict: 160 }, t => { got += t; }, ac.signal); } catch (e) { log('error', 'Guided edit asked the model but it failed (' + e.message + '). Using the normal way.'); }
         const nl = agent.cleanGuidedLine(got, plan.oldLine);
         if (nl) {
-          let res; try { res = stu.patchFile(b.studio.project, plan.file, plan.oldLine.trim(), nl.trim()); } catch (e) { res = 'Tool error: ' + e.message; }
+          let res; try { res = agent.loggedStudio('patch', b.studio.project, plan.file, plan.oldLine.trim(), nl.trim()); } catch (e) { res = 'Tool error: ' + e.message; }
           const ok = !/^Tool error/.test(res);
           log(ok ? 'result' : 'error', ok ? 'Line ' + plan.lineNo + ' of ' + plan.file + ': ' + plan.oldLine.trim() + '  ->  ' + nl.trim() : res);
           line({ tool: { name: 'studio_patch', args: { project: b.studio.project, file: plan.file, find: plan.oldLine.trim(), replace: nl.trim() }, result: ok ? res : res.slice(0, 300) } });
@@ -515,7 +515,7 @@ async function chat(req, res, b) {
           tries++; got = '';
           try { await streamTurn(model, [{ role: 'system', content: 'You write small working web projects. Reply only with files in the requested FILE: format.' }, { role: 'user', content: bp.prompt + (tries > 1 ? '\n\nYour last reply had no FILE: blocks. Reply ONLY with FILE: name then a code block, for each file.' : '') }], { ...opts, temperature: 0.3, num_predict: 2400 }, t => { got += t; }, ac.signal); } catch (e) { log('error', 'Build request failed (' + e.message + ').'); break; }
           for (const f of agent.parseFileBlocks(got, b.studio.project, bp.file)) {
-            let res; try { res = stu.writeFile(b.studio.project, f.file, agent.tidyFile(f.file, f.content)); } catch (e) { res = 'Tool error: ' + e.message; }
+            let res; try { res = agent.loggedStudio('write', b.studio.project, f.file, agent.tidyFile(f.file, f.content)); } catch (e) { res = 'Tool error: ' + e.message; }
             const ok = !/^Tool error/.test(String(res));
             log(ok ? 'result' : 'error', ok ? 'Wrote ' + f.file + ' (' + Buffer.byteLength(f.content) + ' bytes)' : String(res).slice(0, 200));
             line({ tool: { name: 'studio_write', args: { project: b.studio.project, file: f.file }, result: ok ? 'Saved ' + f.file : String(res).slice(0, 200) } });
@@ -529,7 +529,7 @@ async function chat(req, res, b) {
             log('step', 'Auto-check found ' + issues.length + ' problem(s). Asking the model to fix them.');
             let g2 = ''; try { await streamTurn(model, [{ role: 'system', content: 'You fix small web projects. Reply only with the corrected files in FILE: format.' }, { role: 'user', content: 'Problems found in the project:\n- ' + issues.slice(0, 5).join('\n- ') + '\n\nCurrent files:\n' + stu.snapshot(b.studio.project).filter(f => written.includes(f.name)).map(f => 'FILE: ' + f.name + '\n```\n' + f.content.slice(0, 3000) + '\n```').join('\n\n') + '\n\nReply with the corrected files in FILE: format, nothing else.' }], { ...opts, temperature: 0.2, num_predict: 2400 }, t => { g2 += t; }, ac.signal); } catch { break; }
             const backup = stu.snapshot(b.studio.project), before = issues.length;
-            for (const f of agent.parseFileBlocks(g2, b.studio.project)) { try { stu.writeFile(b.studio.project, f.file, agent.tidyFile(f.file, f.content)); } catch {} }
+            for (const f of agent.parseFileBlocks(g2, b.studio.project)) { try { agent.loggedStudio('write', b.studio.project, f.file, agent.tidyFile(f.file, f.content)); } catch {} }
             let now = before; try { now = stu.check(b.studio.project).filter(x => x !== 'No problems found.').length; } catch {}
             if (now >= before) { for (const f of backup) { try { stu.writeFile(b.studio.project, f.name, f.content); } catch {} } log('step', 'The fix did not help, so I kept the earlier version.'); break; }
             line({ tool: { name: 'studio_write', args: { project: b.studio.project }, result: 'Fixed problems (' + before + ' -> ' + now + ')' } });
@@ -575,7 +575,7 @@ async function chat(req, res, b) {
       const text = shot.text;
       generated += text;
       const shown = sent;
-      const call = tools.length ? (agent.parseTool(text) || (inStudio ? agent.parseFileBlock(text, b.studio.project) : null)) : null;
+      const call = tools.length ? (agent.parseTool(text, tools.map(t => t.name)) || (inStudio ? agent.parseFileBlock(text, b.studio.project) : null)) : null;
       const wasRetrying = retrying; if (call || !agent.looksLikeToolAttempt(text)) retrying = false;
       if (!call && tools.length && !cut && agent.looksLikeToolAttempt(text)) {
         badCalls++;
@@ -746,7 +746,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/github/approve' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ok: true, text: await agent.github.confirm(String(req.headers['x-github-token'] || ''), String(b.id || ''), b.approve === true) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); } }
     // ---- commands the AI proposes: run only after the user clicks Allow, only from this PC's own page ----
-    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/bonus' || p === '/api/bonus/github' || p === '/api/bonus/rewards') {
+    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/editlog/stream' || p === '/api/bonus' || p === '/api/bonus/github' || p === '/api/bonus/rewards') {
       if (req.who !== 'local') return json(res, 403, { error: 'This can only be done on the PC itself.' });
       const o = req.headers.origin;   // the public website is allowed to chat with this PC, but never to approve or stop commands
       if (o && !new RegExp('^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\]):' + PORT + '$').test(o)) return json(res, 403, { error: 'Approve commands in the Pholama window on this PC.' });
@@ -758,6 +758,14 @@ const server = http.createServer(async (req, res) => {
         catch (e) { return json(res, 200, { ok: false, text: e.message }); }
       }
       if (p === '/api/cmd/stop' && req.method === 'POST') return json(res, 200, { ok: agent.power.stopRunning() });
+      if (p === '/api/editlog/stream' && req.method === 'GET') {   // live feed of new log entries (server-sent events)
+        res.writeHead(200, { 'Content-Type': 'text/event-stream', 'Cache-Control': 'no-cache', Connection: 'keep-alive' });
+        const send = e => { try { res.write('data: ' + JSON.stringify(e) + '\n\n'); } catch {} };
+        const stop = agent.power.watch(send);
+        if (!stop) { res.end('event: full\ndata: {}\n\n'); return; }
+        res.write(': hello\n\n'); const beat = setInterval(() => { try { res.write(': \n\n'); } catch {} }, 20000);
+        const done = () => { clearInterval(beat); stop(); }; req.on('close', done); res.on('error', done); return;
+      }
       if (p === '/api/editlog' && req.method === 'GET') return json(res, 200, { entries: agent.power.readLog(+u.searchParams.get('n') || 100) });
       if (p === '/api/editlog' && req.method === 'DELETE') return json(res, 200, { ok: agent.power.clearLog() });
       if (p === '/api/bonus' && req.method === 'POST') { try { return json(res, 200, await agent.power.claimBonus(String((await body(req)).token || ''))); } catch (e) { return json(res, 200, { error: e.message, bonus: agent.power.bonusTotal() }); } }

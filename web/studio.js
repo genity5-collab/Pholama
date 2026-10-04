@@ -163,7 +163,7 @@ export function createStudio(env) {
     save.flush(); await new Promise(r => setTimeout(r, 60));   // make sure the AI sees what the user just typed
     const model = getModel(); if (!model) { say('Pick a model at the top first.', 'err'); return; }
     S.busy = true; el.stSend.textContent = 'Stop'; say(text, 'me'); hist.push({ role: 'user', content: text }); if (hist.length > 8) hist.splice(0, hist.length - 8);
-    const ac = new AbortController(); S.stopper = () => ac.abort(); let reply = '', node = null, srcCard = null;
+    const ac = new AbortController(); S.stopper = () => ac.abort(); let reply = '', node = null, srcCard = null, thinkNode = null;
     try {
       const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: hist, agent: true, stream: true, studio: { project: S.project }, switches: { search: true, tools: true } }) });
       const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
@@ -172,8 +172,9 @@ export function createStudio(env) {
         while ((i = buf.indexOf('\n')) >= 0) {
           const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!l) continue; let j; try { j = JSON.parse(l); } catch { continue; }
           if (j.error) throw new Error(j.error);
-          if (j.log && (j.log.kind === 'action' || j.log.kind === 'error')) say(j.log.text, j.log.kind === 'error' ? 'err' : 'act');
-          else if (j.tool) say(toolLine(j.tool), 'tool');
+          if (j.log && j.log.kind === 'thought') { if (!thinkNode) thinkNode = say(j.log.text, 'think'); else thinkNode.textContent = j.log.text; }   // live: one line that updates while the model thinks
+          else if (j.log && (j.log.kind === 'action' || j.log.kind === 'error')) { thinkNode = null; say(j.log.text, j.log.kind === 'error' ? 'err' : 'act'); }
+          else if (j.tool) { thinkNode = null; say(toolLine(j.tool), 'tool'); }
           else if (j.sources) { if (!srcCard) { srcCard = sourcesCard([]); el.stAiLog.appendChild(srcCard.el); } srcCard.update(j.sources); el.stAiLog.scrollTop = 1e9; }
           else if (j.studio) refreshSoon();
           else if (j.approve) approve(j.approve);

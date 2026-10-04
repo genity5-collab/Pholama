@@ -20,7 +20,14 @@ const LIMITS = {
 };
 
 // ---------- edit log: every command and file change, who approved it, how it ended ----------
+// A tiny live feed: every log entry is also handed to anyone watching (the edit log panel). Watchers can never block or break logging.
+const watchers = new Set();
+function watch(fn) { if (watchers.size >= 20) return null; watchers.add(fn); return () => watchers.delete(fn); }
 function logEntry(e) {
+  try {
+    const entry = { t: new Date().toISOString(), ...e };
+    for (const w of [...watchers]) { try { w(entry); } catch { watchers.delete(w); } }
+  } catch {}
   try {
     fs.mkdirSync(DIR, { recursive: true });
     fs.appendFileSync(LOG, JSON.stringify({ t: new Date().toISOString(), ...e }) + '\n');
@@ -209,4 +216,4 @@ async function claimRewards(token, fetchImpl = fetch) {
   return { granted: got, bonus: bonusTotal() };
 }
 
-module.exports = { LIMITS, propose, approve, reject, list, stopRunning, checkCommand, readLog, clearLog, logEntry, claimBonus, claimGithubBonus, claimRewards, bonusTotal };
+module.exports = { watch, LIMITS, propose, approve, reject, list, stopRunning, checkCommand, readLog, clearLog, logEntry, claimBonus, claimGithubBonus, claimRewards, bonusTotal };

@@ -226,7 +226,7 @@ body.studio-on #chat,body.studio-on footer,body.dash-on #chat,body.dash-on foote
 .st-ailog{max-height:150px;overflow:auto;font-size:13px;display:flex;flex-direction:column;gap:4px}
 .st-msg{padding:4px 8px;border-radius:8px;white-space:pre-wrap;word-break:break-word}
 .st-msg.me{background:var(--card2);align-self:flex-end;max-width:85%}.st-msg.ai{background:transparent}
-.st-msg.tool,.st-msg.act{color:var(--mut);font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace}
+.st-msg.tool,.st-msg.act,.st-msg.think{color:var(--mut);font-size:12px;font-family:ui-monospace,Menlo,Consolas,monospace}
 .st-msg.err{color:var(--err)}.st-msg.warn{color:#b7791f}.st-msg.appr{border:1px solid var(--line)}
 .st-aibox{display:flex;gap:8px;align-items:flex-end}.st-aibox textarea{flex:1;resize:none;border:1px solid var(--line);border-radius:12px;background:var(--bg);color:var(--fg);padding:8px 10px;font:inherit}
 @media (max-width:760px){
@@ -286,3 +286,4 @@ code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:13px}
 .achip{display:flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;font-size:13px;max-width:100%}
 .achip img{width:26px;height:26px;object-fit:cover;border-radius:6px}.achip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}
 .achip button{min-height:0;width:22px;height:22px;padding:0;border-radius:50%;line-height:1;background:transparent;border:0;color:var(--mut);cursor:pointer;font-size:16px}
+.st-msg.think{font-style:italic;opacity:.8}

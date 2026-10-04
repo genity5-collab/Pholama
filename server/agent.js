@@ -76,7 +76,7 @@ async function fetchText(url, ms = 12000) {
 async function webSearch({ query }, ctx) {
   if (!query) throw new Error('query required');
   // DuckDuckGo HTML endpoint: no API key, works from a normal PC
-  const r = await fetchText('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(query));
+  const r = process.env.PHOLAMA_TEST_SEARCH ? { text: require('fs').readFileSync(process.env.PHOLAMA_TEST_SEARCH, 'utf8') } : await fetchText('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(query));   // the env var is only for the test suite
   const out = [], found = []; const re = /<a[^>]+class="result__a"[^>]+href="([^"]+)"[^>]*>([\s\S]*?)<\/a>[\s\S]*?<a[^>]+class="result__snippet"[^>]*>([\s\S]*?)<\/a>/g; let m;
   while ((m = re.exec(r.text)) && out.length < 5) {
     let href = m[1]; const q = /uddg=([^&]+)/.exec(href); if (q) href = decodeURIComponent(q[1]);
@@ -366,6 +366,48 @@ async function buildTools(a) {
 
 // Safety net for EVERY tool, present or future: a hard time limit and a size cap. A hung site, a stalled MCP server or a slow
 // database can no longer freeze a chat; it becomes a normal "Tool error" that the AI can read and work around.
+// Studio edits are shown live in the edit log: "Working..." first, then Done with how many lines were added and removed.
+// Logging is best effort and wrapped, so it can never break or slow an edit.
+const STUDIO_EDITS = /^(studio_write|studio_patch|studio_lines|studio_delete)$/;
+function lineCounts(before, after) {
+  const split = t => (t == null || t === '') ? [] : String(t).replace(/\n$/, '').split('\n');   // nothing is zero lines, not one empty line
+  const a = split(before), b = split(after);
+  const cnt = new Map(); for (const l of a) cnt.set(l, (cnt.get(l) || 0) + 1);
+  let common = 0; for (const l of b) { const c = cnt.get(l); if (c > 0) { common++; cnt.set(l, c - 1); } }
+  return { added: Math.max(0, b.length - common), removed: Math.max(0, a.length - common) };
+}
+let editSeq = 0;
+function runStudioLogged(name, args) {
+  if (!STUDIO_EDITS.test(name)) return studio.run(name, args);
+  const a = args || {}, id = 'e' + Date.now().toString(36) + (editSeq++ % 1000), file = String(a.file || '').slice(0, 120), project = String(a.project || '').slice(0, 60);
+  let before = null; try { before = studio.readFile(project, file); } catch { before = null; }
+  const base = { kind: 'file', id, tool: name, path: file, project, by: 'ai' };
+  try { power.logEntry({ ...base, status: 'working' }); } catch {}
+  let out;
+  try { out = studio.run(name, args); }
+  catch (e) { try { power.logEntry({ ...base, status: 'failed', error: String(e.message).slice(0, 200) }); } catch {} throw e; }
+  try {
+    let after = null; if (name !== 'studio_delete') { try { after = studio.readFile(project, file); } catch { after = null; } }
+    const c = name === 'studio_delete' ? { added: 0, removed: (before == null || before === '') ? 0 : String(before).replace(/\n$/, '').split('\n').length } : lineCounts(before, after);
+    power.logEntry({ ...base, status: /^(error|could not|no such|not found|nothing)/i.test(String(out)) ? 'failed' : 'ok', added: c.added, removed: c.removed, ...(/^(error|could not|no such|not found)/i.test(String(out)) ? { error: String(out).slice(0, 200) } : {}) });
+  } catch {}
+  return out;
+}
+
+
+// For the guided-edit paths in the server, which write files directly instead of going through a tool call.
+function loggedStudio(kind, project, file, ...rest) {
+  const name = kind === 'patch' ? 'studio_patch' : 'studio_write';
+  const a = kind === 'patch' ? { project, file, find: rest[0], replace: rest[1] } : { project, file, content: rest[0] };
+  const id = 'e' + Date.now().toString(36) + (editSeq++ % 1000), base = { kind: 'file', id, tool: name, path: String(file || '').slice(0, 120), project: String(project || '').slice(0, 60), by: 'ai' };
+  let before = null; try { before = studio.readFile(project, file); } catch {}
+  try { power.logEntry({ ...base, status: 'working' }); } catch {}
+  let out;
+  try { out = kind === 'patch' ? studio.patchFile(project, file, rest[0], rest[1]) : studio.writeFile(project, file, rest[0]); }
+  catch (e) { try { power.logEntry({ ...base, status: 'failed', error: String(e.message).slice(0, 200) }); } catch {} throw e; }
+  try { let after = null; try { after = studio.readFile(project, file); } catch {} const c = lineCounts(before, after); const bad = /^(error|could not|no such|not found)/i.test(String(out)); power.logEntry({ ...base, status: bad ? 'failed' : 'ok', added: c.added, removed: c.removed, ...(bad ? { error: String(out).slice(0, 200) } : {}) }); } catch {}
+  return out;
+}
 const TOOL_LIMIT_MS = +process.env.PHOLAMA_TOOL_LIMIT_MS || 45000, TOOL_MAX_CHARS = 20000;
 async function runTool(tools, name, args, ctx) {
   let timer;
@@ -386,7 +428,7 @@ async function runToolRaw(tools, name, args, ctx) {
     if (/^(write_file|append_file|edit_file|delete_file|make_folder)$/.test(name)) { try { power.logEntry({ kind: 'file', status: 'ok', tool: name, path: String((args && args.path) || '').slice(0, 200), by: 'ai' }); } catch {} }
     return out;
   }
-  if (studio.isStudio(name)) return studio.run(name, args);   // local and free, works even with 0 credits
+  if (studio.isStudio(name)) return runStudioLogged(name, args);   // local and free, works even with 0 credits
   if (plugins.isSkillTool(name)) return plugins.runSkillTool(name, args);   // local and free
   if (plugins.isPlatform(name)) { if (name !== 'platform_updates' && !spend(COST.search)) throw new Error('out of daily credits'); return plugins.runPlatform(name, args, ctx && ctx.pholamaToken); }
   if (github.isGithub(name)) {
@@ -495,9 +537,39 @@ function parseFileBlock(text, project) {
   if (!m || !project) return null;
   return { name: 'studio_write', args: { project, file: m[1], content: m[2] } };
 }
-function parseTool(text) {
+// Other shapes small models use for a tool call. All become the same {name, args}; a name must be a REAL tool, so ordinary text and HTML never match.
+const FIRST_ARG = { web_search: 'query', fetch_page: 'url', calculator: 'expression', remember_thing: 'text', use_skill: 'name', platform_latest_posts: 'community', read_file: 'path', list_files: 'path', delete_file: 'path', run_command: 'command' };
+function parseOtherForms(text, names) {
+  const t = String(text || ''), list = (names && names.length ? names : Object.keys(FIRST_ARG)).filter(n => /^[a-z_][a-z0-9_]*$/i.test(n));
+  if (!list.length) return null;
+  const alt = list.map(n => n.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const asArgs = (name, raw) => {
+    raw = String(raw || '').trim(); if (!raw) return {};
+    let j; try { j = JSON.parse(raw); } catch { j = repairJson(raw); }
+    if (j && typeof j === 'object' && !Array.isArray(j)) return j;
+    const q = /^(["'`])([\s\S]*)\1$/.exec(raw); const key = FIRST_ARG[name];
+    if (q && key) return { [key]: q[2] };
+    return null;
+  };
+  let m;
+  // <web_search {"query": "x"}>   or   <web_search>{"query": "x"}</web_search>   or   <web_search query="x" />
+  if ((m = new RegExp('<(' + alt + ')\\b\\s*(\\{[\\s\\S]*?\\})\\s*/?>', 'i').exec(t)) || (m = new RegExp('<(' + alt + ')\\s*>\\s*(\\{[\\s\\S]*?\\})\\s*(?:</\\1\\s*>|$)', 'i').exec(t))) {
+    const a = asArgs(m[1].toLowerCase(), m[2]); if (a) return { name: m[1].toLowerCase(), args: a };
+  }
+  if ((m = new RegExp('<(' + alt + ')\\s+([a-z_]+)\\s*=\\s*"([^"]*)"\\s*/?>', 'i').exec(t))) return { name: m[1].toLowerCase(), args: { [m[2]]: m[3] } };
+  // web_search({"query": "x"})   web_search("x")   on a line of its own
+  if ((m = new RegExp('(?:^|\\n)\\s*(?:`{0,3}\\w*\\s*)?(' + alt + ')\\s*\\(\\s*([\\s\\S]*?)\\s*\\)\\s*`{0,3}\\s*(?:\\n|$)', 'i').exec(t))) {
+    const a = asArgs(m[1].toLowerCase(), m[2]); if (a) return { name: m[1].toLowerCase(), args: a };
+  }
+  // Mistral [TOOL_CALLS] [{"name": "x", "arguments": {...}}]   Llama 3 <|python_tag|>{"name": "x", "parameters": {...}}
+  if ((m = /\[TOOL_CALLS\]\s*(\[[\s\S]*\])/.exec(t))) { try { const arr = JSON.parse(m[1]); const c = Array.isArray(arr) && arr[0]; if (c && list.includes(c.name)) return { name: c.name, args: c.arguments && typeof c.arguments === 'object' ? c.arguments : (c.args || {}) }; } catch {} }
+  if ((m = /<\|python_tag\|>\s*(\{[\s\S]*\})/.exec(t))) { const j = (() => { try { return JSON.parse(m[1]); } catch { return repairJson(m[1]); } })(); if (j && list.includes(j.name)) return { name: j.name, args: j.parameters || j.arguments || j.args || {} }; }
+  return null;
+}
+function parseTool(text, names) {
+  const other = (() => { const t = String(text || ''); if (/<\/?tool(?:_call)?\b/i.test(t)) return null; return parseOtherForms(t, names); })();
   let m = TOOL_RE.exec(text);
-  if (!m) { const open = /<tool(?:_call)?>([\s\S]*)$/.exec(text); if (!open) return null; m = open; }   // the model stopped before writing </tool>
+  if (!m) { const open = /<tool(?:_call)?>([\s\S]*)$/.exec(text); if (!open) return other; m = open; }   // the model stopped before writing </tool>
   let j; try { j = JSON.parse(m[1].trim()); } catch { j = repairJson(m[1]); }
   if (!j || typeof j.name !== 'string' || !j.name) return null;
   if (j.args == null && j.arguments != null) { if (typeof j.arguments === 'string') { try { j.arguments = JSON.parse(j.arguments); } catch { j.arguments = repairJson(j.arguments) || {}; } } j.args = j.arguments; }   // Qwen/Hermes writes "arguments", Pholama's own tag writes "args"
@@ -523,13 +595,17 @@ function aboutUserHint(text, memories) {
 // ---- Broken tool calls: never show them, retry them ----
 // A small model often tries to call a tool and gets the format wrong (bad JSON, wrong tag, a code fence around it).
 // parseTool() then returns null, and the raw command used to be shown to the user as if it were the answer.
-const ATTEMPT_RE = /<\/?tool(?:_call)?\b|"name"\s*:\s*"[a-z_]+"\s*,\s*"(?:args|arguments)"\s*:|^\s*(?:tool_call|TOOL_CALL)\s*[:(]/im;
+const ATTEMPT_RE = /<\/?tool(?:_call)?\b|<(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|read_file|write_file|edit_file|list_files|delete_file|run_command)\b|\[TOOL_CALLS\]|<\|python_tag\|>|^\s*(?:web_search|fetch_page|platform_[a-z_]+|github_[a-z_]+)\s*\(|"name"\s*:\s*"[a-z_]+"\s*,\s*"(?:args|arguments)"\s*:|^\s*(?:tool_call|TOOL_CALL)\s*[:(]/im;
+const TOOL_NAME_RE = /^(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|read_file|write_file|append_file|edit_file|list_files|search_files|delete_file|make_folder|run_command|studio_[a-z_]+)$/i;
 function looksLikeToolAttempt(text) { return ATTEMPT_RE.test(String(text || '')); }
 // Remove any tool-call text from a reply so it can be shown safely. Returns '' when nothing readable is left.
 function stripToolText(text) {
   let t = String(text || '');
   t = t.replace(/```[a-z]*\s*\n?\s*<tool(?:_call)?>[\s\S]*?(?:<\/tool(?:_call)?>|$)\s*\n?```/gi, '');
   t = t.replace(/<tool(?:_call)?>[\s\S]*?(?:<\/tool(?:_call)?>|$)/gi, '');
+  t = t.replace(/<([a-z][a-z0-9_]*)\s*(?:\{[\s\S]*?\}|[a-z_]+\s*=\s*"[^"]*")\s*\/?>(?:[\s\S]*?<\/\1\s*>)?/gi, (all, n) => TOOL_NAME_RE.test(n) ? '' : all);   // <web_search {...}> and <web_search query="x" />
+  t = t.replace(/<([a-z][a-z0-9_]*)\s*>\s*\{[\s\S]*?\}\s*(?:<\/\1\s*>|$)/gi, (all, n) => TOOL_NAME_RE.test(n) ? '' : all);
+  t = t.replace(/\[TOOL_CALLS\][\s\S]*$/g, '').replace(/<\|python_tag\|>[\s\S]*$/g, '');
   t = t.replace(/<\/?tool(?:_call)?>/gi, '');
   t = t.replace(/\{\s*"name"\s*:\s*"[a-z_]+"\s*,\s*"(?:args|arguments)"\s*:[\s\S]*$/i, '');
   return t.replace(/\n{3,}/g, '\n\n').trim();
@@ -549,13 +625,22 @@ function toolFailNotice(name, result, attempt) {
 
 // How many characters of a streaming reply are safe to show: everything before the first tool tag, and nothing of a
 // half-written tag at the very end ("<to", "<tool_c"...), because that may turn into a command on the next token.
+const TOOL_HEADS = ['web_search', 'fetch_page', 'calculator', 'current_time', 'remember_thing', 'use_skill', 'create_skill', 'platform_', 'github_', 'read_file', 'write_file', 'append_file', 'edit_file', 'list_files', 'search_files', 'delete_file', 'make_folder', 'run_command', 'studio_', '|python_tag|'];
 function safeShowLength(acc) {
   const s = String(acc || '');
   const i = s.search(/<\/?tool/i); if (i >= 0) return i;
   const j = s.lastIndexOf('<'); if (j >= 0 && '<tool_call>'.startsWith(s.slice(j).toLowerCase().slice(0, 11)) || (j >= 0 && '</tool_call>'.startsWith(s.slice(j).toLowerCase()))) return j;
+  const sp = s.search(/\[TOOL_CALLS\]|<\|python_tag\|>/); if (sp >= 0) return sp;
   const k = s.search(/\{\s*"name"\s*:\s*"[a-z_]+"\s*,\s*"(?:args|arguments)"/i); if (k >= 0) return k;
+  const named = /<(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|read_file|write_file|append_file|edit_file|list_files|search_files|delete_file|make_folder|run_command|studio_[a-z_]+)\b/i.exec(s); if (named) return named.index;   // <web_search {...}>
+  for (let tc = s.indexOf('['); tc >= 0; tc = s.indexOf('[', tc + 1)) { const rest = s.slice(tc); if (rest.length > 1 && rest.length <= 12 && '[TOOL_CALLS]'.startsWith(rest)) return tc; }   // "[TOOL_C" still being typed
+  // web_search("x") on a line of its own: hold from the start of that line once it looks like NAME( , or while it is still a prefix of a tool name
+  const ls = s.lastIndexOf('\n') + 1, line = s.slice(ls).replace(/^\s*(?:`{3}\w*\s*)?/, '');
+  if (line && (/^(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|read_file|write_file|edit_file|list_files|delete_file|run_command)\s*\(/i.test(line) || (line.length >= 4 && line.length <= 20 && /^[a-z_]+$/i.test(line) && TOOL_HEADS.some(h => h.startsWith(line.toLowerCase()) && h.length > line.length)))) return ls;
+  const lt = s.lastIndexOf('<');   // a tag still being typed, such as "<web_s": hold it until we know what it is
+  if (lt >= 0 && s.length - lt <= 24 && /^<[a-z_|]*$/i.test(s.slice(lt)) && s.slice(lt).length > 1 && TOOL_HEADS.some(h => h.startsWith(s.slice(lt + 1).toLowerCase()))) return lt;
   return s.length;
 }
 const isToolFail = r => /^Tool error/.test(String(r || ''));
 
-module.exports = { lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+module.exports = { loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

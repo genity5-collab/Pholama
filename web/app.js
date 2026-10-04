@@ -8,7 +8,7 @@ import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GAT
 import { planFallback } from './fallback.js';
 import { splitThinking, thinkLabel, countWords } from './thinking.js';
 import { splitBlocks, LANGS, cleanLang, extFor, safeFileName, diffLines, diffStats, extractScript, editPrompt, runCommand } from './codeblocks.js';
-import { collapse, groupByDay, dayTitle, applyFilter, summarise, summaryText, info as logInfo, detailRows, fmtTime, FILTERS } from './editlog.js';
+import { collapse, groupByDay, dayTitle, applyFilter, summarise, summaryText, info as logInfo, detailRows, fmtTime, FILTERS, title as elTitle, mergeLive } from './editlog.js';
 import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 import { downloadDecision, readCached, writeCached } from './pclink.js';
 import { canSave, usedText } from './memlimit.js';
@@ -1421,7 +1421,7 @@ function elPaint() {
       const st = logInfo(e.status), det = document.createElement('details'); det.className = 'elrow tone-' + st.tone;
       const sm = document.createElement('summary');
       const chip = document.createElement('span'); chip.className = 'elchip'; chip.textContent = st.word + (e.kind === 'bonus' ? ' +' + e.credits : '');
-      const what = document.createElement('span'); what.className = 'elwhat'; what.textContent = e.cmd ? e.cmd.replace(/\s+/g, ' ').slice(0, 120) : (e.kind === 'bonus' ? 'Login bonus' : 'Event');
+      const what = document.createElement('span'); what.className = 'elwhat'; what.textContent = elTitle(e);
       const tm = document.createElement('span'); tm.className = 'eltime'; tm.textContent = fmtTime(e.t);
       sm.append(chip, what, tm); det.append(sm);
       const body = document.createElement('div'); body.className = 'elbody';
@@ -1435,8 +1435,19 @@ async function paintEditLog() {
   const box = $('#editLog'); if (!box) return;
   if (!server || remoteBase()) { box.textContent = 'The edit log lives on the PC. Open Pholama on the PC to see it.'; $('#elFilters').textContent = ''; $('#elSummary').textContent = ''; return; }
   try { elEntries = (await (await api('api/editlog?n=200')).json()).entries || []; } catch { elEntries = []; }
-  elPaint();
+  elPaint(); elStartLive();
 }
+// Live: new log entries arrive by themselves. One stream, reconnects after a drop, repaints at most 4 times a second, and stops when the panel is closed.
+let elLive = null, elTimer = null, elRetry = 0;
+function elSchedulePaint() { if (elTimer) return; elTimer = setTimeout(() => { elTimer = null; elPaint(); }, 250); }
+function elStartLive() {
+  if (elLive || !server || remoteBase() || typeof EventSource === 'undefined') return;
+  try { elLive = new EventSource('api/editlog/stream'); } catch { return; }
+  elLive.onopen = () => { elRetry = 0; const s = $('#elLiveDot'); if (s) s.textContent = 'Live'; };
+  elLive.onmessage = ev => { let e; try { e = JSON.parse(ev.data); } catch { return; } elEntries = mergeLive(elEntries, e, 300); elSchedulePaint(); };
+  elLive.onerror = () => { const s = $('#elLiveDot'); if (s) s.textContent = 'Reconnecting...'; elStopLive(); const wait = Math.min(15000, 1000 * 2 ** Math.min(elRetry++, 4)); setTimeout(elStartLive, wait); };
+}
+function elStopLive() { if (elLive) { try { elLive.close(); } catch {} elLive = null; } }
 $('#logRefresh').onclick = paintEditLog;
 $('#logClear').onclick = async () => { if (!confirm('Clear the edit log? This cannot be undone.')) return; try { await api('api/editlog', { method: 'DELETE' }); } catch {} paintEditLog(); };
 
