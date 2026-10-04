@@ -21,6 +21,12 @@ ok('files unique', new Set(cat.map(m => m.file)).size === cat.length);
 
 // ---- parsing ----
 const a = require('../server/agent.js');
+const freshBuild = a.planGuidedBuild('Build a small memory game', '', [], 'fresh-project');
+ok('fresh local Studio builds request linked HTML, CSS and JavaScript files', freshBuild && freshBuild.fresh && freshBuild.files.join() === 'index.html,style.css,script.js' && /just before <\/body>/.test(freshBuild.prompt));
+const existingBuild = a.planGuidedBuild('Build a small memory game', '', [{ name: 'index.html', size: 1800 }], 'existing-project');
+ok('guided builds leave existing nonstarter projects to the safe editing tools', existingBuild && !existingBuild.fresh);
+const ownScript = a.planGuidedBuild('Write a JavaScript script to format a date', '', [], 'script-project');
+ok('plain script requests remain single-file JavaScript', ownScript && ownScript.files.join() === 'script.js');
 let t = a.parseTool('<tool>{"name":"calculator","args":{"expression":"2+2"}}</tool>'); ok('own tag', t && t.name === 'calculator' && t.args.expression === '2+2');
 t = a.parseTool('<tool_call>{"name":"read_file","arguments":{"path":"a.txt"}}</tool_call>'); ok('hermes tag', t && t.name === 'read_file' && t.args.path === 'a.txt', JSON.stringify(t));
 t = a.parseTool('<tool_call>{"name":"read_file","arguments":"{\\"path\\":\\"b.txt\\"}"}</tool_call>'); ok('arguments as string', t && t.args.path === 'b.txt', JSON.stringify(t));

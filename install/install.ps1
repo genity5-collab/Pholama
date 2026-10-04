@@ -9,7 +9,7 @@ function Say($m) { Write-Host ""; Write-Host "  $m" }
 $nodeExe = 'node'
 $ok = $false
 $found = Get-Command node -ErrorAction SilentlyContinue
-if ($found) { try { $ok = ([int](node -p "process.versions.node.split('.')[0]")) -ge 18 } catch { $ok = $false } }
+if ($found) { $nodeExe = $found.Source; try { $ok = ([int](node -p "process.versions.node.split('.')[0]")) -ge 18 } catch { $ok = $false } }
 if (-not $ok) {
   $priv = Join-Path $env:USERPROFILE '.pholama\node'
   $privNode = Join-Path $priv 'node.exe'
@@ -48,6 +48,8 @@ Remove-Item $tmp -Recurse -Force
 # make the pholama command available in new terminals
 $bin = Join-Path $env:USERPROFILE '.pholama\cmd'; New-Item -ItemType Directory -Path $bin -Force | Out-Null
 foreach ($n in 'pholama','phollama') { Set-Content -Path (Join-Path $bin "$n.cmd") -Value "@echo off`r`n`"$nodeExe`" `"$dir\server\cli.js`" %*" -Encoding ASCII }
+$null = & $nodeExe (Join-Path $dir 'server\cli.js') schedule-updates 2>&1
+if ($LASTEXITCODE -eq 0) { Say "Background updates are scheduled every 5 hours while Pholama is closed." } else { Say "Could not install background updates. Retry later with: pholama schedule-updates" }
 $path = [Environment]::GetEnvironmentVariable('Path','User')
 if (($path -split ';') -notcontains $bin) { [Environment]::SetEnvironmentVariable('Path', "$path;$bin", 'User') }
 # Desktop + Start Menu shortcuts that carry the Pholama llama icon, so it is easy to spot and click

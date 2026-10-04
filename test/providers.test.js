@@ -12,7 +12,8 @@ ok('the view never contains the key', !JSON.stringify(a).includes('SECRET') && !
 ok('only the last 4 characters are shown', a.hint === '...cdef', a.hint);
 ok('key file is private (mode 600)', process.platform === 'win32' || (fs.statSync(P.FILE).mode & 0o777) === 0o600, (fs.statSync(P.FILE).mode & 0o777).toString(8));
 ok('ids are unique for the same model', P.addNow({ kind: 'openai', key: KEY + 'x' }, S.checkLink).id !== a.id);
-ok('groq / gemini / openrouter point at their own company', ['groq', 'gemini', 'openrouter', 'mistral', 'deepseek'].every(k => P.addNow({ kind: k, key: 'abcdefgh1234' }, S.checkLink).base.startsWith('https://')));
+ok('known providers point at their own https company endpoints', ['groq', 'gemini', 'openrouter', 'mistral', 'deepseek', 'alibaba', 'alibabaus', 'alibabacn'].every(k => P.addNow({ kind: k, key: 'abcdefgh1234' }, S.checkLink).base.startsWith('https://')));
+ok('Alibaba options use documented regional hosts and default to Qwen', P.KNOWN.alibaba.base.includes('dashscope-intl.aliyuncs.com') && P.KNOWN.alibabaus.base.includes('dashscope-us.aliyuncs.com') && P.KNOWN.alibabacn.base.includes('dashscope.aliyuncs.com') && P.KNOWN.alibaba.model === 'qwen3.8-max');
 ok('unknown company is refused', /Pick one/.test(throws(() => P.addNow({ kind: 'evil', key: 'abcdefgh1234' }))));
 ok('short key refused', /does not look right/.test(throws(() => P.addNow({ kind: 'openai', key: 'abc' }))));
 ok('key with spaces refused', /does not look right/.test(throws(() => P.addNow({ kind: 'openai', key: 'abcd efgh 1234' }))));

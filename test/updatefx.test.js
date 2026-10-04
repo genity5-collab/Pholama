@@ -40,6 +40,9 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   ok('Restart opens the installing scene and closes the banner', /hideBanner\(\); const scene = openInstalling\(version\)/.test(app));
   ok('the scene reports success before reloading', /scene\.done\(\);[^]*location\.reload\(\)/.test(app));
   ok('the scene shows a failure instead of hanging forever', /fail\('Could not restart from here'\)/.test(app) && /fail\('Pholama did not come back'\)/.test(app));
+  ok('a network error during restart is treated as the old server exiting', /NetworkError\|Failed to fetch/.test(app));
+  ok('restart waits for the expected new server version', /v\.version === version/.test(app));
+  ok('an already-open PC tab reloads after the server version changes', /setInterval\(watchServerVersion, 5000\)/.test(app) && /location\.reload\(\)/.test(app));
   ok('the celebration is checked at start-up', /checkCelebrate\(cur,/.test(app));
   ok('the new files work offline (service worker list)', /'studiofx\.js', 'updatefx\.js'/.test(sw));
   ok('all colours come from the theme (no fixed hex) in the update styles', !/\.(updb|upds|updn)[^{]*\{[^}]*#[0-9a-fA-F]{3,6}\b/.test(css.slice(css.indexOf('Update animations:'))));

@@ -524,35 +524,40 @@ async function chat(req, res, b) {
         const prevBuild = before.find(t => /\b(make|build|create|write|code|generate|develop)\b/i.test(t) && t.length < 400) || before[0] || '';
         bp = agent.planGuidedBuild(cur, prevBuild, stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })), b.studio.project);
       } catch {}
-      if (bp) {
-        log('step', 'Building in Studio: asking the model for the files directly.'); line({ toolStart: { name: 'studio_write', args: { file: bp.file || '' } } });
-        let got = '', tries = 0, written = [];
-        while (tries < 3 && !written.length && !ac.signal.aborted) {
+      if (bp && bp.fresh) {
+        log('step', 'Building in Studio: asking the model for complete, linked project files.'); line({ toolStart: { name: 'studio_write', args: { file: bp.file || '' } } });
+        let got = '', tries = 0, written = []; const required = new Set(bp.files || [bp.file]);
+        while (tries < 3 && required.size && !ac.signal.aborted) {
           tries++; got = '';
-          try { await streamTurn(model, [{ role: 'system', content: 'You write small working web projects. Reply only with files in the requested FILE: format.' }, { role: 'user', content: bp.prompt + (tries > 1 ? '\n\nYour last reply had no FILE: blocks. Reply ONLY with FILE: name then a code block, for each file.' : '') }], { ...opts, temperature: 0.3, num_predict: 2400 }, t => { got += t; }, ac.signal); } catch (e) { log('error', 'Build request failed (' + e.message + ').'); break; }
+          const retry = tries > 1 ? '\n\nMissing files: ' + [...required].join(', ') + '. Reply with complete FILE blocks for these missing files only; do not repeat files already made.' : '';
+          try { await streamTurn(model, [{ role: 'system', content: 'You write complete, small, working projects. Follow the requested filenames exactly and return code only in FILE blocks.' }, { role: 'user', content: bp.prompt + retry }], { ...opts, temperature: 0.25, num_predict: 4096 }, t => { got += t; }, ac.signal); } catch (e) { log('error', 'Build request failed (' + e.message + ').'); break; }
           for (const f of agent.parseFileBlocks(got, b.studio.project, bp.file)) {
+            if (!required.has(f.file)) continue;
             let res; try { res = agent.loggedStudio('write', b.studio.project, f.file, agent.tidyFile(f.file, f.content)); } catch (e) { res = 'Tool error: ' + e.message; }
             const ok = !/^Tool error/.test(String(res));
             log(ok ? 'result' : 'error', ok ? 'Wrote ' + f.file + ' (' + Buffer.byteLength(f.content) + ' bytes)' : String(res).slice(0, 200));
             line({ tool: { name: 'studio_write', args: { project: b.studio.project, file: f.file }, result: ok ? 'Saved ' + f.file : String(res).slice(0, 200) } });
-            if (ok) written.push(f.file);
+            if (ok) { written.push(f.file); required.delete(f.file); }
           }
         }
         if (written.length) {
           line({ studio: { changed: true, project: b.studio.project } });
           let issues = []; try { issues = stu.check(b.studio.project).filter(x => x !== 'No problems found.'); } catch {}
+          issues.push(...[...required].map(f => 'The build is incomplete: no complete FILE block was returned for ' + f));
           for (let fix = 0; fix < 2 && issues.length && !ac.signal.aborted; fix++) {   // let the model repair what the checker found
             log('step', 'Auto-check found ' + issues.length + ' problem(s). Asking the model to fix them.');
-            let g2 = ''; try { await streamTurn(model, [{ role: 'system', content: 'You fix small web projects. Reply only with the corrected files in FILE: format.' }, { role: 'user', content: 'Problems found in the project:\n- ' + issues.slice(0, 5).join('\n- ') + '\n\nCurrent files:\n' + stu.snapshot(b.studio.project).filter(f => written.includes(f.name)).map(f => 'FILE: ' + f.name + '\n```\n' + f.content.slice(0, 3000) + '\n```').join('\n\n') + '\n\nReply with the corrected files in FILE: format, nothing else.' }], { ...opts, temperature: 0.2, num_predict: 2400 }, t => { g2 += t; }, ac.signal); } catch { break; }
+            let g2 = ''; try { await streamTurn(model, [{ role: 'system', content: 'You fix small web projects. Reply only with complete corrected FILE blocks.' }, { role: 'user', content: 'Problems found in the project:\n- ' + issues.slice(0, 8).join('\n- ') + '\n\nCurrent files:\n' + stu.snapshot(b.studio.project).filter(f => written.includes(f.name)).map(f => 'FILE: ' + f.name + '\n```\n' + f.content.slice(0, 3000) + '\n```').join('\n\n') + '\n\nReply with complete files in FILE: format that fix every listed issue. Missing required files: ' + [...required].join(', ') + '. Nothing else.' }], { ...opts, temperature: 0.15, num_predict: 4096 }, t => { g2 += t; }, ac.signal); } catch { break; }
             const backup = stu.snapshot(b.studio.project), before = issues.length;
-            for (const f of agent.parseFileBlocks(g2, b.studio.project)) { try { agent.loggedStudio('write', b.studio.project, f.file, agent.tidyFile(f.file, f.content)); } catch {} }
+            for (const f of agent.parseFileBlocks(g2, b.studio.project)) { if (!new Set(bp.files || [bp.file]).has(f.file)) continue; try { const r = agent.loggedStudio('write', b.studio.project, f.file, agent.tidyFile(f.file, f.content)); if (!/^Tool error/.test(r) && !written.includes(f.file)) written.push(f.file); required.delete(f.file); } catch {} }
             let now = before; try { now = stu.check(b.studio.project).filter(x => x !== 'No problems found.').length; } catch {}
+            now += required.size;
             if (now >= before) { for (const f of backup) { try { stu.writeFile(b.studio.project, f.name, f.content); } catch {} } log('step', 'The fix did not help, so I kept the earlier version.'); break; }
             line({ tool: { name: 'studio_write', args: { project: b.studio.project }, result: 'Fixed problems (' + before + ' -> ' + now + ')' } });
             line({ studio: { changed: true, project: b.studio.project } });
             try { issues = stu.check(b.studio.project).filter(x => x !== 'No problems found.'); } catch { issues = []; }
           }
-          const txt = 'Done. I wrote ' + written.join(', ') + ' in the project "' + b.studio.project + '". Press Run to try it.' + (issues.length ? '\n\nStill not perfect: ' + issues.slice(0, 2).join('; ') + '. Tell me what to fix.' : '');
+          const remaining = [...required];
+          const txt = (remaining.length ? 'I created ' : 'Done. I wrote ') + written.join(', ') + ' in the project "' + b.studio.project + '".' + (remaining.length ? '\n\nStill missing: ' + remaining.join(', ') + '. Try a larger model or ask for one of those files next.' : ' Press Run to try it.') + (issues.length && !remaining.length ? '\n\nStill not perfect: ' + issues.slice(0, 2).join('; ') + '. Tell me what to fix.' : '');
           line({ model, message: { role: 'assistant', content: txt }, done: false }); generated += got + txt; guidedDone = true;
         } else log('step', 'The model did not give usable files, using the normal way.');
       }
@@ -702,6 +707,32 @@ async function listModels() {   // Ollama-compatible model list (ours + Ollama's
   for (const pv of providers.list()) list.push({ name: 'byok:' + pv.id, model: 'byok:' + pv.id, size: 0, label: pv.name + ' (' + pv.model + ')', hosted: true });
   return list;
 }
+// Unprefixed names that are not in Pholama's own catalog are passed straight to the
+// configured Ollama service; this preserves images, tools, format, keep_alive and new API fields.
+function nativeOllamaName(model) {
+  const raw = String(model || '');
+  if (raw.startsWith('ollama:')) return raw.slice(7);
+  if (!raw || /^(gguf|byok|cloud):/.test(raw) || CATALOG.some(m => m.id === raw)) return '';
+  return raw;
+}
+async function proxyOllama(res, route, method, payload) {
+  const ac = new AbortController(); let finished = false;
+  const disconnected = () => { if (!finished) ac.abort(); };
+  res.once('close', disconnected);
+  try {
+    const init = { method, signal: ac.signal, headers: { 'Content-Type': 'application/json' } };
+    if (payload != null && method !== 'GET' && method !== 'HEAD') init.body = JSON.stringify(payload);
+    const upstream = await fetch(OLLAMA + route, init);
+    if (res.destroyed) return;
+    res.writeHead(upstream.status, { 'Content-Type': upstream.headers.get('content-type') || 'application/json', ...(res.cors || {}), 'Cache-Control': 'no-cache' });
+    if (upstream.body) for await (const chunk of upstream.body) { if (res.destroyed) break; res.write(chunk); }
+    if (!res.destroyed) res.end(); finished = true;
+  } catch (e) {
+    finished = true;
+    if (res.destroyed) return;
+    return json(res, 502, { error: 'Ollama is unavailable: ' + String(e.message || e).slice(0, 180) });
+  } finally { res.removeListener('close', disconnected); }
+}
 
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname;
@@ -828,7 +859,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/mcp' && req.method === 'POST') return json(res, 200, { servers: agent.addMcp(await body(req)) });
     if (p === '/api/mcp' && req.method === 'DELETE') { agent.removeMcp(u.searchParams.get('name')); return json(res, 200, { ok: true }); }
     if (p === '/api/update' && req.method === 'GET') return json(res, 200, require('./update').status());
-    if (p === '/api/update/check' && req.method === 'POST') return json(res, 200, await require('./update').backgroundCheck());
+    if (p === '/api/update/check' && req.method === 'POST') { const b = await body(req); return json(res, 200, await require('./update').backgroundCheck({ installNow: b.install === true })); }
     if (p === '/api/update/auto' && req.method === 'POST') { const b = await body(req); return json(res, 200, require('./update').setAuto(b.auto !== false)); }
     if (p === '/api/guard') { const n = guardNote; guardNote = null; return json(res, 200, { stopped: n, loaded: !!llama || helperEng.isUp() || ollamaUsed.size > 0 }); }
     if (p === '/api/awake' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); return json(res, 200, { ok: true, woke: sleeper.wake() }); }
@@ -836,7 +867,14 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/stop-local' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); const had = await stopAllLocal(); return json(res, 200, { ok: true, stopped: had }); }
     if (p === '/api/hardware') { const h = hardware(); return json(res, 200, { hardware: h, ollama: await ollamaUp(), llamaServer: !!findLlamaServer(), toolAI: await hasToolAI(), models: recommend(h) }); }
     if (p === '/api/tags') return json(res, 200, { models: await listModels() });
-    if (p === '/api/pull' && req.method === 'POST') { const b = await body(req); const m = CATALOG.find(x => x.id === b.id); if (!m) return json(res, 404, { error: 'unknown model' }); if (!dl[m.id] || dl[m.id].status !== 'downloading') download(m); return json(res, 200, { ok: true }); }
+    if (p.startsWith('/api/ollama/')) {
+      const route = '/api/' + p.slice('/api/ollama/'.length), methods = { '/api/tags': 'GET', '/api/ps': 'GET', '/api/version': 'GET', '/api/show': 'POST', '/api/chat': 'POST', '/api/generate': 'POST', '/api/embed': 'POST', '/api/embeddings': 'POST', '/api/pull': 'POST', '/api/create': 'POST', '/api/copy': 'POST', '/api/delete': 'DELETE', '/api/push': 'POST' };
+      if (!methods[route] || methods[route] !== req.method) return json(res, 404, { error: 'Ollama endpoint not supported here.' });
+      if (['/api/pull', '/api/create', '/api/copy', '/api/delete', '/api/push'].includes(route) && req.who !== 'local') return json(res, 403, { error: 'Only this PC can manage Ollama models.' });
+      const payload = req.method === 'GET' ? null : await body(req);
+      return proxyOllama(res, route, req.method, payload);
+    }
+    if (p === '/api/pull' && req.method === 'POST') { const b = await body(req), external = nativeOllamaName(b.name || b.model || b.id); if (external) { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can download Ollama models.' }); return proxyOllama(res, '/api/pull', 'POST', { ...b, name: external }); } const m = CATALOG.find(x => x.id === b.id); if (!m) return json(res, 404, { error: 'unknown model' }); if (!dl[m.id] || dl[m.id].status !== 'downloading') download(m); return json(res, 200, { ok: true }); }
     if (p === '/api/install-llama' && req.method === 'POST') { installLlama(); return json(res, 200, { ok: true }); }
     if (p === '/api/install-llama/status') return json(res, 200, inst);
     if (p === '/api/install-llama/stop' && req.method === 'POST') { stopInstall(); return json(res, 200, { ok: true }); }
@@ -846,6 +884,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/pull/status') return json(res, 200, dl);
     if (p === '/api/chat' && req.method === 'POST') {
       const cb = await body(req);
+      if (!String(cb.model || '').startsWith('ollama:') && nativeOllamaName(cb.model)) return proxyOllama(res, '/api/chat', 'POST', cb);
       // Remote callers get plain chat only: the tools, terminal, GitHub and memory never run for a key holder.
       if (req.who !== 'local') { cb.agent = false; cb.memory = false; delete cb.switches; delete cb.tools; }
       if (rest.ms > 0 && Date.now() - lastReplyAt < rest.ms) await new Promise(r => setTimeout(r, rest.ms - (Date.now() - lastReplyAt)));   // low memory: a short rest between replies
@@ -856,7 +895,8 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/version') return json(res, 200, { version: require('../package.json').version, name: 'pholama' });
     if (p === '/api/ps') return json(res, 200, { models: served ? [{ name: 'gguf:' + served, model: 'gguf:' + served }] : [] });
     if (p === '/api/show' && req.method === 'POST') {
-      const b = await body(req), id = String(b.model || b.name || '').replace(/^gguf:/, ''), m = CATALOG.find(x => x.id === id);
+      const b = await body(req), external = nativeOllamaName(b.model || b.name); if (external) return proxyOllama(res, '/api/show', 'POST', { ...b, model: external });
+      const id = String(b.model || b.name || '').replace(/^gguf:/, ''), m = CATALOG.find(x => x.id === id);
       if (!m) return json(res, 404, { error: 'model not found' });
       return json(res, 200, { name: 'gguf:' + m.id, details: { family: m.family, parameter_size: m.params, format: 'gguf' }, capabilities: ['completion'].concat(m.toolTier === 'good' ? ['tools'] : [], (m.caps || []).includes('thinking') ? ['thinking'] : []), context_length: m.ctx, license: m.license });
     }
@@ -871,7 +911,8 @@ const server = http.createServer(async (req, res) => {
       return json(res, 200, { id: 'cmpl-' + Date.now().toString(36), object: 'text_completion', created: Math.floor(Date.now() / 1000), model: String(b.model || ''), choices: [{ index: 0, text, finish_reason: 'stop' }], usage: { prompt_tokens: u.in, completion_tokens: u.out, total_tokens: u.total } });
     }
     if ((p === '/v1/embeddings' || p === '/api/embed' || p === '/api/embeddings') && req.method === 'POST') {
-      const b = await body(req), model = String(b.model || ''), raw = b.input != null ? b.input : b.prompt, inputs = (Array.isArray(raw) ? raw : [raw]).map(x => String(x == null ? '' : x).slice(0, 8000)).filter(Boolean).slice(0, 64);
+      const b = await body(req); if (p !== '/v1/embeddings') { const external = nativeOllamaName(b.model); if (external) return proxyOllama(res, p, 'POST', { ...b, model: external }); }
+      const model = String(b.model || ''), raw = b.input != null ? b.input : b.prompt, inputs = (Array.isArray(raw) ? raw : [raw]).map(x => String(x == null ? '' : x).slice(0, 8000)).filter(Boolean).slice(0, 64);
       if (!inputs.length) return json(res, 400, { error: { message: 'input is required' } });
       try {
         let vecs;
@@ -883,8 +924,9 @@ const server = http.createServer(async (req, res) => {
       } catch (e) { return json(res, 502, { error: { message: String(e.message || e).slice(0, 200) } }); }
     }
     if (p === '/api/docs') { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', ...(res.cors || {}) }); return res.end(require('./apidocs').page(PORT)); }
-    if (p === '/api/generate' && req.method === 'POST') { // Ollama-compatible generate -> chat
-      const b = await body(req); b.messages = [{ role: 'user', content: b.prompt || '' }];
+    if (p === '/api/generate' && req.method === 'POST') { // Native Ollama names get the full API; Pholama names retain the compatible wrapper.
+      const b = await body(req), external = nativeOllamaName(b.model); if (external) return proxyOllama(res, '/api/generate', 'POST', { ...b, model: external });
+      b.messages = [{ role: 'user', content: b.prompt || '' }];
       return chat(req, res, b);
     }
     // static
@@ -901,21 +943,23 @@ const server = http.createServer(async (req, res) => {
   } catch (e) { json(res, 500, { error: e.message }); }
 });
 function restartSelf() {
-  // Launch a fresh server after this process releases the port, then close this copy.
+  // A detached helper waits for this process to release its port before launching the replacement.
   const cp = require('child_process');
-  const child = cp.spawn(process.execPath, [path.join(__dirname, 'server.js')], {
+  const child = cp.spawn(process.execPath, [path.join(__dirname, 'restart-child.js'), String(PORT), path.join(__dirname, 'server.js')], {
     detached: true, stdio: 'ignore', windowsHide: true,
     cwd: ROOT, env: process.env
   });
+  child.once('error', e => console.log('  Could not start restart helper: ' + String(e.message || e).slice(0, 140)));
   child.unref();
-  setTimeout(() => closeAll(0), 1200);
+  setTimeout(() => closeAll(0), 350);
 }
-try { require('./update').setRestartHandler(() => restartSelf()); } catch {}
+try { require('./update').setRestartHandler(() => { if (process.env.PHOLAMA_TEST_NO_RESTART === '1') return; restartSelf(); }); } catch {}
 
 server.listen(PORT, HOST, () => {
   const h = hardware();
   console.log(`\n  Pholama running\n  Chat UI:  http://localhost:${PORT}\n  RAM: ${h.ramGB} GB${h.gpu ? '  GPU: ' + h.gpu + (h.vramGB ? ' (' + h.vramGB + ' GB)' : '') : ''}\n  Models folder: ${MODELS_DIR}\n`);
-  try { require('./update').startBackground(); } catch {}
+  try { require('./update').startBackground(5 / 60); } catch {}
+  if (process.env.PHOLAMA_NO_SCHEDULE !== '1' && process.env.PHOLAMA_NO_AUTOUPDATE !== '1') setTimeout(() => { try { require('./update-scheduler').ensure(); } catch (e) { console.log('  Could not set up closed-app updates: ' + String(e.message || e).slice(0, 140) + '. You can retry with pholama schedule-updates.'); } }, 1500).unref();
   if (HOST !== '127.0.0.1') console.log('  Reachable on your network. Open http://<this-PC-IP>:' + PORT + ' on your phone.\n');
 });
 // ---------- lag guard: if the PC starts struggling, stop the local AIs (and only those) ----------

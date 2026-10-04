@@ -15,22 +15,25 @@ async function main() {
   setVer(neu, '9.9.9'); fs.appendFileSync(path.join(neu, 'web', 'studio.js'), '\n// UPDATED-STUDIO-MARKER\n');
   const tgz = path.join(work, 'new.tgz'); execSync(`tar -czf "${tgz}" -C "${work}" Pholama-main`);
   let hits = []; const gh = http.createServer((q, s) => { hits.push(q.url);
-    if (q.url.endsWith('/package.json')) { s.setHeader('Content-Type', 'application/json'); return s.end(fs.readFileSync(path.join(neu, 'package.json'))); }
+    if (q.url.endsWith('/package.json')) { s.setHeader('Content-Type', 'application/json'); return setTimeout(() => { if (!s.destroyed) s.end(fs.readFileSync(path.join(neu, 'package.json'))); }, 180); }
     if (q.url.endsWith('.tar.gz')) { s.setHeader('Content-Type', 'application/gzip'); return s.end(fs.readFileSync(tgz)); }
     s.statusCode = 404; s.end('no'); }).listen(0, '127.0.0.1');
   await wait(200); const G = 'http://127.0.0.1:' + gh.address().port;
   // user data that an update must never touch
   const keep = path.join(home, '.pholama', 'providers.json'); fs.writeFileSync(keep, '{"providers":[{"id":"mine"}]}');
   const port = 36000 + Math.floor(Math.random() * 2000);
-  const srv = spawn(process.execPath, [path.join(old, 'server', 'server.js')], { cwd: old, env: { ...process.env, PORT: String(port), HOME: home, USERPROFILE: home, PHOLAMA_HOME: path.join(home, '.pholama'), PHOLAMA_UPDATE_BASE: G, PHOLAMA_UPDATE_ARCHIVE: G + '/x.tar.gz', PHOLAMA_NO_AUTOUPDATE: '1' }, stdio: 'ignore' });
+  const srv = spawn(process.execPath, [path.join(old, 'server', 'server.js')], { cwd: old, env: { ...process.env, PORT: String(port), HOME: home, USERPROFILE: home, PHOLAMA_HOME: path.join(home, '.pholama'), PHOLAMA_UPDATE_BASE: G, PHOLAMA_UPDATE_ARCHIVE: G + '/x.tar.gz', PHOLAMA_NO_AUTOUPDATE: '1', PHOLAMA_NO_SCHEDULE: '1', PHOLAMA_TEST_NO_RESTART: '1' }, stdio: 'ignore' });
   const B = 'http://127.0.0.1:' + port; for (let i = 0; i < 60; i++) { try { if ((await fetch(B + '/api/version')).ok) break; } catch {} await wait(250); }
   const J = (p, o = {}) => fetch(B + p, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers || {}) } });
   try {
     let u = await (await J('/api/update')).json(); ok('starts on the old version', u.current === '0.1.0' && u.running === '0.1.0', JSON.stringify(u));
-    let r = await J('/api/update/check', { method: 'POST' }); await wait(600);
-    for (let i = 0; i < 40; i++) { u = await (await J('/api/update')).json(); if (!u.checking) break; await wait(300); }
+    await J('/api/update/auto', { method: 'POST', body: JSON.stringify({ auto: false }) });
+    let r = await J('/api/update/check', { method: 'POST', body: JSON.stringify({ install: false }) }); u = await r.json();
     ok('it notices the newer version', u.latest === '9.9.9', JSON.stringify(u));
-    ok('automatic updates on: it was downloaded and installed', u.ready === true && u.current === '9.9.9' && u.running === '0.1.0', JSON.stringify(u));
+    ok('automatic-update off: a normal check does not install', u.ready === false && u.current === '0.1.0' && JSON.parse(fs.readFileSync(path.join(old, 'package.json'), 'utf8')).version === '0.1.0', JSON.stringify(u));
+    const overlappingCheck = J('/api/update/check', { method: 'POST', body: JSON.stringify({ install: false }) }); await wait(35);
+    r = await J('/api/update/check', { method: 'POST', body: JSON.stringify({ install: true }) }); const installed = await r.json(); await overlappingCheck; u = await (await J('/api/update')).json();
+    ok('Check now forces install even when automatic updates are off', r.ok && installed.current === '9.9.9' && u.ready === true && u.current === '9.9.9' && u.running === '0.1.0', JSON.stringify(u));
     ok('the Studio file on disk is the new one', fs.readFileSync(path.join(old, 'web', 'studio.js'), 'utf8').includes('UPDATED-STUDIO-MARKER'));
     ok('the program version on disk is now 9.9.9', JSON.parse(fs.readFileSync(path.join(old, 'package.json'), 'utf8')).version === '9.9.9');
     ok('the user data was not touched', fs.readFileSync(keep, 'utf8').includes('"mine"'));

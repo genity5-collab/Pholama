@@ -298,15 +298,20 @@ function planGuidedBuild(userText, prevUser, files, project) {
   if (vague && prevUser) ask = String(prevUser).trim().slice(0, 500) + ' (details: ' + text + ')';
   else if (!BUILD_WORDS.test(text) || !BUILD_THINGS.test(text)) return null;
   if (!BUILD_THINGS.test(ask) && !BUILD_WORDS.test(ask)) return null;
-  const has = (files || []).map(f => f.name);
-  const fresh = !(files || []).some(f => f.size > 400 && !/^(index\.html|script\.js|style\.css)$/.test(f.name));   // a project that still only has the starter files
+  const knownStarter = new Set(['index.html', 'script.js', 'style.css']);
+  const fresh = (files || []).every(f => knownStarter.has(f.name) && f.size <= 420);   // do not replace a project's real files with a one-shot build
   const py = /\b(python|\.py)\b/i.test(ask), lua = /\b(lua|roblox)\b/i.test(ask);
   const jsOnly = /\b(script|function|program)\b/i.test(ask) && !/\b(game|page|site|website|app|canvas|button|form|animation|calculator|clock|timer|quiz)\b/i.test(ask);
   const name = py ? 'main.py' : lua ? 'main.lua' : jsOnly ? 'script.js' : 'index.html', lang = py ? 'python' : lua ? 'lua' : jsOnly ? 'js' : 'html';
+  const multi = !py && !lua && !jsOnly;
+  const filesWanted = multi ? ['index.html', 'style.css', 'script.js'] : [name];
   const prompt = 'Task: ' + ask.replace(/\s+/g, ' ') + '\n\n' +
-    (py || lua || jsOnly ? 'Write the complete program as ONE file, short and working.' : 'Write ONE complete HTML file that contains everything: the HTML, a <style> block for the CSS and a <script> block for the JavaScript. It must run by itself when opened. Make it a real, working, playable thing for the task, with enough code to actually do it (at least 40 lines). Use a <canvas> or simple elements, keyboard or mouse controls, and show a score or message.') + '\n' +
-    'Reply in exactly this shape and nothing else:\n\nFILE: ' + name + '\n```' + lang + '\n<your complete code here>\n```';
-  return { ask, fresh, prompt, file: name };
+    (multi
+      ? 'Build a complete, usable, working web app as three small files, not one giant HTML file. The HTML must link style.css and load script.js just before </body>. Every ID used by script.js must exist in index.html. CSS and JavaScript must be complete, with no placeholders, TODOs, or external libraries/network requests. Include clear controls, feedback, and useful empty/error states. If this is a game, make the central interaction playable and show score/status. Keep the code compact enough to fit in these three files.'
+      : 'Write the complete, working ' + (py ? 'Python' : lua ? 'Lua' : 'JavaScript') + ' program in ONE file. No placeholder code or TODOs.') + '\n' +
+    'Reply with complete code blocks for every requested file, and nothing else. Use exactly this format for each file:\n\n' +
+    filesWanted.map((f, i) => 'FILE: ' + f + '\n```' + (f.endsWith('.html') ? 'html' : f.endsWith('.css') ? 'css' : f.endsWith('.js') ? 'js' : lang) + '\n<complete contents of ' + f + '>\n```').join('\n\n');
+  return { ask, fresh, prompt, file: name, files: filesWanted };
 }
 function parseFileBlocks(text, project, hint) {
   const out = [], seen = new Set(), re = /(?:^|\n)[ \t]*(?:#+\s*)?(?:\*\*)?(?:FILE|File|file|Filename|filename)\s*:?\s*`?([A-Za-z0-9_\-./]{1,100}\.[A-Za-z0-9]{1,5})`?(?:\*\*)?[ \t]*\n[ \t]*```[A-Za-z0-9]*\n([\s\S]*?)\n?```/g;
@@ -344,7 +349,7 @@ function studioPrompt(project, files) {
   const list = (files || []).slice(0, 40).map(f => `- ${f.name} (${f.size} bytes)`).join('\n') || '(no files yet)';
   return '\n[STUDIO] You are working inside the user\'s Studio project "' + (project || 'none') + '". Files now:\n' + list + '\n' +
     'You can build websites, games, tools and small apps with plain HTML, CSS and JavaScript, and you can also do other tasks (write text, explain, calculate, plan).\n' +
-    'RULES: 1) To build or change anything, CALL TOOLS, do not paste big code into the chat. 2) New file: studio_write. Change an existing file (including one the user wrote themselves): its current contents are shown below under [OPEN FILES] when the user names it, so edit THAT file. If it is not shown, call studio_read_numbered first. Then change only the needed lines with studio_patch (copy a few exact lines) or studio_lines (by line number). Never rewrite a whole file to change a few lines, never make a new file when the user talks about an existing one, and never remove code you were not asked to change. 3) Keep files small and split into index.html, style.css, script.js. A new app needs ALL its files: write index.html with every element the script uses (give each an id), then script.js. 4) Before a complex change, call studio_diagnose; after every edit, call studio_check and use studio_run_js for pure logic that can be tested. If the check lists a problem, fix it with a tool and check again. 5) Finish with ONE short sentence saying what you made. 6) Never put passwords or keys in files. 7) Publishing to GitHub needs the user to press Allow, so only do it when asked.\n' +
+    'RULES: 1) To build or change anything, CALL TOOLS, do not paste big code into the chat. 2) New file: studio_write. Change an existing file (including one the user wrote themselves): its current contents are shown below under [OPEN FILES] when the user names it, so edit THAT file. If it is not shown, call studio_read_numbered first. Then change only the needed lines with studio_patch (copy a few exact lines) or studio_lines (by line number). Never rewrite a whole file to change a few lines, never make a new file when the user talks about an existing one, and never remove code you were not asked to change. 3) Keep web apps split into index.html, style.css and script.js; add every file needed and wire the HTML links. Every ID used by JavaScript must exist in the HTML. 4) Before a complex change, call studio_diagnose; after every edit, call studio_check and use studio_run_js for pure logic that can be tested. If the check lists a problem, fix it with a tool and check again. 5) Finish with ONE short sentence saying what you made. 6) Never put passwords or keys in files. 7) Publishing to GitHub needs the user to press Allow, so only do it when asked.\n' +
     'You may ALSO write a whole file like this (preferred for big files, no JSON needed):\nFILE: index.html\n```html\n<!doctype html>...\n```\n' +
     'Examples:\nUser: make a button that counts clicks\nAssistant: <tool>{"name":"studio_write","args":{"project":"' + (project || 'app') + '","file":"script.js","content":"let n=0;document.getElementById(\'b\').onclick=()=>{n++;document.getElementById(\'b\').textContent=\'Clicks: \'+n;};"}}</tool>\n';
 }

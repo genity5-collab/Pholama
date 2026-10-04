@@ -118,35 +118,64 @@ const HOME = path.join(os.homedir(), '.pholama'), SET = path.join(HOME, 'update.
 const readSet = () => { try { return JSON.parse(fs.readFileSync(SET, 'utf8')); } catch { return {}; } };
 const writeSet = o => { try { fs.mkdirSync(HOME, { recursive: true }); fs.writeFileSync(SET, JSON.stringify(o)); } catch {} };
 const status = { current: localVersion(), latest: null, ready: false, checking: false, restarting: false, lastCheck: null, error: null, auto: readSet().auto !== false };
-let timer = null, restartHandler = null;
+let timer = null, restartHandler = null, checkTask = null;
 // The server supplies this callback so automatic updates can replace the running process.
 // Keeping it injectable makes the updater safe to use from the CLI and easy to test.
 function setRestartHandler(fn) { restartHandler = typeof fn === 'function' ? fn : null; return status; }
-async function backgroundCheck() {
-  if (status.checking) return status;
+async function backgroundCheck({ installNow = false } = {}) {
+  if (checkTask) {
+    await checkTask;
+    if (installNow && !status.ready && status.latest && cmp(status.latest, localVersion()) > 0) return backgroundCheck({ installNow: true });
+    return status;
+  }
   status.checking = true; status.error = null;
-  try {
-    const info = await check(); status.latest = info.latest; status.lastCheck = Date.now();
-    if (info.newer && status.auto) {
-      const r = await update({ log() {} });               // quiet: only program files change
-      if (r.updated) {
-        status.ready = true; status.current = localVersion();
-        // A downloaded update is not useful while the old JS is still serving the UI.
-        // Restart only when this is the long-running PC server; manual/CLI updates keep the old behavior.
-        if (restartHandler) { status.restarting = true; try { restartHandler(info.latest); } catch (e) { status.error = 'Update installed, but automatic restart failed.'; } }
-      }
-      else if (!r.ok) status.error = 'Could not install the update. Your current version keeps working.';
-    } else if (info.newer) status.ready = false;
-  } catch (e) { status.error = 'Could not reach GitHub.'; status.lastCheck = Date.now(); }
-  status.checking = false; return status;
+  const work = (async () => {
+    try {
+      const info = await check(); status.latest = info.latest; status.lastCheck = Date.now();
+      if (info.newer && (status.auto || installNow)) {
+        const r = await update({ log() {} });               // quiet: only program files change
+        if (r.updated) {
+          status.ready = true; status.current = localVersion();
+          // A downloaded update is not useful while the old JS is still serving the UI.
+          // Restart only when this is the long-running PC server; manual/CLI updates keep the old behavior.
+          if (restartHandler) { status.restarting = true; try { restartHandler(info.latest); } catch (e) { status.error = 'Update installed, but automatic restart failed.'; } }
+        }
+        else if (!r.ok) status.error = 'Could not install the update. Your current version keeps working.';
+      } else if (info.newer) status.ready = false;
+    } catch (e) { status.error = 'Could not reach GitHub.'; status.lastCheck = Date.now(); }
+    finally { status.checking = false; }
+    return status;
+  })();
+  const tracked = work.finally(() => { if (checkTask === tracked) checkTask = null; });
+  checkTask = tracked;
+  return tracked;
 }
-// Checks shortly after start, then every 6 hours. Never throws, never blocks the app.
+// Checks shortly after start, then every five minutes. Never throws, never blocks the app.
 function startBackground(hours = 6) {
   if (timer || process.env.PHOLAMA_NO_AUTOUPDATE === '1') return;
   setTimeout(() => backgroundCheck().catch(() => {}), 20000).unref();
   timer = setInterval(() => backgroundCheck().catch(() => {}), hours * 3600 * 1000); timer.unref();
 }
+// Scheduled OS task: respect the user's auto-update setting and do nothing if the app is running;
+// the live server performs its own more-frequent check and owns restart handling.
+async function offlineCheck({ log = () => {}, isRunning, runUpdate = update } = {}) {
+  if (readSet().auto === false) return { ok: true, skipped: 'automatic-updates-off' };
+  let running = false;
+  try {
+    if (isRunning) running = await isRunning();
+    else running = await new Promise(resolve => {
+      let savedPort = 0; try { savedPort = +fs.readFileSync(path.join(os.homedir(), '.pholama', 'update-scheduler', 'port'), 'utf8'); } catch {}
+      const port = savedPort || +process.env.PORT || 11435;
+      const req = http.get({ hostname: '127.0.0.1', port, path: '/api/version', timeout: 1200 }, res => {
+        let data = ''; res.setEncoding('utf8'); res.on('data', x => { data += x; }); res.on('end', () => { try { resolve(JSON.parse(data).name === 'pholama'); } catch { resolve(false); } });
+      });
+      req.on('timeout', () => { req.destroy(); resolve(false); }); req.on('error', () => resolve(false));
+    });
+  } catch {}
+  if (running) return { ok: true, skipped: 'app-running' };
+  return runUpdate({ log });
+}
 function setAuto(on) { status.auto = !!on; writeSet({ ...readSet(), auto: !!on }); return status; }
 // 'running' is the version this process started with; 'current' is what is on disk now. They differ after an update until you restart.
 const RUNNING = localVersion();
-module.exports = { update, check, localVersion, status: () => ({ ...status, running: RUNNING, current: localVersion(), ready: status.ready && cmp(localVersion(), RUNNING) > 0 }), backgroundCheck, startBackground, setAuto, setRestartHandler };
+module.exports = { update, check, localVersion, status: () => ({ ...status, running: RUNNING, current: localVersion(), ready: status.ready && cmp(localVersion(), RUNNING) > 0 }), backgroundCheck, offlineCheck, startBackground, setAuto, setRestartHandler };

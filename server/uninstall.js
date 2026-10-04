@@ -71,6 +71,7 @@ async function run(args, deps) {
   }
 
   log('\nStopping Pholama and every local AI...');
+  try { require('./update-scheduler').remove(); log('  ' + C.green('removed ') + 'background update task'); } catch { log('  ' + C.yellow('could not remove the background update task')); }
   try { await deps.stopServer(); } catch {}
   await new Promise(r => setTimeout(r, 1200));
 

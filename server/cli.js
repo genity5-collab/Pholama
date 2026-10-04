@@ -221,9 +221,14 @@ async function cmdStop() {
   console.log(green('Pholama stopped.'));
 }
 
-async function cmdUpdate() {
-  const { update } = require('./update');
-  await update({ log: console.log, color: { green, red, dim, yellow } });
+async function cmdUpdate(args = []) {
+  const updater = require('./update');
+  if (args.includes('--if-closed')) return updater.offlineCheck({ log: () => {} });
+  await updater.update({ log: console.log, color: { green, red, dim, yellow } });
+}
+
+function cmdScheduleUpdates() {
+  console.log(green(require('./update-scheduler').install()));
 }
 
 function help() {
@@ -236,6 +241,7 @@ ${bold('Pholama')}  AI models on your own PC
   ${cyan('pholama serve <model>')}   let this PC and your apps use the model at ${BASE}
   ${cyan('pholama rm <model>')}      remove the model and all its files and folders
   ${cyan('pholama update')}          get the newest Pholama without reinstalling
+  ${cyan('pholama schedule-updates')} check for updates while the app is closed (every 5 hours)
   ${cyan('pholama awake')}           wake Pholama after it slept (it sleeps when no AI was used for a day, to free your memory)
   ${cyan('pholama stop')}            stop the background server
   ${cyan('pholama remove-all')}      remove Pholama, its models, folders, command and icons from this PC (asks first; --dry-run only lists)
@@ -266,7 +272,8 @@ async function cmdWeb() {
       case 'serve': return await cmdServe(arg, rest);
       case 'stop': return await cmdStop();
       case 'awake': case 'wake': case 'wakeup': return await cmdAwake();
-      case 'update': case 'upgrade': return await cmdUpdate();
+      case 'update': case 'upgrade': return await cmdUpdate(rest);
+      case 'schedule-updates': return cmdScheduleUpdates();
       case 'web': case 'open': return await cmdWeb();
       case 'start': await ensureServer(); console.log(green('Pholama is running at ') + cyan(BASE)); return;
       case 'help': case '--help': case '-h': return help();
