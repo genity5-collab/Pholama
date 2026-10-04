@@ -62,6 +62,48 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
   ok('every model has an added date', cat.every(m => /^\d{4}-\d{2}-\d{2}$/.test(m.added || '')));
   ok('release months are valid', cat.every(m => !m.released || /^\d{4}-(0[1-9]|1[0-2])$/.test(m.released)));
 }
+
+// ---- attachments: what a model accepts and how files reach it ----
+(async () => {
+  const a = await import(path.join(root, 'web/attach.js'));
+  const F = (name, type, size = 100) => ({ name, type, size });
+  const txtModel = { name: 'Text Model', caps: ['chat'] }, visModel = { name: 'Vision Model', caps: ['chat', 'vision'], accepts: ['text', 'image'] };
+  ok('text model does not accept images', a.accepts(txtModel).image === false && a.accepts(txtModel).file === true);
+  ok('vision model accepts images', a.accepts(visModel).image === true);
+  ok('accepts: model with the vision cap only', a.accepts({ caps: ['vision'] }).image === true);
+  ok('accepts: null model is safe', a.accepts(null).image === false);
+  ok('kind: png is an image', a.kindOf(F('a.png', 'image/png')) === 'image');
+  ok('kind: lua file is text even with no type', a.kindOf(F('script.lua', '')) === 'text');
+  ok('kind: upper case extension', a.kindOf(F('NOTES.TXT', '')) === 'text');
+  ok('kind: exe is unsupported', a.kindOf(F('x.exe', 'application/x-msdownload')) === 'unsupported');
+  ok('kind: pdf is unsupported', a.kindOf(F('a.pdf', 'application/pdf')) === 'unsupported');
+  ok('kind: svg is unsupported (could hold scripts)', a.kindOf(F('a.svg', 'image/svg+xml')) === 'unsupported');
+  ok('check: text file to text model ok', a.checkFiles([F('a.txt', 'text/plain')], txtModel).ok === true);
+  ok('check: image to text model is refused with a reason', (() => { const r = a.checkFiles([F('a.png', 'image/png')], txtModel); return !r.ok && /cannot read images/.test(r.problems[0]); })());
+  ok('check: image to vision model ok', a.checkFiles([F('a.jpg', 'image/jpeg')], visModel).ok === true);
+  ok('check: image over the limit is refused', !a.checkFiles([F('big.png', 'image/png', 9 * 1048576)], visModel).ok);
+  ok('check: too many files is reported', a.checkFiles([1, 2, 3, 4, 5].map(i => F(i + '.txt', 'text/plain')), txtModel).problems.some(p => /Up to 4/.test(p)));
+  ok('check: nothing picked is not ok', a.checkFiles([], txtModel).ok === false && a.checkFiles(null, txtModel).ok === false);
+  ok('check: one bad file blocks the batch but names it', (() => { const r = a.checkFiles([F('a.txt', 'text/plain'), F('b.exe', '')], txtModel); return !r.ok && r.problems[0].startsWith('b.exe'); })());
+  ok('textBlock: short file is whole', a.textBlock('a.txt', 'hello') === '[File: a.txt]\nhello\n[End of file]');
+  ok('textBlock: long file is cut and says so', (() => { const t = a.textBlock('a.txt', 'x'.repeat(a.MAX_TEXT_CHARS + 500)); return /first 6000 of 6500 characters/.test(t) && t.length < a.MAX_TEXT_CHARS + 120; })());
+  ok('textBlock: strips null bytes and handles null', !/\u0000/.test(a.textBlock('a', 'a\u0000b')) && a.textBlock('a', null).includes('[File: a]'));
+  ok('message: question + text file', (() => { const m = a.buildMessage('What is this?', [{ kind: 'text', name: 'a.txt', text: 'hi' }]); return m.content.endsWith('What is this?') && m.content.includes('[File: a.txt]') && m.images.length === 0; })());
+  ok('message: image with no question gets a default', (() => { const m = a.buildMessage('', [{ kind: 'image', name: 'a.png', dataUrl: 'data:image/png;base64,AA' }]); return m.content === 'Describe this image.' && m.images.length === 1; })());
+  ok('message: text file with no question gets a default', a.buildMessage('  ', [{ kind: 'text', name: 'a.txt', text: 'x' }]).content.endsWith('Read the file and summarize it.'));
+  ok('message: no attachments is just the text', a.buildMessage('hello', []).content === 'hello' && a.buildMessage('hello').images.length === 0);
+  ok('fitSize: big image shrinks, ratio kept', (() => { const s = a.fitSize(2000, 1000, 512); return s.w === 512 && s.h === 256; })());
+  ok('fitSize: small image is not enlarged', (() => { const s = a.fitSize(200, 100, 512); return s.w === 200 && s.h === 100; })());
+  ok('fitSize: bad size is safe', a.fitSize(0, 10).w === 0 && a.fitSize(NaN, NaN).h === 0);
+  ok('pair: total size is small (reader + brain under 1 GB)', a.PAIR_MB === 690 && a.PAIR_MB < 1024);
+  ok('pair: picture goes in <picture> tags with a system line', (() => { const m = a.withPicture([], 'Solve it.', ['17+25=?']); return m[0].role === 'system' && /<picture>17\+25=\?<\/picture>\nSolve it\./.test(m.at(-1).content); })());
+  ok('pair: earlier chat is kept, old system lines are not doubled', (() => { const m = a.withPicture([{ role: 'system', content: 'x' }, { role: 'user', content: 'hi' }, { role: 'assistant', content: 'hello' }], 'what now', ['a']); return m.filter(x => x.role === 'system').length === 1 && m.length === 4; })());
+  ok('pair: two pictures are numbered', /Picture 1: a\nPicture 2: b/.test(a.withPicture([], 'q', ['a', 'b']).at(-1).content));
+  ok('pair: nothing read is said plainly, not left empty', /nothing could be read/.test(a.withPicture([], 'q', ['', '  ']).at(-1).content) && /nothing could be read/.test(a.withPicture([], 'q', null).at(-1).content));
+  ok('pair: empty question gets a default', /Describe it\./.test(a.withPicture([], '', ['x']).at(-1).content));
+  ok('fmtBytes', a.fmtBytes(500) === '1 KB' && a.fmtBytes(2048) === '2 KB' && a.fmtBytes(3 * 1048576) === '3.0 MB');
+})();
+
 // ---- dashboard logic ----
 (async () => {
   const d = await import(path.join(root, 'web/dashboard.js'));

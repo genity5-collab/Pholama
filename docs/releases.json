@@ -1,6 +1,17 @@
 {
- "latest": "0.6.2",
+ "latest": "0.7.0",
  "releases": [
+  {
+   "version": "0.7.0",
+   "date": "2026-10-04",
+   "title": "Send files and pictures",
+   "notes": [
+    "New paperclip: attach text and code files (up to 4) and the model reads them. Drag a file onto the chat or paste a picture too",
+    "Send pictures with a tiny image reader (SmolVLM 256M, ~190 MB). It reads the picture into words, then your chat model answers",
+    "Recommended pair for phones: SmolVLM 256M + Qwen2.5 0.5B, about 0.7 GB in total",
+    "Models can now declare that they read pictures themselves"
+   ]
+  },
   {
    "version": "0.6.2",
    "date": "2026-10-04",

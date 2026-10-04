@@ -1429,5 +1429,11 @@
   "thinking": "Thinks",
   "reasoning": "Reasoning",
   "tools": "Tool use"
+ },
+ "pair": {
+  "title": "Recommended: reader + brain",
+  "reader": "SmolVLM 256M (reads pictures, ~190 MB)",
+  "brain": "Qwen2.5 0.5B (chat and maths, ~0.5 GB)",
+  "totalMB": 690
  }
 }

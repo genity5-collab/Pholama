@@ -279,3 +279,10 @@ body.studio-on #chat,body.studio-on footer,body.dash-on #chat,body.dash-on foote
 .dlink{display:inline-block;margin-top:10px;color:var(--fg);text-decoration:underline;background:none;border:0;padding:0;min-height:0;border-radius:0;cursor:pointer;font-size:14px}
 code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:13px}
 @media (max-width:720px){.dtiles{grid-template-columns:repeat(2,1fr)}.dgrid{grid-template-columns:1fr}.dhero h2{font-size:24px}}
+
+/* ---------- attachments ---------- */
+#attachBtn{flex:none;align-self:flex-end;margin-right:2px}
+.achips{display:flex;flex-wrap:wrap;gap:6px;padding:6px 14px 0}.achips[hidden]{display:none}
+.achip{display:flex;align-items:center;gap:6px;background:var(--card2);border:1px solid var(--line);border-radius:999px;padding:3px 6px 3px 10px;font-size:13px;max-width:100%}
+.achip img{width:26px;height:26px;object-fit:cover;border-radius:6px}.achip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}
+.achip button{min-height:0;width:22px;height:22px;padding:0;border-radius:50%;line-height:1;background:transparent;border:0;color:var(--mut);cursor:pointer;font-size:16px}

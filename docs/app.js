@@ -8,6 +8,7 @@ import { planFallback } from './fallback.js';
 import { splitThinking, thinkLabel, countWords } from './thinking.js';
 import { splitBlocks, LANGS, cleanLang, extFor, safeFileName, diffLines, diffStats, extractScript, editPrompt, runCommand } from './codeblocks.js';
 import { collapse, groupByDay, dayTitle, applyFilter, summarise, summaryText, info as logInfo, detailRows, fmtTime, FILTERS } from './editlog.js';
+import { initAttach, hasAttachments, attachedNames, clearAttachments, prepare } from './attachui.js';
 import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 
 const $ = s => document.querySelector(s);
@@ -388,20 +389,25 @@ async function pcChat(model, msg, onText) {
 
 async function send() {
   if (busy) { stopGen(); return; }
-  const text = inEl.value.trim(); if (!text) return;
+  const text = inEl.value.trim(); if (!text && !hasAttachments()) return;
   if (!sel.value) return alert('Open Models and download a model first.');
   if (needLogin('use')) return;
   const isCloud = sel.value === CLOUD_ID, token = Account.token();
   if (isCloud && !token) return needLogin('use');
   inEl.value = ''; inEl.style.height = 'auto'; setBusy(true); stopped = false;
-  hideHero(); addUser(text); history.push({ role: 'user', content: text });
-  saveCurrentSession();
+  const files = attachedNames();
+  hideHero(); addUser(files.length ? (text ? text + '\n' : '') + '📎 ' + files.join(', ') : text);
   const msg = makeMsg(); let acc = '', pendingUi = null, plan = null; const sessionAtStart = sessionId;
+  let shownText = text, attach = null;
   try {
+    if (files.length) { attach = await prepare(text, history, m => msg.log('step', m, 0)); shownText = attach.content; }
+    history.push({ role: 'user', content: shownText }); clearAttachments();
+    saveCurrentSession();
     const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');
     if (local) { const ri = rememberIntent(text); if (ri && memOn) msg.log('result', await saveMemory(ri), 0); }
     if (!isCloud) await ensureEngine(sel.value);
-    const mem = local ? memorySystem() : null, send_ = mem ? [mem, ...history] : history;
+    const base = attach && attach.hasImages ? attach.build(history.slice(0, -1)) : history;
+    const mem = local ? memorySystem() : null, send_ = mem ? [mem, ...base] : base;
     if (isCloud) {
       msg.log('step', `Asking ${MAX_NAME}` + (effort !== 'normal' ? ` (effort: ${EFFORT[effort].label})` : '') + '...', 0);
       const ac = new AbortController(); stopper = () => ac.abort();
@@ -760,6 +766,7 @@ $('#close').onclick = () => { dlg.close(); refreshSelect(); };
 $('#tBrowser').onclick = () => { tab = 'browser'; render(); };
 $('#tLocal').onclick = () => { tab = 'local'; render(); };
 $('#send').onclick = send;
+initAttach({ model: () => { const v = sel.value, all = [...((catalog && catalog.browser) || []), ...((catalog && catalog.cpu) || [])]; return all.find(m => v === 'web:' + m.id || v === 'cpu:' + m.id || v.endsWith(m.id)) || { name: 'this model' }; }, note: m => alert(m) });
 
 // New session: stop any running reply, save current chat, clear, show welcome screen again.
 function newSession() {

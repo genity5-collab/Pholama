@@ -1,24 +1,30 @@
 # Pholama
 
-Run an AI chat **on your own phone or PC**. Free. You need a free account (name + password, no email) to chat and download.
+Run an AI chat **on your own phone or PC**. Free and private.
+
+> **Phone support is ending.** Pholama is moving to the **PC app**: bigger models, tools, web search and Roblox Studio. The phone site stays as a small helper for daily chat, maths and reading pictures. It gets no new features.
 
 ## On your phone (3 taps)
 
 1. **[Tap here to open Pholama](https://genity5-collab.github.io/Pholama/)** (use Chrome)
-2. Tap **Models**, then tap **Download** on the first model.
+2. Tap **Models**, then tap **Download** on a model.
 3. Tap **Close** and start typing.
 
-That is all. The first download takes a few minutes. After that it works even offline.
+The first download takes a few minutes. After that it works even offline.
 
 **Tip:** in Chrome tap the three dots, then **Add to Home screen**, to use it like an app.
 
-### Make a free account (required)
+### The best pair for a phone (about 0.7 GB)
 
-Tap **Account**, pick a **name and a password**. No email needed, and you stay logged in on that device.
-You must be logged in to send a message or download a model. Optionally turn **Memory** on, then say things like *"remember that I like short answers"*. Pholama uses what it
-remembers in later chats. See or delete everything in **Account**. Memory is **off** until you turn it on.
+Download these two and you can chat, do maths and **send pictures**:
 
-Note: there is no email, so a forgotten password **cannot be reset**. Pick one you will remember.
+| | Model | Size | What it does |
+|---|---|---|---|
+| Reader | **SmolVLM 256M** | ~190 MB | Looks at a picture and writes down what is in it |
+| Brain | **Qwen2.5 0.5B** | ~0.5 GB | Chats, helps, does maths, answers about the picture |
+
+How it works: the reader looks at your picture, then the brain answers using what the reader saw. Everything runs on your phone. Nothing is uploaded.
+Full guide: [Send files and pictures](docs-md/FILES.md).
 
 ### Downloads keep their place
 
@@ -34,10 +40,8 @@ Stop a download any time. **Resume** continues from where it stopped, even after
 | Too slow | [Pick a smaller model](docs-md/MODELS.md) |
 | iPhone | Needs iOS 18 or newer, in Safari. Small models only. |
 
-### Agent Max (cloud, nothing to download)
-Pick **Agent Max** in the model list. It can use tools, open and close the app's windows for you, check your limits, and knows how Pholama works. You get **10 messages a day and 30 a month**; the daily 10 restock every day until you hit 30, then it waits for next month. Local models are always free. [Details](docs-md/AGENT.md#agent-max)
-
 ### More for phones
+- [Send files and pictures](docs-md/FILES.md)
 - [Which model should I pick?](docs-md/MODELS.md) (every model, what it is good at, what phone it fits)
 - [Use your PC's power from your phone](docs-md/PC.md#chat-from-your-phone-over-wifi)
 
