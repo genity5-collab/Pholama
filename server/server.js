@@ -438,6 +438,10 @@ async function chat(req, res, b) {
     const opts = { ...(b.options || {}) }; if (effortUse !== 'normal') opts.num_predict = effortUse === 'max' ? 2048 : 1024;
     if (effortUse !== 'normal') log('step', 'Effort: ' + effortUse);
     const usage = { in: 0, out: 0, got: false }, t1 = Date.now();
+    let studioChanged = false;   // did a Studio tool really write, edit or delete a file this message? If not, a reply saying 'I added X' is invented.
+    const editclaim = require('./editclaim');
+    // The edit log sees EVERY file the AI writes: the tool path and the guided paths that write directly. A real, successful AI edit flips the flag.
+    let stopEditWatch = null; try { stopEditWatch = agent.power.watch(e => { if (e && e.kind === 'file' && e.by === 'ai' && e.status === 'ok') studioChanged = true; }); if (stopEditWatch) res.once('close', stopEditWatch); } catch {}   // always let go when the reply ends, however it ends
     let searchRan = false;   // did a real search / page / GitHub tool run this message? If not, a reply that says it found results is invented.
     const origUserText = (() => { const u = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return u ? String(u.content) : ''; })();
     if (inStudio) {   // Studio: only the last few turns, and never the model's own <think> notes, so a small model stays on the request instead of looping
@@ -456,6 +460,7 @@ async function chat(req, res, b) {
         log('action', `${r0.name} ${JSON.stringify(r0.args)}`);
         line({ toolStart: { name: r0.name, args: r0.args } }); let result; try { result = String(await agent.runTool(tools, r0.name, r0.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
         if (/^(web_search|fetch_page|github_|platform_)/.test(r0.name) && !/^Tool error/.test(result)) searchRan = true;
+        if (editclaim.changedFile(r0.name, result)) studioChanged = true;
         if (r0.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
         log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
         line({ tool: { name: r0.name, args: r0.args, result: result.slice(0, 400) } }); if (visited.size() !== sentSrc) { sentSrc = visited.size(); line({ sources: visited.list() }); }
@@ -598,6 +603,7 @@ async function chat(req, res, b) {
       let acc = '', mode = tools.length ? 'undecided' : 'stream', sent = 0, first = true;
       let cut = false;
       const lu = [...messages].reverse().find(m => m.role === 'user'), holdWeb = (!tools.length && lu && ASKED_WEB.test(lu.content)) || (tools.length && !searchRan && lu && SEARCHY.test(lu.content));   // decide before showing anything
+      const holdEdit = inStudio && !studioChanged && tools.some(t => /^studio_/.test(t.name));   // nothing written yet: hold the words back until we know the reply is honest
       const watchLazy = !lazyTried && lu && agent.lazyRefusal(lu.content, 'I cannot create');   // a build request: hold only the first few words, a refusal shows itself early
       const flush = () => { if (cut) return; if (leaked(acc)) { cut = true; line({ model, message: { role: 'assistant', content: sent ? '\n' + CANT : CANT }, done: false }); log('step', 'Hid part of the reply that quoted private instructions.'); return; } const safe = tools.length ? (retrying ? 0 : agent.safeShowLength(acc)) : acc.length; if (safe > sent) { line({ model, message: { role: 'assistant', content: acc.slice(sent, safe) }, done: false }); sent = safe; } };
       const onTok = t => {
@@ -608,7 +614,7 @@ async function chat(req, res, b) {
           if (head.startsWith('<tool')) mode = 'tool';
           else if (head.length >= 5 || !'<tool'.startsWith(head)) mode = 'stream';
         }
-        if (mode === 'stream' && !holdWeb && !(watchLazy && acc.length < 160)) flush();   // build request: wait for ~160 characters, then stream as normal
+        if (mode === 'stream' && !holdWeb && !holdEdit && !(watchLazy && acc.length < 160)) flush();   // build request: wait for ~160 characters, then stream as normal
       };
       // Shield: an empty reply or an engine that dropped out before saying anything is retried (engine restarted first), never shown as silence.
       const shot = await shieldedTurn((tok) => streamTurn(model, messages, opts, t => { tok(t); onTok(t); }, ac.signal, usage), {
@@ -643,6 +649,7 @@ async function chat(req, res, b) {
           messages.push({ role: 'assistant', content: text.slice(0, 300) }, { role: 'user', content: agent.LAZY_RETRY + '\n\nThe request was: ' + String(lastUser.content).slice(0, 500) });
           retrying = true; continue;
         }
+        if (inStudio && editclaim.invented(text, { changed: studioChanged, hasStudioTools: tools.some(t => /^studio_/.test(t.name)) })) { line({ model, message: { role: 'assistant', content: shown ? '\n' + editclaim.NO_EDIT_RAN : editclaim.NO_EDIT_RAN }, done: false }); log('step', 'The AI said it added or changed something, but no file was written. Replaced that with an honest answer.'); break; }
         if (holdWeb && tools.length && agent.inventedSearch(text, searchRan)) { line({ model, message: { role: 'assistant', content: NO_SEARCH_RAN }, done: false }); log('step', 'The AI said it found search results, but no search ran. Replaced that with an honest answer.'); break; }
         if (holdWeb && CLAIMS_WEB.test(text)) { line({ model, message: { role: 'assistant', content: NO_WEB }, done: false }); log('step', 'This model has no web access, so its claim to search was replaced.'); break; }
         if (shown < text.length) { const rest = tools.length ? text.slice(shown) : agent.stripToolText(text.slice(shown)); if (rest) line({ model, message: { role: 'assistant', content: rest }, done: false }); } break;
@@ -652,6 +659,7 @@ async function chat(req, res, b) {
       log('action', `Model asked for ${call.name} ${JSON.stringify(call.args)}`);
       line({ toolStart: { name: call.name, args: call.args } }); let result; try { result = String(await agent.runTool(tools, call.name, call.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
       if (/^(web_search|fetch_page|github_|platform_)/.test(call.name) && !/^Tool error/.test(result)) searchRan = true;
+      if (editclaim.changedFile(call.name, result)) studioChanged = true;
       if (call.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
       log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
       line({ tool: { name: call.name, args: call.args, result: result.slice(0, 400) } }); if (visited.size() !== sentSrc) { sentSrc = visited.size(); line({ sources: visited.list() }); }

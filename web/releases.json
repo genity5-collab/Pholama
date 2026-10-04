@@ -1,6 +1,18 @@
 {
- "latest": "0.9.23",
+ "latest": "0.9.24",
  "releases": [
+  {
+   "version": "0.9.24",
+   "date": "2026-10-04",
+   "title": "Studio no longer says it added things it did not add",
+   "notes": [
+    "Fixed: the Studio AI sometimes said it added a timer or changed your page when it had not touched any file",
+    "If the AI claims an edit but no file was really written, Pholama now replaces that claim with an honest answer and tells you how to ask again",
+    "Real edits are never blocked: a claim is kept whenever a file was actually written, including the guided build paths",
+    "Offers and questions like 'Want me to add a timer?' are left alone",
+    "@plugin mentions and the Updating animation from 0.9.23 are included"
+   ]
+  },
   {
    "version": "0.9.23",
    "date": "2026-10-04",
