@@ -1,6 +1,15 @@
 {
- "latest": "0.9.14",
+ "latest": "0.9.15",
  "releases": [
+  {
+   "version": "0.9.15",
+   "date": "2026-10-04",
+   "title": "Studio contrast and mascot polish",
+   "notes": [
+    "Raised contrast across the PC Studio editor, preview, output log and AI panel so text remains readable in dark mode",
+    "Kept the monochrome, local-first mascot treatment consistent across the PC app and public site"
+   ]
+  },
   {
    "version": "0.9.14",
    "date": "2026-10-04",
