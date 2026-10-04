@@ -63,6 +63,8 @@ header{border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);ba
 .brand{font-weight:750;letter-spacing:-.035em}.brand::before{width:32px;height:32px;border-radius:10px;box-shadow:0 0 0 1px var(--line),0 8px 24px var(--glow)}
 .viewsw{box-shadow:0 8px 24px rgba(0,0,0,.12)}
 #dash{padding-top:24px}.dwrap{max-width:1160px}.dhero h2{font-size:clamp(30px,5vw,48px);letter-spacing:-.055em;line-height:1.05}.dhero{padding:18px 0 10px}.dcard,.dpanel,.feature,.card-box{box-shadow:0 12px 30px rgba(0,0,0,.1)}
+/* The public site is an information and community surface; model selection belongs in the PC app. */
+body.site-shell #model,body.site-shell #mgr{display:none!important}
 #hero{margin-top:7vh;max-width:680px}#hero h1{font-size:clamp(28px,5vw,42px);line-height:1.08;letter-spacing:-.055em}#hero p{max-width:520px;margin-left:auto;margin-right:auto}
 .sunset,.aiwarn{border-radius:14px!important;box-shadow:0 8px 24px rgba(0,0,0,.1)}
 .composer{box-shadow:0 14px 40px rgba(0,0,0,.16)}

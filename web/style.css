@@ -70,6 +70,21 @@ header{border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);ba
 #studio{max-width:1500px;width:100%;margin:0 auto;padding:12px 18px 18px;gap:12px}.st-bar{padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:color-mix(in srgb,var(--card) 92%,transparent);box-shadow:0 12px 30px rgba(0,0,0,.12)}
 .st-main{gap:12px!important}.st-left,.st-right,.st-ai{border-color:var(--line)!important;border-radius:14px!important;box-shadow:0 10px 28px rgba(0,0,0,.12)}.st-left,.st-right{background:var(--studio-panel)!important}.st-tabs{background:var(--studio)!important}.st-tab.on{box-shadow:inset 0 -2px 0 var(--acc)!important}.st-code,.st-right iframe{border-radius:10px}.st-con,.st-ailog{background:var(--studio)!important;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.st-ai{background:var(--card)!important;padding:10px!important}.st-aibox{border:1px solid var(--line);border-radius:12px;padding:6px;background:var(--studio)}
 @media(max-width:760px){#studio{padding:8px}.st-main{grid-template-columns:1fr!important}.st-right{min-height:360px}.st-bar{overflow:auto}.st-bar select{min-width:150px}}
+/* Studio workspace: make the PC app feel like a focused local development environment. */
+#studio{background:linear-gradient(180deg,color-mix(in srgb,var(--studio) 28%,transparent),transparent 180px)}
+.st-bar{display:flex;align-items:center;gap:8px;min-height:52px;background:linear-gradient(110deg,color-mix(in srgb,var(--card) 95%,transparent),color-mix(in srgb,var(--acc) 5%,var(--card)))!important}
+.st-bar select{font-weight:700;border-radius:10px;background:var(--studio)!important}
+.st-bar button{border-radius:10px}.st-bar button.p{box-shadow:0 8px 20px var(--glow)}
+.st-main{min-height:560px!important}.st-left,.st-right{min-width:0;overflow:hidden}
+.st-tabs{padding:8px!important;display:flex;gap:4px;overflow:auto;border-bottom:1px solid var(--studio-line)}
+.st-tab{border:0!important;border-radius:8px!important;padding:7px 11px!important;min-height:32px!important;color:var(--mut)}
+.st-tab.on{color:var(--fg);background:var(--studio-panel)!important}
+.st-code{padding:18px!important;font-size:13px!important;line-height:1.65!important;tab-size:2;caret-color:var(--acc)}
+.st-prevhead,.st-conhead{padding:10px 12px!important;background:var(--studio)!important;border-bottom:1px solid var(--studio-line)}
+.st-prevhead b,.st-conhead b{font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mut)}
+.st-right iframe{background:#fff;min-height:300px}.st-con{min-height:145px!important;padding:10px 12px!important}.st-ailog{min-height:100px;padding:10px 12px!important}
+.st-aibox textarea{padding:8px!important}.st-aibox button{border-radius:9px!important}
+@media(max-width:760px){.st-main{min-height:0!important}.st-code{min-height:360px!important}.st-right iframe{min-height:300px}}
 
 
 /* Settings tabs & progress bars */
