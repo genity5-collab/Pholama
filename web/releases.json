@@ -1,6 +1,18 @@
 {
- "latest": "0.9.9",
+ "latest": "0.9.10",
  "releases": [
+  {
+   "version": "0.9.10",
+   "date": "2026-10-04",
+   "title": "Fix: ChatGPT and Gemini keys",
+   "notes": [
+    "Fixed: ChatGPT and Gemini keys did not work. Gemini's old default model (gemini-2.0-flash) was shut down by Google on June 1, 2026, so a correct key still failed. Model names change often, so Pholama no longer trusts a fixed name",
+    "A key is now checked with the company the moment you add it. A wrong key is refused with a plain reason and is not saved. A correct key asks the company which models it can use and picks one that really exists, and tells you if it had to change your choice",
+    "New Change model button on every saved key. It lists only the chat models your key can use right now (no embedding, voice or image models). If a model is retired later, chat says so in plain words instead of showing raw error text",
+    "Newer ChatGPT models that refuse some settings (max_tokens or a custom temperature) now work: Pholama drops or renames just that setting and tries again",
+    "Updated starting models: ChatGPT gpt-5-mini, Gemini gemini-3.8-flash, OpenRouter openai/gpt-5-mini, Grok grok-4"
+   ]
+  },
   {
    "version": "0.9.9",
    "date": "2026-10-04",

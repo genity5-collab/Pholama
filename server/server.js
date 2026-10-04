@@ -794,7 +794,7 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/github/approve' && req.method === 'POST') { const b = await body(req); try { return json(res, 200, { ok: true, text: await agent.github.confirm(String(req.headers['x-github-token'] || ''), String(b.id || ''), b.approve === true) }); } catch (e) { return json(res, 200, { ok: false, text: e.message }); } }
     // ---- commands the AI proposes: run only after the user clicks Allow, only from this PC's own page ----
-    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/editlog/stream' || p === '/api/providers' || p === '/api/bonus' || p === '/api/bonus/github' || p === '/api/bonus/rewards') {
+    if (p.startsWith('/api/cmd/') || p === '/api/editlog' || p === '/api/editlog/stream' || p === '/api/providers' || p === '/api/providers/models' || p === '/api/bonus' || p === '/api/bonus/github' || p === '/api/bonus/rewards') {
       if (req.who !== 'local') return json(res, 403, { error: 'This can only be done on the PC itself.' });
       const o = req.headers.origin;   // the public website is allowed to chat with this PC, but never to approve or stop commands
       if (o && !new RegExp('^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\]):' + PORT + '$').test(o)) return json(res, 403, { error: 'Approve commands in the Pholama window on this PC.' });
@@ -806,9 +806,13 @@ const server = http.createServer(async (req, res) => {
         catch (e) { return json(res, 200, { ok: false, text: e.message }); }
       }
       if (p === '/api/cmd/stop' && req.method === 'POST') return json(res, 200, { ok: agent.power.stopRunning() });
+      if (p === '/api/providers/models' && req.method === 'GET') {   // the models this saved key can really use (asked from the company, key never leaves this PC except to them)
+        try { return json(res, 200, await providers.modelsFor(u.searchParams.get('id'))); } catch (e) { return json(res, 400, { error: providers.scrub(e.message) }); }
+      }
       if (p === '/api/providers') {   // your own API keys: only on this PC, and the key is never sent back
         if (req.method === 'GET') return json(res, 200, { providers: providers.list(), known: providers.known() });
-        if (req.method === 'POST') { try { const b = await body(req); return json(res, 200, { ok: true, provider: providers.add(b, agent.sources.checkLink) }); } catch (e) { return json(res, 400, { error: providers.scrub(e.message) }); } }
+        if (req.method === 'POST') { try { const b = await body(req); const v = await providers.add(b, agent.sources.checkLink); return json(res, 200, { ok: true, provider: v, note: v.note || '' }); } catch (e) { return json(res, 400, { error: providers.scrub(e.message) }); } }
+        if (req.method === 'PATCH') { try { const b = await body(req); return json(res, 200, { ok: true, provider: providers.setModel(b.id, b.model) }); } catch (e) { return json(res, 400, { error: providers.scrub(e.message) }); } }
         if (req.method === 'DELETE') { const id = u.searchParams.get('id'); for (const k of Object.keys(capCache)) if (k === 'byok:' + id) delete capCache[k]; return json(res, 200, { ok: providers.remove(id) }); }
       }
       if (p === '/api/editlog/stream' && req.method === 'GET') {   // live feed of new log entries (server-sent events)

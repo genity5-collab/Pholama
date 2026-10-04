@@ -14,7 +14,7 @@ async function main() {
   await wait(200); const pport = prov.address().port;
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ph-byok-')); const port = 31000 + Math.floor(Math.random() * 4000);
   // seed one provider pointing at the fake server (the module only allows http for localhost, which is exactly this case)
-  const srv = spawn(process.execPath, [path.join(root, 'server', 'server.js')], { env: { ...process.env, PORT: String(port), HOME: home, USERPROFILE: home, PHOLAMA_HOME: path.join(home, '.pholama') }, stdio: 'ignore' });
+  const srv = spawn(process.execPath, [path.join(root, 'server', 'server.js')], { env: { ...process.env, PORT: String(port), HOME: home, USERPROFILE: home, PHOLAMA_HOME: path.join(home, '.pholama'), PHOLAMA_TEST_NO_KEYCHECK: '1' }, stdio: 'ignore' });
   const B = 'http://127.0.0.1:' + port; for (let i = 0; i < 60; i++) { try { if ((await fetch(B + '/api/version')).ok) break; } catch {} await wait(250); }
   const J = (p, o = {}) => fetch(B + p, { ...o, headers: { 'Content-Type': 'application/json', ...(o.headers || {}) } });
   try {

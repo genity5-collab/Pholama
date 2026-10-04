@@ -30,7 +30,18 @@ export function buildKeysPanel({ api, parent, onChange }) {
       const t = document.createElement('span'); t.textContent = keyLine(p); t.style.wordBreak = 'break-word';
       const del = document.createElement('button'); del.textContent = 'Remove';
       del.onclick = async () => { del.disabled = true; try { await api('api/providers?id=' + encodeURIComponent(p.id), { method: 'DELETE' }); } catch {} await load(); if (onChange) onChange(); };
-      row.append(t, del); listBox.appendChild(row);
+      const chg = document.createElement('button'); chg.textContent = 'Change model';
+      const pick = document.createElement('select'); pick.style.display = 'none'; const status = document.createElement('div'); status.className = 'sys'; status.style.cssText = 'text-align:left;flex-basis:100%';
+      chg.onclick = async () => {   // ask the company which models this key can use right now
+        chg.disabled = true; status.textContent = 'Asking ' + (p.name || 'the company') + ' which models your key can use...';
+        try {
+          const r = await api('api/providers/models?id=' + encodeURIComponent(p.id)); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Could not check.');
+          pick.innerHTML = ''; for (const m of j.models) pick.add(new Option(m, m, false, m === p.model)); if (!j.currentOk) pick.add(new Option(p.model + ' (not available)', p.model, false, true), 0);
+          pick.style.display = ''; status.textContent = j.currentOk ? 'Your key can use these models. Pick one.' : 'The model "' + p.model + '" is not available for this key any more. Pick another one.';
+        } catch (e) { status.textContent = e.message; } finally { chg.disabled = false; }
+      };
+      pick.onchange = async () => { try { const r = await api('api/providers', { method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, model: pick.value }) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Could not change it.'); status.textContent = 'Now using ' + pick.value + '.'; await load(); if (onChange) onChange(); } catch (e) { status.textContent = e.message; } };
+      row.style.flexWrap = 'wrap'; row.append(t, chg, del, pick, status); listBox.appendChild(row);
     }
   };
   async function load() {
@@ -40,11 +51,11 @@ export function buildKeysPanel({ api, parent, onChange }) {
   }
   addBtn.onclick = () => { form.style.display = form.style.display === 'none' ? 'flex' : 'none'; };
   save.onclick = async () => {
-    msg.textContent = ''; save.disabled = true;
+    msg.textContent = 'Checking your key with the company...'; save.disabled = true;
     try {
       const r = await api('api/providers', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ kind: kind.value, key: key.value, model: model.value, base: base.value }) });
       const j = await r.json(); if (!r.ok) throw new Error(j.error || 'Could not save.');
-      key.value = ''; msg.textContent = 'Saved. Pick it in the model list at the top.'; form.style.display = 'none'; await load(); if (onChange) onChange();
+      key.value = ''; msg.textContent = 'Saved and checked with ' + (j.provider && j.provider.name || 'the company') + '. ' + (j.note ? j.note + ' ' : '') + 'Pick it in the model list at the top.'; form.style.display = 'none'; await load(); if (onChange) onChange();
     } catch (e) { msg.textContent = e.message; } finally { save.disabled = false; }
   };
   form.append(kind, model, base, key, note, save);
