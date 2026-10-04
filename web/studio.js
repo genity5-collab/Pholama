@@ -55,7 +55,7 @@ export function createStudio(env) {
   mount.innerHTML = `
   <div class="st-bar">
     <select id="stProj" title="Project"></select>
-    <button id="stNew">New</button><button id="stDel" title="Delete this project">Delete</button>
+    <button id="stNew">New</button><button id="stDel" title="Delete this project">Delete</button><button id="stRefresh" title="Pull the latest files from the local Pholama server">Refresh files</button>
     <span class="sp"></span>
     <button id="stPublish" class="p" title="Put this project on GitHub">Publish</button>
   </div>
@@ -76,7 +76,7 @@ export function createStudio(env) {
     <div id="stAiLog" class="st-ailog"></div>
     <div class="st-aibox"><textarea id="stAsk" rows="2" placeholder="Ask the AI to build, fix or explain anything..."></textarea><button id="stSend" class="p">Send</button></div>
   </div>`;
-  for (const id of ['stProj', 'stNew', 'stDel', 'stPublish', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stSend']) el[id] = mount.querySelector('#' + id);
+  for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stPublish', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stSend']) el[id] = mount.querySelector('#' + id);
 
   const say = (txt, cls = '') => { const d = document.createElement('div'); d.className = 'st-msg ' + cls; d.textContent = txt; el.stAiLog.appendChild(d); while (el.stAiLog.childElementCount > 150) el.stAiLog.firstChild.remove(); el.stAiLog.scrollTop = 1e9; return d; };
   const con = (kind, text) => { if (S.log.length >= MAX_CONSOLE) { if (S.log.length === MAX_CONSOLE) { S.log.push({ kind: 'warn', text: 'Too much output. Further lines are hidden. Press Clear.' }); paintConLine(S.log[S.log.length - 1]); } return; } S.log.push({ kind, text }); paintConLine({ kind, text }); };
@@ -148,6 +148,7 @@ export function createStudio(env) {
 
   // ---- project actions ----
   el.stProj.onchange = () => openProject(el.stProj.value).catch(e => say(e.message, 'err'));
+  el.stRefresh.onclick = async () => { el.stRefresh.disabled = true; stat('Refreshing...'); try { await refreshFromServer(); stat(S.dirty.size ? 'Unsaved' : 'Saved'); say('Pulled the latest files from the local Pholama server.', 'act'); } finally { el.stRefresh.disabled = false; } };
   el.stNew.onclick = async () => { const n = (prompt('Name of the new project (letters, numbers, dashes):') || '').trim(); if (!n) return; try { const r = await jsend('api/studio/projects', 'POST', { name: n }); await loadProjects(r.name); } catch (e) { say(e.message, 'err'); } };
   el.stDel.onclick = async () => { if (!S.project || !confirm('Delete the project "' + S.project + '" and all its files from this PC? This cannot be undone.')) return; try { await jsend('api/studio/projects/' + encodeURIComponent(S.project), 'DELETE'); S.project = null; await loadProjects(); } catch (e) { say(e.message, 'err'); } };
   el.stAddFile.onclick = async () => { const n = (prompt('File name (for example page2.html, extra.js):') || '').trim(); if (!n || !S.project) return; try { await jsend('api/studio/projects/' + encodeURIComponent(S.project) + '/file', 'PUT', { file: n, content: '' }); await refreshFromServer(); S.current = n.replace(/^\/+/, ''); paintTabs(); paintEditor(); } catch (e) { say(e.message, 'err'); } };
