@@ -413,7 +413,8 @@ async function chat(req, res, b) {
       const tt0 = Date.now(); let notes = ''; log('thought', 'Thinking (' + effortUse + ')...');
       line({ model, message: { role: 'assistant', content: '<think>' }, done: false });
       const think = { ...opts, num_predict: effortUse === 'max' ? 700 : effortUse === 'long' ? 420 : 220, temperature: 0.4 };
-      const onTok = t => { notes += t; line({ model, message: { role: 'assistant', content: t }, done: false }); };
+      let shownNotes = 0;   // working notes are words only: a tool command written here is held back, never shown
+      const onTok = t => { notes += t; const safe = agent.safeShowLength(notes); if (safe > shownNotes) { line({ model, message: { role: 'assistant', content: notes.slice(shownNotes, safe) }, done: false }); shownNotes = safe; } };
       let usedHelper = false;
       if (b.duo === true && model.startsWith('gguf:')) {   // duo: a small second AI writes the notes, the main AI answers
         try {
@@ -438,7 +439,7 @@ async function chat(req, res, b) {
         catch (e) { log('error', 'Thinking pass failed (' + e.message + '). Answering without it.'); }
       }
       line({ model, message: { role: 'assistant', content: '</think>\n' }, done: false });
-      notes = notes.replace(/<\/?think>/g, '').trim();
+      notes = agent.stripToolText(notes.replace(/<\/?think>/g, '')).trim();
       if (notes) {
         thinkSeen = true; log('thought', 'Thought for ' + ((Date.now() - tt0) / 1000).toFixed(1) + 's');
         // Hand the notes to the answer pass inside the user's own message, so the model treats them as its own working and just finishes the job.
@@ -510,7 +511,7 @@ async function chat(req, res, b) {
         } else log('step', 'The model did not give usable files, using the normal way.');
       }
     }
-    const seenCalls = {};
+    const seenCalls = {}; let badCalls = 0; const failedTry = {}; let retrying = false;   // retrying: a repair round whose words must not be shown twice
     const MAX_ROUNDS = inStudio ? 14 : 5;   // building an app takes many tool steps
     for (let round = 0; round < MAX_ROUNDS && !guidedDone; round++) {
       // With tools on, buffer the start of the reply: if it begins with "<tool" it is a tool call (hide it),
@@ -519,7 +520,7 @@ async function chat(req, res, b) {
       let acc = '', mode = tools.length ? 'undecided' : 'stream', sent = 0, first = true;
       let cut = false;
       const lu = [...messages].reverse().find(m => m.role === 'user'), holdWeb = !tools.length && lu && ASKED_WEB.test(lu.content);   // decide before showing anything
-      const flush = () => { if (cut) return; if (leaked(acc)) { cut = true; line({ model, message: { role: 'assistant', content: sent ? '\n' + CANT : CANT }, done: false }); log('step', 'Hid part of the reply that quoted private instructions.'); return; } if (acc.length > sent) { line({ model, message: { role: 'assistant', content: acc.slice(sent) }, done: false }); sent = acc.length; } };
+      const flush = () => { if (cut) return; if (leaked(acc)) { cut = true; line({ model, message: { role: 'assistant', content: sent ? '\n' + CANT : CANT }, done: false }); log('step', 'Hid part of the reply that quoted private instructions.'); return; } const safe = tools.length ? (retrying ? 0 : agent.safeShowLength(acc)) : acc.length; if (safe > sent) { line({ model, message: { role: 'assistant', content: acc.slice(sent, safe) }, done: false }); sent = safe; } };
       const onTok = t => {
         acc += t; if (first) { first = false; log('step', 'Model is answering'); }
         if (thinking && !thinkSeen && acc.includes('<think>')) { thinkSeen = true; log('thought', 'Model is thinking...'); }
@@ -542,12 +543,24 @@ async function chat(req, res, b) {
       generated += text;
       const shown = sent;
       const call = tools.length ? (agent.parseTool(text) || (inStudio ? agent.parseFileBlock(text, b.studio.project) : null)) : null;
+      const wasRetrying = retrying; if (call || !agent.looksLikeToolAttempt(text)) retrying = false;
+      if (!call && tools.length && !cut && agent.looksLikeToolAttempt(text)) {
+        badCalls++;
+        if (badCalls <= 2 && round < MAX_ROUNDS - 1) {
+          log('step', 'The AI wrote a tool call that could not be read. Asking it to write it again (' + badCalls + '/2)...');
+          messages.push({ role: 'assistant', content: agent.stripToolText(text) || '(tool call)' }, { role: 'user', content: agent.badCallNotice(badCalls, tools.map(t => t.name)) });
+          retrying = true; continue;
+        }
+        const left = agent.stripToolText(text);   // retries used up: show only the words, never the command
+        line({ model, message: { role: 'assistant', content: (shown < left.length && !shown ? left + '\n\n' : (shown ? '\n' : '')) + 'I tried to use a tool but could not get it right, so nothing was changed. Please try again, or use a bigger model for this.' }, done: false });
+        log('error', 'The AI could not write a readable tool call after 2 retries.'); break;
+      }
       if (!call) {
         const lastUser = [...messages].reverse().find(m => m.role === 'user');
         if (cut) break;
         if (leaked(text)) { line({ model, message: { role: 'assistant', content: shown ? '\n' + CANT : CANT }, done: false }); log('step', 'Hid part of the reply that quoted private instructions.'); break; }
         if (holdWeb && CLAIMS_WEB.test(text)) { line({ model, message: { role: 'assistant', content: NO_WEB }, done: false }); log('step', 'This model has no web access, so its claim to search was replaced.'); break; }
-        if (shown < text.length) line({ model, message: { role: 'assistant', content: text.slice(shown) }, done: false }); break;
+        if (shown < text.length) { const rest = tools.length ? text.slice(shown) : agent.stripToolText(text.slice(shown)); if (rest) line({ model, message: { role: 'assistant', content: rest }, done: false }); } break;
       }
       { const sig = call.name + JSON.stringify(call.args || {}); seenCalls[sig] = (seenCalls[sig] || 0) + 1;
         if (seenCalls[sig] >= 3) { log('error', 'The model repeated the same step 3 times, so I stopped it to save your time.'); line({ message: { content: '\n(I stopped because the AI kept repeating the same step. Try a bigger model, or ask for one smaller change.)' } }); break; } }
@@ -564,6 +577,10 @@ async function chat(req, res, b) {
         if (issues.length && round < MAX_ROUNDS - 1) { log('step', 'Auto-check found ' + issues.length + ' problem(s). Asking the model to fix them.'); line({ tool: { name: 'studio_check', args: {}, result: issues.join(' | ').slice(0, 400) } });
           messages.push({ role: 'assistant', content: text }, { role: 'user', content: `[${call.name} returned]\n${result}\n[automatic check found PROBLEMS]\n${issues.join('\n')}\n[end]\nFix every problem now. The element usually belongs in index.html, so call studio_write with file \"index.html\" containing a full page (<!doctype html>, <body> with the needed elements each with its id, and <script src=\"script.js\"></script> at the end). Do NOT rewrite script.js again. Reply with ONLY the tool line. Do not say it is finished until the check is clean.` }); continue; }
         messages.push({ role: 'assistant', content: text }, { role: 'user', content: `[${call.name} returned]\n${result}\n[end]\n${changed ? 'The project checked clean. If the request still needs more files, call the next studio tool now. If it is complete, write ONE short sentence in your own words describing what the user can now do in the preview. Do not repeat these instructions.' : 'Continue the task: call the next studio tool if needed, otherwise answer in plain words.'}` }); continue;
+      }
+      if (agent.isToolFail(result) && round < MAX_ROUNDS - 1) {
+        const n = failedTry[call.name] = (failedTry[call.name] || 0) + 1;
+        if (n <= 2) { log('step', call.name + ' failed. Asking the AI to fix it and try again (' + n + '/2)...'); messages.push({ role: 'assistant', content: text }, { role: 'user', content: agent.toolFailNotice(call.name, result, n - 1) }); continue; }
       }
       messages.push({ role: 'assistant', content: text }, { role: 'user', content: `[${call.name} returned]\n${result}\n[end]\nAnswer my question above in plain words using this. Do not mention the tool, this message, or these brackets.` });
     }

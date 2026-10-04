@@ -1,6 +1,17 @@
 {
- "latest": "0.9.2",
+ "latest": "0.9.3",
  "releases": [
+  {
+   "version": "0.9.3",
+   "date": "2026-10-04",
+   "title": "The AI now retries when a command fails",
+   "notes": [
+    "Fixed: when the AI wrote a tool command wrongly, the raw command showed up in the chat and nothing happened. It is now hidden, and the AI is asked to write it again, up to 2 times",
+    "Fixed: when a tool failed (for example a file was not found), the AI gave up at once. It now reads the error and tries again, up to 2 times, then explains in plain words",
+    "Fixed: commands written inside the thinking notes can no longer appear on screen",
+    "If it still cannot do it, you get a clear message instead of a stray command"
+   ]
+  },
   {
    "version": "0.9.2",
    "date": "2026-10-04",

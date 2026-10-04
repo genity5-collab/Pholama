@@ -454,4 +454,43 @@ function aboutUserHint(text, memories) {
     : '\n[this question is about the user, and you know nothing about them yet. Reply only: "I don\'t know that about you yet. Tell me and I\'ll remember it." Do not talk about your own preferences or the internet.]\n';
 }
 
-module.exports = { setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+
+// ---- Broken tool calls: never show them, retry them ----
+// A small model often tries to call a tool and gets the format wrong (bad JSON, wrong tag, a code fence around it).
+// parseTool() then returns null, and the raw command used to be shown to the user as if it were the answer.
+const ATTEMPT_RE = /<\/?tool(?:_call)?\b|"name"\s*:\s*"[a-z_]+"\s*,\s*"(?:args|arguments)"\s*:|^\s*(?:tool_call|TOOL_CALL)\s*[:(]/im;
+function looksLikeToolAttempt(text) { return ATTEMPT_RE.test(String(text || '')); }
+// Remove any tool-call text from a reply so it can be shown safely. Returns '' when nothing readable is left.
+function stripToolText(text) {
+  let t = String(text || '');
+  t = t.replace(/```[a-z]*\s*\n?\s*<tool(?:_call)?>[\s\S]*?(?:<\/tool(?:_call)?>|$)\s*\n?```/gi, '');
+  t = t.replace(/<tool(?:_call)?>[\s\S]*?(?:<\/tool(?:_call)?>|$)/gi, '');
+  t = t.replace(/<\/?tool(?:_call)?>/gi, '');
+  t = t.replace(/\{\s*"name"\s*:\s*"[a-z_]+"\s*,\s*"(?:args|arguments)"\s*:[\s\S]*$/i, '');
+  return t.replace(/\n{3,}/g, '\n\n').trim();
+}
+// The message sent back to the model when its tool call could not be read (attempt = 1 or 2).
+function badCallNotice(attempt, toolNames) {
+  const names = (toolNames || []).slice(0, 12).join(', ');
+  return '[your tool call could not be read, so nothing was done]\nWrite it again, exactly in this form and nothing else: <tool_call>{"name": "TOOL_NAME", "arguments": {"key": "value"}}</tool_call>\n' +
+    'Rules: valid JSON, double quotes, one tool only, no code fence' + (names ? '. Tools you can use: ' + names : '') + '.' + (attempt >= 2 ? '\nThis is your LAST try. If you cannot, answer in plain words without any tool.' : '') + '\n[end]';
+}
+// The message sent back when a tool ran but failed. Gives the model a real chance to fix the arguments once or twice.
+function toolFailNotice(name, result, attempt) {
+  return `[${name} failed]\n${String(result).slice(0, 600)}\n[end]\n` + (attempt < 2
+    ? 'Read the error, fix the arguments, and call the tool again now with <tool_call>{"name": "...", "arguments": {...}}</tool_call>. If it cannot work, say so in plain words.'
+    : 'This failed twice. Do not call it again. Tell me in plain words what went wrong and what I can do.');
+}
+
+// How many characters of a streaming reply are safe to show: everything before the first tool tag, and nothing of a
+// half-written tag at the very end ("<to", "<tool_c"...), because that may turn into a command on the next token.
+function safeShowLength(acc) {
+  const s = String(acc || '');
+  const i = s.search(/<\/?tool/i); if (i >= 0) return i;
+  const j = s.lastIndexOf('<'); if (j >= 0 && '<tool_call>'.startsWith(s.slice(j).toLowerCase().slice(0, 11)) || (j >= 0 && '</tool_call>'.startsWith(s.slice(j).toLowerCase()))) return j;
+  const k = s.search(/\{\s*"name"\s*:\s*"[a-z_]+"\s*,\s*"(?:args|arguments)"/i); if (k >= 0) return k;
+  return s.length;
+}
+const isToolFail = r => /^Tool error/.test(String(r || ''));
+
+module.exports = { safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

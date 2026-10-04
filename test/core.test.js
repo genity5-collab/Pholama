@@ -301,6 +301,18 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
     ok('website: connecting to a PC brings chat back', /markSite\(\);\s*await refreshSelect\(\); render\(\);/.test(js));
     ok('PC app has no site-only switch', !/site-only/.test(webJs) && !/site-only/.test(fs.readFileSync(path.join(root, 'web', 'style.css'), 'utf8')));
   }
+  // ---- broken tool calls are retried, never shown ----
+  {
+    const ag = require('../server/agent.js');
+    ok('retry: plain words are not a tool attempt', !ag.looksLikeToolAttempt('Sure, saved. I can use tools like list_files.'));
+    ok('retry: bad json, unclosed tag and bare json ARE attempts', ag.looksLikeToolAttempt('<tool_call>{oops}</tool_call>') && ag.looksLikeToolAttempt('go <tool_call>{"name":"x"') && ag.looksLikeToolAttempt('{"name": "a", "arguments": {}}'));
+    ok('retry: tool text is stripped, words are kept', ag.stripToolText('Ok. <tool_call>{"name":"x"}</tool_call>') === 'Ok.' && ag.stripToolText('<tool_call>{bad') === '');
+    ok('retry: a half-written tag is held back from the screen', ag.safeShowLength('Sure <tool_c') === 5 && ag.safeShowLength('Sure <tool_call>{') === 5 && ag.safeShowLength('a < b and <b>x</b>') === 18);
+    ok('retry: tool failure gets a retry, then a stop', /call the tool again/.test(ag.toolFailNotice('x', 'Tool error: bad', 0)) && /failed twice/.test(ag.toolFailNotice('x', 'Tool error: bad', 2)));
+    ok('retry: a good call still parses', ag.parseTool('<tool_call>{"name":"list_files","arguments":{}}</tool_call>').name === 'list_files');
+    const { spawnSync } = require('child_process'); const e2e = spawnSync(process.execPath, [path.join(root, 'test', 'retry.e2e.js')], { encoding: 'utf8', timeout: 240000 });
+    ok('retry: all 12 end-to-end scenarios pass against the real server', e2e.status === 0 && /all passed/.test(e2e.stdout || ''), (e2e.stdout || '').split('\n').filter(l => /FAIL/.test(l)).join(' | ') || e2e.stderr);
+  }
   // ---- syntax of every file ----
   for (const f of fs.readdirSync(path.join(root, 'server'))) if (f.endsWith('.js')) { try { new (require('vm').Script)(fs.readFileSync(path.join(root, 'server', f), 'utf8').replace(/^#!.*/, '')); P++; } catch (e) { F++; console.log('FAIL syntax', f, e.message); } }
   await new Promise(r => setTimeout(r, 300)); console.log(`${P} passed, ${F} failed`); process.exit(F ? 1 : 0);
