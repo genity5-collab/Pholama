@@ -655,6 +655,7 @@ const server = http.createServer(async (req, res) => {
       // (settings, the agent and its tools, commands, GitHub approvals, downloads, logs) answers to this PC alone.
       const REMOTE_OK = p.startsWith('/v1/') || ['/api/credits', '/api/chat', '/api/tags', '/api/caps', '/api/version', '/api/ps', '/api/show', '/api/embed', '/api/embeddings', '/api/docs'].includes(p);
       if (req.who !== 'local' && !REMOTE_OK) return json(res, 403, { error: 'This can only be done on the PC itself.' });
+      if (!sleeper.touch(req.method, p)) return json(res, 503, { error: 'Pholama is asleep: nobody used an AI for a day, so all local AIs were shut down to free your memory. On the PC, run:  pholama awake', asleep: true });
     }
     // serve / shutdown: only from this PC
     if (p === '/api/serve' && req.method === 'POST') {
@@ -732,6 +733,8 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/update/check' && req.method === 'POST') return json(res, 200, await require('./update').backgroundCheck());
     if (p === '/api/update/auto' && req.method === 'POST') { const b = await body(req); return json(res, 200, require('./update').setAuto(b.auto !== false)); }
     if (p === '/api/guard') { const n = guardNote; guardNote = null; return json(res, 200, { stopped: n, loaded: !!llama || helperEng.isUp() || ollamaUsed.size > 0 }); }
+    if (p === '/api/awake' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); return json(res, 200, { ok: true, woke: sleeper.wake() }); }
+    if (p === '/api/sleep' && req.method === 'GET') return json(res, 200, { asleep: sleeper.isAsleep(), idleHours: +(sleeper.idleMs() / 3600000).toFixed(2), limitHours: +(sleeper.limitMs / 3600000).toFixed(2) });
     if (p === '/api/stop-local' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); const had = await stopAllLocal(); return json(res, 200, { ok: true, stopped: had }); }
     if (p === '/api/hardware') { const h = hardware(); return json(res, 200, { hardware: h, ollama: await ollamaUp(), llamaServer: !!findLlamaServer(), toolAI: await hasToolAI(), models: recommend(h) }); }
     if (p === '/api/tags') return json(res, 200, { models: await listModels() });
@@ -804,12 +807,32 @@ const guard = require('./guard').createGuard({
   onStop: (why) => { guardNote = { at: Date.now(), why }; console.log('\n  Lag guard: ' + why + '. Stopped all local AIs. Cloud Agent Max is not affected.\n'); },
 });
 guard.start();
+// ---------- sleep: one day with nobody using an AI shuts every local AI down until `pholama awake` ----------
+const sleeper = require('./sleep').create({
+  isLoaded: () => !!llama || helperEng.isUp() || ollamaUsed.size > 0,
+  stopAll: () => stopAllLocal(),
+  onSleep: (ms) => console.log('\n  Pholama went to sleep: nobody used an AI for ' + Math.round(ms / 3600000) + ' hours, so every local AI was shut down and the memory is free. Run  pholama awake  to wake it.\n'),
+  onWake: () => console.log('\n  Pholama is awake.\n'),
+});
+sleeper.start(+process.env.PHOLAMA_SLEEP_CHECK_MS || 60000);
+
+// ---------- reaper: if Pholama is killed hard (End task, crash), this tiny separate watcher still stops the AI engines ----------
+// Started once, detached and hidden. It exits by itself as soon as it has done its job.
+function startReaper() {
+  try {
+    const files = [PIDFILE, helperEng.PIDFILE];
+    const r = require('child_process').spawn(process.execPath, [path.join(__dirname, 'reaper.js'), String(process.pid), ...files], { detached: true, stdio: 'ignore', windowsHide: true });
+    r.unref();
+  } catch (e) { console.log('  (could not start the memory watcher: ' + e.message + ')'); }
+}
+if (!process.env.PHOLAMA_NO_REAPER) startReaper();
 
 // ---------- closing Pholama closes every local AI, however it is closed ----------
 let closing = false;
 function closeAll(code) {
   if (closing) return; closing = true;
   try { guard.stop(); } catch {}
+  try { sleeper.stop(); } catch {}
   killLocalNow();
   for (const m of ollamaUsed) { try { require('child_process').spawnSync(process.execPath, ['-e', `fetch(${JSON.stringify(OLLAMA + '/api/generate')},{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:${JSON.stringify(m)},keep_alive:0})}).catch(()=>{})`], { timeout: 3000 }); } catch {} }
   process.exit(code || 0);

@@ -1,6 +1,6 @@
 {
  "name": "pholama",
- "version": "0.9.3",
+ "version": "0.9.4",
  "description": "Pholama: run AI models on your own PC. CLI: pholama pull | chat | serve | rm | update.",
  "bin": {
   "pholama": "server/cli.js",

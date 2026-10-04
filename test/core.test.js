@@ -313,6 +313,50 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
     const { spawnSync } = require('child_process'); const e2e = spawnSync(process.execPath, [path.join(root, 'test', 'retry.e2e.js')], { encoding: 'utf8', timeout: 240000 });
     ok('retry: all 12 end-to-end scenarios pass against the real server', e2e.status === 0 && /all passed/.test(e2e.stdout || ''), (e2e.stdout || '').split('\n').filter(l => /FAIL/.test(l)).join(' | ') || e2e.stderr);
   }
+  // ---- same account on a PC: the browser never downloads a model ----
+  {
+    const pl = await import(require('url').pathToFileURL(path.join(root, 'web', 'pclink.js')).href);
+    ok('pclink: signed in + a PC on the account = browser download blocked', pl.downloadDecision({ signedIn: true, hasPc: true, value: 'web:Llama-3.2-1B' }).block === true);
+    ok('pclink: same for CPU models', pl.downloadDecision({ signedIn: true, hasPc: true, value: 'cpu:HuggingFaceTB/SmolLM2-135M-Instruct' }).block === true);
+    ok('pclink: not signed in = downloads work as before', pl.downloadDecision({ signedIn: false, hasPc: true, value: 'web:x' }).block === false);
+    ok('pclink: signed in but no PC on the account = downloads work', pl.downloadDecision({ signedIn: true, hasPc: false, value: 'web:x' }).block === false);
+    ok('pclink: offline / unknown never blocks chat', pl.downloadDecision({ signedIn: true, hasPc: null, value: 'web:x' }).block === false);
+    ok('pclink: PC and cloud models are never a browser download', pl.downloadDecision({ signedIn: true, hasPc: true, value: 'gguf:x' }).block === false && pl.downloadDecision({ signedIn: true, hasPc: true, value: 'cloud:x' }).block === false);
+    ok('pclink: the message tells the person what to do instead', /PC/.test(pl.downloadDecision({ signedIn: true, hasPc: true, value: 'web:x' }).why));
+    const mem = {}; const st = { getItem: k => mem[k] ?? null, setItem: (k, v) => { mem[k] = v; }, removeItem: k => { delete mem[k]; } };
+    pl.writeCached(st, 'u1', true, 1000);
+    ok('pclink: answer is remembered for the same user', pl.readCached(st, 'u1', 2000) === true);
+    ok('pclink: another account never reuses it', pl.readCached(st, 'u2', 2000) === null);
+    ok('pclink: the remembered answer expires', pl.readCached(st, 'u1', 1000 + 11 * 60 * 1000) === null);
+    ok('pclink: an unknown answer is never stored as false', (pl.writeCached(st, 'u3', null, 1000), pl.readCached(st, 'u3', 1500) === null));
+  }
+  // ---- one day idle: every local AI shuts down until `pholama awake` ----
+  {
+    const sl = require('../server/sleep'); let t = 1000, loaded = true, stopped = 0;
+    const s = sl.create({ now: () => t, limitMs: sl.DAY_MS, isLoaded: () => loaded, stopAll: async () => { stopped++; loaded = false; } });
+    ok('sleep: a chat or API call counts as use', sl.usesAi('POST', '/api/chat') && sl.usesAi('POST', '/v1/chat/completions') && sl.usesAi('POST', '/v1/embeddings') && sl.usesAi('POST', '/api/generate'));
+    ok('sleep: dashboard polling and lists do not count', !sl.usesAi('GET', '/api/hardware') && !sl.usesAi('GET', '/api/tags') && !sl.usesAi('GET', '/api/pull/status') && !sl.usesAi('GET', '/api/chat'));
+    t += sl.DAY_MS - 1000; ok('sleep: just under a day stays awake', (await s.check()) === false && !s.isAsleep());
+    s.touch('GET', '/api/hardware'); t += 2000;
+    ok('sleep: after a day it sleeps and stops every AI, even with a tab polling', (await s.check()) === true && s.isAsleep() && stopped === 1);
+    ok('sleep: asleep refuses AI work but allows passive calls', s.touch('POST', '/api/chat') === false && s.touch('GET', '/api/version') === true);
+    ok('sleep: wake works once', s.wake() === true && s.wake() === false && s.touch('POST', '/api/chat') === true);
+    loaded = true; t += 1000; s.touch('POST', '/api/chat'); t += sl.DAY_MS - 5;
+    ok('sleep: using it resets the clock', (await s.check()) === false);
+    loaded = false; t += sl.DAY_MS * 3; ok('sleep: nothing loaded means nothing to shut down', (await s.check()) === false && !s.isAsleep());
+  }
+  // ---- the watcher that frees RAM after a hard kill ----
+  {
+    const rp = require('../server/reaper'); const killed = []; const files = [];
+    const mk = (n, v) => { const f = path.join(require('os').tmpdir(), 'reap-' + process.pid + '-' + n); fs.writeFileSync(f, String(v)); files.push(f); return f; };
+    const n1 = rp.reapEngines([mk(1, 4242)], { exists: () => true, nameOf: () => 'llama-server', kill: p => killed.push(p) });
+    ok('reaper: stops an engine that is still a llama-server', n1 === 1 && killed[0] === 4242);
+    const n2 = rp.reapEngines([mk(2, 999)], { exists: () => true, nameOf: () => 'firefox', kill: p => killed.push(p) });
+    ok('reaper: never touches an unrelated program that reused the pid', n2 === 0 && !killed.includes(999));
+    ok('reaper: ignores a missing pid file', rp.reapEngines(['/nonexistent/x.pid'], { exists: () => true, nameOf: () => 'llama-server', kill: p => killed.push(p) }) === 0);
+    ok('reaper: recognises the engine name on every platform', rp.isEngine('llama-server') && rp.isEngine('"llama-server.exe","12","Console"') && rp.isEngine('x /home/u/.pholama/bin/llama-server') && !rp.isEngine('node'));
+    for (const f of files) { try { fs.unlinkSync(f); } catch {} }
+  }
   // ---- syntax of every file ----
   for (const f of fs.readdirSync(path.join(root, 'server'))) if (f.endsWith('.js')) { try { new (require('vm').Script)(fs.readFileSync(path.join(root, 'server', f), 'utf8').replace(/^#!.*/, '')); P++; } catch (e) { F++; console.log('FAIL syntax', f, e.message); } }
   await new Promise(r => setTimeout(r, 300)); console.log(`${P} passed, ${F} failed`); process.exit(F ? 1 : 0);

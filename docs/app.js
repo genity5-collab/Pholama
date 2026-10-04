@@ -14,6 +14,7 @@ import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pick
 import { READER } from './attach.js';
 import { initAttach, hasAttachments, attachedNames, clearAttachments, prepare } from './attachui.js';
 import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
+import { downloadDecision, readCached, writeCached } from './pclink.js';
 
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
@@ -199,7 +200,17 @@ async function refreshSelect() {
   paintSwitches(); paintEffort(); paintComposerPill();
 }
 
+// Same account on a PC: never download a model into this browser. Returns normally when allowed, throws a friendly error when not.
+async function mustNotDownload(value) {
+  if (!Account.user()) return;
+  if (value.startsWith('web:') && await cachedOnDevice(value.slice(4))) return;   // already on this device: nothing to download, keep it working
+  const uid = Account.user().id; let has = readCached(localStorage, uid);
+  if (has === null) { has = await Account.hasPc(); writeCached(localStorage, uid, has); }
+  const d = downloadDecision({ signedIn: true, hasPc: has, value });
+  if (d.block) throw new Error(d.why);
+}
 async function ensureEngine(value) {
+  await mustNotDownload(value);
   if (value.startsWith('cpu:')) return ensureCpu(value.slice(4));
   if (!value.startsWith('web:')) return;
   const id = value.slice(4);
@@ -232,6 +243,7 @@ function dropHelper() { helperPipe = null; helperId = null; }   // frees the hel
 let cpuPipe = null, cpuModel = null;
 async function ensureCpu(id, onProgress) {
   if (cpuPipe && cpuModel === id) return;
+  await mustNotDownload('cpu:' + id);
   const tf = await import('https://cdn.jsdelivr.net/npm/@huggingface/transformers@3');
   cpuPipe = await tf.pipeline('text-generation', id, { dtype: 'q4', progress_callback: p => { if (onProgress && p.progress != null) onProgress(p); } }).catch(async () =>
     tf.pipeline('text-generation', id, { dtype: 'q8', progress_callback: p => { if (onProgress && p.progress != null) onProgress(p); } }));
@@ -860,6 +872,7 @@ async function cachedOnDevice(id) { try { return await (await import(WEBLLM)).ha
 async function deleteFromDevice(id) { try { await (await import(WEBLLM)).deleteModelAllInfoInCache(id); } catch {} }
 const unmarkReady = id => localStorage.setItem('pholama.ready', JSON.stringify(saved().filter(x => x !== id)));
 async function ensureEngineWithBar(id, r) {
+  await mustNotDownload('web:' + id);
   r.bar.style.display = '';
   if (!hasGPU) throw new Error('No usable WebGPU in this browser');
   const webllm = await import('https://esm.run/@mlc-ai/web-llm');

@@ -207,6 +207,13 @@ async function cmdServe(name, args) {
   await new Promise(() => {});
 }
 
+async function cmdAwake() {
+  if (!(await up())) { console.log('Pholama is not running, so nothing is asleep. Start it with:  ' + cyan('pholama start')); return; }
+  let st = null; try { st = (await req('GET', '/api/sleep')).json; } catch {}
+  if (st && !st.asleep) { console.log(green('Pholama is already awake.') + ' (idle for ' + st.idleHours + ' h, it sleeps after ' + st.limitHours + ' h)'); return; }
+  try { const r = (await req('POST', '/api/awake')).json; console.log(r && r.woke ? green('Pholama is awake.') + ' Your AIs load again the next time you chat.' : green('Pholama is awake.')); }
+  catch (e) { console.error(red('Could not wake Pholama: ' + e.message)); process.exit(1); }
+}
 async function cmdStop() {
   if (!(await up())) return console.log('Pholama is not running.');
   try { await req('POST', '/api/shutdown'); } catch {}
@@ -229,6 +236,7 @@ ${bold('Pholama')}  AI models on your own PC
   ${cyan('pholama serve <model>')}   let this PC and your apps use the model at ${BASE}
   ${cyan('pholama rm <model>')}      remove the model and all its files and folders
   ${cyan('pholama update')}          get the newest Pholama without reinstalling
+  ${cyan('pholama awake')}           wake Pholama after it slept (it sleeps when no AI was used for a day, to free your memory)
   ${cyan('pholama stop')}            stop the background server
   ${cyan('pholama remove-all')}      remove Pholama, its models, folders, command and icons from this PC (asks first; --dry-run only lists)
   ${cyan('pholama web')}             open the chat page in your browser
@@ -257,6 +265,7 @@ async function cmdWeb() {
       case 'rm': case 'remove': case 'delete': return await cmdRm(arg);
       case 'serve': return await cmdServe(arg, rest);
       case 'stop': return await cmdStop();
+      case 'awake': case 'wake': case 'wakeup': return await cmdAwake();
       case 'update': case 'upgrade': return await cmdUpdate();
       case 'web': case 'open': return await cmdWeb();
       case 'start': await ensureServer(); console.log(green('Pholama is running at ') + cyan(BASE)); return;

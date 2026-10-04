@@ -1,6 +1,17 @@
 {
- "latest": "0.9.3",
+ "latest": "0.9.4",
  "releases": [
+  {
+   "version": "0.9.4",
+   "date": "2026-10-04",
+   "title": "Phone never downloads models if your PC is linked, and Pholama sleeps after a day",
+   "notes": [
+    "Signed in with an account that already has Pholama on a PC? The phone and the website no longer download any model. Chat goes through your PC. Models already on the device keep working, and if the app cannot tell (offline) it never blocks chat",
+    "After one day with nobody using an AI, Pholama shuts every local AI down so nothing sits in your memory. Run  pholama awake  to wake it. An open tab refreshing in the background does not count as use",
+    "Closing Pholama frees the memory every time, even when it is force-closed (End task) or crashes: a tiny watcher stops the AI engine. It never touches other programs, and never the engine of a restarted Pholama",
+    "New command: pholama awake"
+   ]
+  },
   {
    "version": "0.9.3",
    "date": "2026-10-04",

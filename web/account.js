@@ -120,6 +120,12 @@ export const Account = {
       return true;
     } catch { return false; }   // the table may not exist yet, or the network is down: never block login for this
   },
+  // Does this account have Pholama on a PC? true / false, or null when we could not find out (offline, table missing). Never throws.
+  async hasPc() {
+    const u = this.user(); if (!u || !session) return false;
+    try { const rows = await this.rest('pholama_logins?select=surface&surface=eq.pc&limit=1'); return Array.isArray(rows) && rows.length > 0; }
+    catch { return null; }
+  },
   // Tells the Platform which local models this person has on their PC. Names only, at most 12. Nothing else is sent.
   async reportRecentAis(names) {
     const u = this.user(); if (!u || !session) return false;
