@@ -56,6 +56,18 @@ input[type=text]:focus,input[type=password]:focus{border-color:var(--mut)}
 .tool{max-width:720px;margin:0 auto 10px;padding:7px 11px;border-left:3px solid var(--line);background:var(--card);border-radius:8px;font-size:13px;color:var(--mut);white-space:pre-wrap;word-break:break-word}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
+/* Platform polish: make the information site feel like the calm control room around the PC app. */
+body{background-image:radial-gradient(circle at 50% -18%,color-mix(in srgb,var(--acc) 10%,transparent),transparent 42%)}
+header{border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);backdrop-filter:blur(18px)}
+.brand{font-weight:750;letter-spacing:-.035em}.brand::before{width:32px;height:32px;border-radius:10px;box-shadow:0 0 0 1px var(--line),0 8px 24px var(--glow)}
+.viewsw{box-shadow:0 8px 24px rgba(0,0,0,.12)}
+#dash{padding-top:24px}.dwrap{max-width:1160px}.dhero h2{font-size:clamp(30px,5vw,48px);letter-spacing:-.055em;line-height:1.05}.dhero{padding:18px 0 10px}.dcard,.dpanel,.feature,.card-box{box-shadow:0 12px 30px rgba(0,0,0,.1)}
+#hero{margin-top:7vh;max-width:680px}#hero h1{font-size:clamp(28px,5vw,42px);line-height:1.08;letter-spacing:-.055em}#hero p{max-width:520px;margin-left:auto;margin-right:auto}
+.sunset,.aiwarn{border-radius:14px!important;box-shadow:0 8px 24px rgba(0,0,0,.1)}
+.composer{box-shadow:0 14px 40px rgba(0,0,0,.16)}
+@media(max-width:640px){#dash{padding:14px 10px 32px}.dhero{padding-top:8px}.dhero h2{font-size:32px}}
+
+
 /* Settings tabs & progress bars */
 .s-tabs{display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:4px;background:var(--card);border-radius:999px;margin-bottom:14px;max-width:100%}
 .s-tabs button{border:0;background:transparent;padding:6px 12px;font-size:13.5px;border-radius:999px;white-space:nowrap;min-height:36px;cursor:pointer;flex:0 0 auto}

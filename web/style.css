@@ -58,6 +58,20 @@ input[type=text]:focus,input[type=password]:focus{border-color:var(--mut)}
 .tool{max-width:720px;margin:0 auto 10px;padding:7px 11px;border-left:3px solid var(--line);background:var(--card);border-radius:8px;font-size:13px;color:var(--mut);white-space:pre-wrap;word-break:break-word}
 @media (prefers-reduced-motion:reduce){*{animation:none!important;transition:none!important}}
 
+/* Pholama studio polish: quiet chrome, clear state, and a stronger local-first identity. */
+:root{--studio:#0d1018;--studio-line:#293246;--studio-panel:#141a25}
+body{background-image:radial-gradient(circle at 50% -20%,color-mix(in srgb,var(--acc) 9%,transparent),transparent 38%)}
+header{border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);backdrop-filter:blur(18px)}
+.brand{font-weight:750;letter-spacing:-.035em}.brand::before{width:32px;height:32px;border-radius:10px;box-shadow:0 0 0 1px var(--line),0 8px 24px var(--glow)}
+.viewsw{box-shadow:0 8px 24px rgba(0,0,0,.12)}
+#hero{margin-top:7vh;max-width:680px}.hero-kicker{display:inline-flex;align-items:center;gap:7px;color:var(--ok);font-size:12px;font-weight:750;letter-spacing:.1em;text-transform:uppercase}.hero-kicker::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 12px currentColor}
+#hero h1{font-size:clamp(28px,5vw,42px);line-height:1.08;letter-spacing:-.055em}#hero p{max-width:520px;margin-left:auto;margin-right:auto}
+.composer{box-shadow:0 14px 40px rgba(0,0,0,.16)}
+#studio{max-width:1500px;width:100%;margin:0 auto;padding:12px 18px 18px;gap:12px}.st-bar{padding:10px 12px;border:1px solid var(--line);border-radius:14px;background:color-mix(in srgb,var(--card) 92%,transparent);box-shadow:0 12px 30px rgba(0,0,0,.12)}
+.st-main{gap:12px!important}.st-left,.st-right,.st-ai{border-color:var(--line)!important;border-radius:14px!important;box-shadow:0 10px 28px rgba(0,0,0,.12)}.st-left,.st-right{background:var(--studio-panel)!important}.st-tabs{background:var(--studio)!important}.st-tab.on{box-shadow:inset 0 -2px 0 var(--acc)!important}.st-code,.st-right iframe{border-radius:10px}.st-con,.st-ailog{background:var(--studio)!important;font-family:ui-monospace,SFMono-Regular,Menlo,monospace}.st-ai{background:var(--card)!important;padding:10px!important}.st-aibox{border:1px solid var(--line);border-radius:12px;padding:6px;background:var(--studio)}
+@media(max-width:760px){#studio{padding:8px}.st-main{grid-template-columns:1fr!important}.st-right{min-height:360px}.st-bar{overflow:auto}.st-bar select{min-width:150px}}
+
+
 /* Settings tabs & progress bars */
 .s-tabs{display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:4px;background:var(--card);border-radius:999px;margin-bottom:14px;max-width:100%}
 .s-tabs button{border:0;background:transparent;padding:6px 12px;font-size:13.5px;border-radius:999px;white-space:nowrap;min-height:36px;cursor:pointer;flex:0 0 auto}
