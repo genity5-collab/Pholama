@@ -12,7 +12,7 @@ const sec = require('./security');
 
 const PORT = +process.env.PORT || 11435;
 const HOST = process.env.HOST || '127.0.0.1'; // set HOST=0.0.0.0 to chat from your phone on same WiFi
-const providers = require('./providers'), maxcloud = require('./maxcloud'), mcp = require('./mcp');
+const providers = require('./providers'), maxcloud = require('./maxcloud');
 const OLLAMA = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const LLAMA_PORT = 11436;
 const { fitToContext, chooseContext } = require('./fit');
@@ -439,7 +439,7 @@ async function chat(req, res, b) {
       if (r0) {
         log('action', `Request looks like a job for ${r0.name}. Running it first.`);
         log('action', `${r0.name} ${JSON.stringify(r0.args)}`);
-        let result; try { result = String(await agent.runTool(tools, r0.name, r0.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
+        line({ toolStart: { name: r0.name, args: r0.args } }); let result; try { result = String(await agent.runTool(tools, r0.name, r0.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
         if (/^(web_search|fetch_page|github_|platform_)/.test(r0.name) && !/^Tool error/.test(result)) searchRan = true;
         if (r0.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
         log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
@@ -499,7 +499,7 @@ async function chat(req, res, b) {
       let plan = null, lu0 = null;
       try { lu0 = [...(b.messages || [])].reverse().find(m => m.role === 'user'); plan = agent.planGuidedEdit(stu.snapshot(b.studio.project), origUserText); } catch {}
       if (plan) {
-        log('step', 'Small change to ' + plan.file + ' (line ' + plan.lineNo + '). Asking the model for just the new line.');
+        log('step', 'Small change to ' + plan.file + ' (line ' + plan.lineNo + '). Asking the model for just the new line.'); line({ toolStart: { name: 'studio_patch', args: { file: plan.file } } });
         let got = ''; try { await streamTurn(model, [{ role: 'system', content: 'You edit one line of code. Reply with the single new line only. No explanation, no quotes, no code fence.' }, { role: 'user', content: plan.prompt }], { ...opts, temperature: 0.1, num_predict: 160 }, t => { got += t; }, ac.signal); } catch (e) { log('error', 'Guided edit asked the model but it failed (' + e.message + '). Using the normal way.'); }
         const nl = agent.cleanGuidedLine(got, plan.oldLine);
         if (nl) {
@@ -525,7 +525,7 @@ async function chat(req, res, b) {
         bp = agent.planGuidedBuild(cur, prevBuild, stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })), b.studio.project);
       } catch {}
       if (bp) {
-        log('step', 'Building in Studio: asking the model for the files directly.');
+        log('step', 'Building in Studio: asking the model for the files directly.'); line({ toolStart: { name: 'studio_write', args: { file: bp.file || '' } } });
         let got = '', tries = 0, written = [];
         while (tries < 3 && !written.length && !ac.signal.aborted) {
           tries++; got = '';
@@ -619,7 +619,7 @@ async function chat(req, res, b) {
       { const sig = call.name + JSON.stringify(call.args || {}); seenCalls[sig] = (seenCalls[sig] || 0) + 1;
         if (seenCalls[sig] >= 3) { log('error', 'The model repeated the same step 3 times, so I stopped it to save your time.'); line({ message: { content: '\n(I stopped because the AI kept repeating the same step. Try a bigger model, or ask for one smaller change.)' } }); break; } }
       log('action', `Model asked for ${call.name} ${JSON.stringify(call.args)}`);
-      let result; try { result = String(await agent.runTool(tools, call.name, call.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
+      line({ toolStart: { name: call.name, args: call.args } }); let result; try { result = String(await agent.runTool(tools, call.name, call.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
       if (/^(web_search|fetch_page|github_|platform_)/.test(call.name) && !/^Tool error/.test(result)) searchRan = true;
       if (call.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
       log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
@@ -703,16 +703,6 @@ async function listModels() {   // Ollama-compatible model list (ours + Ollama's
   return list;
 }
 
-// The only things an outside MCP client (ChatGPT) can reach. Fixed list, read-only, no caller-chosen tool names.
-const mcpDeps = {
-  version: () => '',
-  async news(limit) { const { tools } = await agent.buildTools({ platform: true }); return agent.runTool(tools, 'platform_updates', { limit }, { sources: agent.sources.makeCollector(4) }); },
-  async search(query) { const { tools } = await agent.buildTools({ search: true }); return agent.runTool(tools, 'web_search', { query }, { sources: agent.sources.makeCollector(8) }); },
-  async models() { const l = await listModels(); return l.length ? l.map(m => { const c = CATALOG.find(x => 'gguf:' + x.id === m.name); return (m.label || m.name.replace(/^(gguf|ollama):/, '')) + (c && c.toolTier ? ' (tools: ' + c.toolTier + ')' : ''); }).join('\n') : 'No models installed yet.'; },
-  async credits() { const c = agent.credits(); return c.left + ' credits left today (of ' + c.daily + ').'; },
-};
-mcpDeps.version = VERSION_FOR_MCP;
-function VERSION_FOR_MCP() { try { return require('../package.json').version; } catch { return '0'; } }
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname;
   res.cors = sec.corsHeaders(req);
@@ -720,20 +710,6 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, res.cors); return res.end(); }
   if (sec.originBlocked(req)) return json(res, 403, { error: 'This website is not allowed to use this Pholama host.' });   // other sites can never drive your PC
   try {
-    if (p === '/mcp') {
-      if (!mcp.isOn()) return json(res, 404, { error: 'The ChatGPT connection is switched off. Turn it on in Pholama on the PC: Settings > Connect ChatGPT.' });
-      const a = sec.authorizeKeyOnly(req); if (!a.ok) return json(res, a.status, { error: a.error, hint: a.hint });   // a key is ALWAYS needed here, even from this PC: a tunnel makes outside requests look local
-      if (req.method !== 'POST') { res.writeHead(405, { Allow: 'POST', 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Use POST.' })); }
-      let raw = ''; try { raw = await rawBody(req, mcp.MAX_BODY); } catch { return json(res, 413, { error: 'Too large' }); }
-      const r = await mcp.handleBody(raw, { ...mcpDeps, version: VERSION_FOR_MCP() });
-      if (r.body === null) { res.writeHead(r.status, res.cors); return res.end(); }
-      return json(res, r.status, r.body);
-    }
-    if (p === '/api/mcp-server') {   // on/off switch: this PC only (the /api/ rule below already blocks remote keys from it)
-      const a = sec.authorize(req); if (!a.ok || a.who !== 'local') return json(res, 403, { error: 'This can only be done on the PC itself.' });
-      if (req.method === 'GET') return json(res, 200, { on: mcp.isOn(), tools: mcp.TOOLS.map(t => ({ name: t.name, description: t.description })) });
-      if (req.method === 'POST') { const b = await body(req); return json(res, 200, { on: mcp.setOn(b.on === true) }); }
-    }
     if (p === '/api/auth') return json(res, 200, { required: !sec.isLoopback(req), local: sec.isLoopback(req), keys: sec.isLoopback(req) ? sec.keyCount() : undefined });   // public: lets the page know if it needs a key
     if (p.startsWith('/api/') || p.startsWith('/v1/')) {
       const a = sec.authorize(req);

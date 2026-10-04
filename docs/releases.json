@@ -1,6 +1,30 @@
 {
- "latest": "0.9.16",
+ "latest": "0.9.14",
  "releases": [
+  {
+   "version": "0.9.14",
+   "date": "2026-10-04",
+   "title": "Studio shows the AI editing live",
+   "notes": [
+    "New Studio animation. While the AI works, the editor glows with a sweeping light and a pill at the bottom says what it is doing: Editing index.html, Reading, Checking the code for mistakes",
+    "When the change lands, the lines that are new or changed flash green and fade, the editor scrolls to the first change, the file's tab pulses, and the preview glows as it reloads",
+    "Only real changes light up. Adding one line at the top does not light up the whole file",
+    "It never gets in your way: you can keep clicking and typing while it plays, and it switches itself off if your system is set to reduce motion (the status pill still shows)",
+    "Works in both the light and dark theme"
+   ]
+  },
+  {
+   "version": "0.9.13",
+   "date": "2026-10-04",
+   "title": "Studio readable again, website downloads ended, Connect ChatGPT removed",
+   "notes": [
+    "Studio on the PC is readable again. The last fix forced white text onto a light background, so parts of Studio were invisible. Studio now uses the normal light or dark theme colours, and every panel was measured in both themes",
+    "Model downloads from the website have ended. The website no longer downloads models to your phone or browser. Chat there uses the cloud assistant. Models on your own computer come from the PC app",
+    "Mobile support has fully ended",
+    "Removed the Connect ChatGPT card and the ChatGPT connection it switched on, so your PC no longer has that door. Using your own ChatGPT, Gemini or Groq key inside Pholama is not affected",
+    "Removed the credit line at the bottom of the website"
+   ]
+  },
   {
    "version": "0.9.16",
    "date": "2026-10-04",

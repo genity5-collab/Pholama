@@ -58,7 +58,7 @@ function checkKey(key) {
 function authorizeKeyOnly(req) {
   const a = addr(req);
   if (blocked(a)) return { ok: false, status: 429, error: 'Too many wrong keys. Try again in a few minutes.' };
-  if (!keyCount()) return { ok: false, status: 401, error: 'unauthorized', hint: 'Create a key first: on the PC, open Settings > Connect ChatGPT.' };
+  if (!keyCount()) return { ok: false, status: 401, error: 'unauthorized', hint: 'Create a key first: on the PC, open Settings > Remote.' };
   const given = getKey(req);
   if (!given) return { ok: false, status: 401, error: 'unauthorized' };
   const k = checkKey(given);

@@ -2,6 +2,7 @@
 // Anti-lag rules: typing is debounced, the preview only reloads when something changed, the console is capped,
 // and the preview runs in a sandboxed iframe that cannot reach Pholama's storage, keys or account.
 import { sourcesCard } from './sources.js';
+import { createFx, toolStatus } from './studiofx.js';
 
 export const PREVIEW_DELAY = 300, SAVE_DELAY = 600, MAX_CONSOLE = 200, MAX_LINE = 400;
 
@@ -77,6 +78,8 @@ export function createStudio(env) {
     <div class="st-aibox"><textarea id="stAsk" rows="2" placeholder="Ask the AI to build, fix or explain anything..."></textarea><button id="stSend" class="p">Send</button></div>
   </div>`;
   for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stPublish', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stSend']) el[id] = mount.querySelector('#' + id);
+  const fx = createFx({ host: el.stCode.parentElement, code: el.stCode, tabs: el.stTabs, frame: el.stFrame });   // the 'AI is editing' animation
+  let fxOpen = 0, fxShow = false;   // fxShow stays true through the last refresh after a run, so the final change still flashes
 
   const say = (txt, cls = '') => { const d = document.createElement('div'); d.className = 'st-msg ' + cls; d.textContent = txt; el.stAiLog.appendChild(d); while (el.stAiLog.childElementCount > 150) el.stAiLog.firstChild.remove(); el.stAiLog.scrollTop = 1e9; return d; };
   const con = (kind, text) => { if (S.log.length >= MAX_CONSOLE) { if (S.log.length === MAX_CONSOLE) { S.log.push({ kind: 'warn', text: 'Too much output. Further lines are hidden. Press Clear.' }); paintConLine(S.log[S.log.length - 1]); } return; } S.log.push({ kind, text }); paintConLine({ kind, text }); };
@@ -138,9 +141,9 @@ export function createStudio(env) {
       const typing = document.activeElement === el.stCode, keep = S.current, pos = typing ? [el.stCode.selectionStart, el.stCode.selectionEnd] : null;
       const m = mergeIncoming(S.files, j.files, S.dirty); S.files = m.files;
       if (!S.files.some(f => f.name === S.current)) S.current = (S.files.find(f => f.name === 'index.html') || S.files[0] || {}).name || null;
-      paintTabs(); const f = S.files.find(x => x.name === S.current);
-      if (f && el.stCode.value !== f.content && !S.dirty.has(f.name)) { el.stCode.value = f.content; if (pos && keep === S.current) el.stCode.setSelectionRange(Math.min(pos[0], f.content.length), Math.min(pos[1], f.content.length)); }
-      renderPreview(false);
+      paintTabs(); fx.restoreTabs(); const f = S.files.find(x => x.name === S.current);
+      if (f && el.stCode.value !== f.content && !S.dirty.has(f.name)) { const before = el.stCode.value, fresh = keep === S.current && !typing; el.stCode.value = f.content; if (fresh && (S.busy || fxShow)) { fx.landed(before, f.content); fx.pulseTab(f.name); } if (pos && keep === S.current) el.stCode.setSelectionRange(Math.min(pos[0], f.content.length), Math.min(pos[1], f.content.length)); }
+      renderPreview(false); if (S.busy || fxShow) fx.pulsePreview();
       if (m.conflicts.length) say('The AI also changed ' + m.conflicts.join(', ') + ' but you have unsaved edits there, so your version was kept.', 'warn');
     } catch (e) { say('Could not refresh: ' + e.message, 'err'); }
   }
@@ -176,7 +179,8 @@ export function createStudio(env) {
           if (j.error) throw new Error(j.error);
           if (j.log && j.log.kind === 'thought') { if (!thinkNode) thinkNode = say(j.log.text, 'think'); else thinkNode.textContent = j.log.text; }   // live: one line that updates while the model thinks
           else if (j.log && (j.log.kind === 'action' || j.log.kind === 'error')) { thinkNode = null; say(j.log.text, j.log.kind === 'error' ? 'err' : 'act'); }
-          else if (j.tool) { thinkNode = null; say(toolLine(j.tool), 'tool'); }
+          else if (j.toolStart) { fxOpen++; fx.working(toolStatus(j.toolStart)); }   // the AI just started a tool: light up the editor and name the file
+          else if (j.tool) { thinkNode = null; say(toolLine(j.tool), 'tool'); if (fxOpen > 0) { fxOpen--; fx.idle(); } }   // it finished: the strip fades, the changed lines flash when they arrive
           else if (j.sources) { if (!srcCard) { srcCard = sourcesCard([]); el.stAiLog.appendChild(srcCard.el); } srcCard.update(j.sources); el.stAiLog.scrollTop = 1e9; }
           else if (j.studio) refreshSoon();
           else if (j.approve) approve(j.approve);
@@ -187,7 +191,7 @@ export function createStudio(env) {
       const kept = reply.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/<\/?think>/g, '').trim();
       if (kept) hist.push({ role: 'assistant', content: kept.slice(0, 1200) }); else hist.pop();
     } catch (e) { if (e.name !== 'AbortError') say(e.message || 'Something went wrong.', 'err'); else say('Stopped.', 'warn'); }
-    finally { S.busy = false; S.stopper = null; el.stSend.textContent = 'Send'; await refreshFromServer(); }
+    finally { while (fxOpen > 0) { fxOpen--; fx.idle(); } S.busy = false; S.stopper = null; el.stSend.textContent = 'Send'; fxShow = true; try { await refreshFromServer(); } finally { fxShow = false; } }
   }
   const toolLine = t => { const a = t.args || {}; const f = a.file ? ' ' + a.file : ''; return (t.name || 'tool').replace(/^studio_/, '').replace(/_/g, ' ') + f + (t.result ? ': ' + String(t.result).split('\n')[0].slice(0, 100) : ''); };
   el.stSend.onclick = () => { if (S.busy) { if (S.stopper) S.stopper(); } else { const t = el.stAsk.value; el.stAsk.value = ''; ask(t); } };

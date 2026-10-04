@@ -16,7 +16,6 @@ import { loadReader, readerLoaded } from './reader.js';
 import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
 import { READER } from './attach.js';
 import { buildKeysPanel, friendlyModelName } from './keys.js';
-import { buildChatGptCard } from './chatgpt.js';
 import { initAttach, hasAttachments, attachedNames, clearAttachments, prepare } from './attachui.js';
 
 const $ = s => document.querySelector(s);
@@ -211,7 +210,7 @@ async function init() {
 
 async function refreshSelect() {
   sel.innerHTML = '';
-  for (const id of saved()) {
+  for (const id of (server ? saved() : [])) {   // website: phone/browser models are gone, only the cloud assistant is offered
     const m = catalog.browser.find(x => x.id === id || x.fallback === id); if (m) sel.add(new Option('📱 ' + m.name, 'web:' + id));
     const c = (catalog.cpu || []).find(x => 'cpu:' + x.id === id); if (c) sel.add(new Option('📱 ' + c.name, id));
   }
@@ -227,7 +226,9 @@ async function refreshSelect() {
 
 
 // Same account on a PC: never download a model into this browser. Returns normally when allowed, throws a friendly error when not.
+const SITE_NO_DL = 'Downloading models from the website has ended. Use the cloud assistant here, or get the Pholama PC app to run models on your computer.';
 async function mustNotDownload(value) {
+  if (!server) throw new Error(SITE_NO_DL);   // the website never downloads a model into the browser (phones included)
   if (!Account.user()) return;
   if (value.startsWith('web:') && await cachedOnDevice(value.slice(4))) return;   // already on this device: nothing to download, keep it working
   const uid = Account.user().id; let has = readCached(localStorage, uid);
@@ -766,7 +767,12 @@ function render() {
   $('#tBrowser').classList.toggle('on', tab === 'browser'); $('#tLocal').classList.toggle('on', tab === 'local');
   listEl.innerHTML = '';
   paintDuoBar();
-  if (server && !remoteBase()) { buildKeysPanel({ api, parent: listEl, onChange: () => { refreshSelect(); } }); buildChatGptCard({ api, parent: listEl }); }
+  if (server && !remoteBase()) { buildKeysPanel({ api, parent: listEl, onChange: () => { refreshSelect(); } }); }
+  if (tab === 'browser' && !server) {
+    const n = document.createElement('div'); n.className = 'sys'; n.style.cssText = 'text-align:left;line-height:1.5;padding:6px 2px';
+    n.innerHTML = '<b>Model downloads on the website have ended.</b><br>Mobile support has fully ended, so the website no longer downloads models to your phone or browser. Chat here uses the cloud assistant. To run models on your own computer, get the Pholama PC app.';
+    listEl.appendChild(n); return;
+  }
   if (tab === 'browser') {
     const ram = deviceRam(), gpu = hasGPU;
     $('#hw').textContent = gpu

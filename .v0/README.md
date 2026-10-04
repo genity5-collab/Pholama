@@ -30,3 +30,12 @@ This file is written for v0. It is a normal file in the repo, so anyone who can 
 2. Run `node scripts/sync-site.js` so `docs/` matches `web/`.
 3. Do not commit tokens, keys or passwords. The user's provider keys live in `~/.pholama` and never belong in the repo.
 4. The sandbox rules are kept: the file tools must not read outside the active workspace.
+
+## Changes in 0.9.13 and 0.9.14. Please keep these
+
+- **Studio colours** are ONE block at the end of `web/style.css` ("Studio: one readable layout for light AND dark"). It uses only theme variables (`--card`, `--fg`, `--line`...). The earlier layers with fixed greys and white text were removed because they made the light theme unreadable (white text on a near-white panel). Do not add fixed colours back. Measure contrast in BOTH themes before you push a Studio colour change.
+- **The website no longer downloads models.** `mustNotDownload()` in `web/app.js` refuses every browser and CPU download when there is no PC server. Mobile support is fully ended. Chat on the site is the cloud assistant only.
+- **"Connect ChatGPT" was deleted on purpose** (the card, the `/mcp` door and its switch). Bring-your-own-key for ChatGPT, Gemini and Groq (`server/providers.js`, `web/keys.js`) is a different feature and stays.
+- **No "built with v0" credit line** on the website. Do not add one back.
+- **Studio animation**: `web/studiofx.js` (logic and drawing), styles at the end of `web/style.css` (`.stfx-*`), wiring in `web/studio.js`. The server sends `{ toolStart }` before each Studio tool runs (4 places in `server/server.js`), and the existing `{ tool }` line after it. The last change of a run must still flash, so `fxShow` stays on through the final refresh. The tab bar is repainted often, so `restoreTabs()` puts a running pulse back. Tests: `test/studiofx.test.js`.
+- **Icons**: your mascot SVG (`web/icon.svg`, identical in `docs/`) is the single source. The PNGs must be REAL sizes: `icon-192.png` 192x192 (about 6 KB), `icon-512.png` 512x512 (about 18 KB), `icon-maskable-512.png` 512x512, and `install/pholama.ico` with 16 to 256. Commit `dc6487a` put 1024x1024 pictures under the 192 and 512 names (156 KB and 663 KB), which phones ignore and which slow the first load. Export with `rsvg-convert -w SIZE web/icon.svg -o out.png`. `test/update.e2e.js` fails if `icon-192.png` is over 30 KB.
