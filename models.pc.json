@@ -19,7 +19,8 @@
    "chat",
    "fast"
   ],
-  "command": "pholama pull smollm2-135m"
+  "command": "pholama pull smollm2-135m",
+  "toolTier": "none"
  },
  {
   "id": "smollm2-360m",
@@ -41,7 +42,8 @@
    "chat",
    "fast"
   ],
-  "command": "pholama pull smollm2-360m"
+  "command": "pholama pull smollm2-360m",
+  "toolTier": "none"
  },
  {
   "id": "qwen2.5-0.5b",
@@ -63,7 +65,8 @@
    "chat",
    "fast"
   ],
-  "command": "pholama pull qwen2.5-0.5b"
+  "command": "pholama pull qwen2.5-0.5b",
+  "toolTier": "none"
  },
  {
   "id": "qwen2.5-coder-0.5b",
@@ -86,7 +89,8 @@
    "fast",
    "code"
   ],
-  "command": "pholama pull qwen2.5-coder-0.5b"
+  "command": "pholama pull qwen2.5-coder-0.5b",
+  "toolTier": "none"
  },
  {
   "id": "qwen3-0.6b",
@@ -104,13 +108,13 @@
   "license": "Apache-2.0",
   "caps": [
    "chat",
-   "tools",
    "fast"
   ],
   "command": "pholama pull qwen3-0.6b",
   "bytes": 396705472,
   "sizeGB": 0.37,
-  "minRamGB": 2
+  "minRamGB": 2,
+  "toolTier": "basic"
  },
  {
   "id": "gemma3-1b",
@@ -132,7 +136,8 @@
   "command": "pholama pull gemma3-1b",
   "bytes": 806058272,
   "sizeGB": 0.75,
-  "minRamGB": 3
+  "minRamGB": 3,
+  "toolTier": "none"
  },
  {
   "id": "llama3.2-1b",
@@ -154,7 +159,8 @@
    "chat",
    "fast"
   ],
-  "command": "pholama pull llama3.2-1b"
+  "command": "pholama pull llama3.2-1b",
+  "toolTier": "none"
  },
  {
   "id": "granite3-1b",
@@ -176,7 +182,8 @@
    "chat",
    "fast"
   ],
-  "command": "pholama pull granite3-1b"
+  "command": "pholama pull granite3-1b",
+  "toolTier": "none"
  },
  {
   "id": "smollm2-1.7b",
@@ -198,7 +205,8 @@
    "chat",
    "fast"
   ],
-  "command": "pholama pull smollm2-1.7b"
+  "command": "pholama pull smollm2-1.7b",
+  "toolTier": "none"
  },
  {
   "id": "qwen3-1.7b",
@@ -223,7 +231,8 @@
   "command": "pholama pull qwen3-1.7b",
   "bytes": 1107409472,
   "sizeGB": 1.03,
-  "minRamGB": 3
+  "minRamGB": 3,
+  "toolTier": "none"
  },
  {
   "id": "qwen2.5-1.5b",
@@ -237,18 +246,17 @@
   "minRamGB": 3,
   "ctx": 8192,
   "categories": [
-   "tools",
    "fast"
   ],
   "blurb": "Recommended. The smallest model that runs tools well: calculator, time, web search and page reading. Only 1 GB, so it fits most PCs.",
   "license": "Apache-2.0",
   "caps": [
    "chat",
-   "tools",
    "fast"
   ],
   "command": "pholama pull qwen2.5-1.5b",
-  "recommended": true
+  "recommended": true,
+  "toolTier": "basic"
  },
  {
   "id": "qwen2.5-coder-1.5b",
@@ -271,7 +279,8 @@
    "fast",
    "code"
   ],
-  "command": "pholama pull qwen2.5-coder-1.5b"
+  "command": "pholama pull qwen2.5-coder-1.5b",
+  "toolTier": "none"
  },
  {
   "id": "deepseek-r1-1.5b",
@@ -296,7 +305,8 @@
    "fast",
    "thinking"
   ],
-  "command": "pholama pull deepseek-r1-1.5b"
+  "command": "pholama pull deepseek-r1-1.5b",
+  "toolTier": "none"
  },
  {
   "id": "codegemma-2b",
@@ -319,7 +329,8 @@
   "command": "pholama pull codegemma-2b",
   "bytes": 1630262400,
   "sizeGB": 1.52,
-  "minRamGB": 4
+  "minRamGB": 4,
+  "toolTier": "none"
  },
  {
   "id": "gemma2-2b",
@@ -341,7 +352,8 @@
    "chat",
    "fast"
   ],
-  "command": "pholama pull gemma2-2b"
+  "command": "pholama pull gemma2-2b",
+  "toolTier": "none"
  },
  {
   "id": "smollm3-3b",
@@ -363,7 +375,8 @@
   "command": "pholama pull smollm3-3b",
   "bytes": 1915306528,
   "sizeGB": 1.78,
-  "minRamGB": 4
+  "minRamGB": 4,
+  "toolTier": "none"
  },
  {
   "id": "llama3.2-3b",
@@ -387,7 +400,8 @@
    "tools",
    "fast"
   ],
-  "command": "pholama pull llama3.2-3b"
+  "command": "pholama pull llama3.2-3b",
+  "toolTier": "good"
  },
  {
   "id": "qwen2.5-3b",
@@ -411,7 +425,8 @@
    "tools",
    "fast"
   ],
-  "command": "pholama pull qwen2.5-3b"
+  "command": "pholama pull qwen2.5-3b",
+  "toolTier": "good"
  },
  {
   "id": "granite4.2-3b",
@@ -435,7 +450,8 @@
   "command": "pholama pull granite4.2-3b",
   "bytes": 2317126048,
   "sizeGB": 2.16,
-  "minRamGB": 5
+  "minRamGB": 5,
+  "toolTier": "good"
  },
  {
   "id": "phi3.5-mini",
@@ -457,7 +473,8 @@
    "chat",
    "fast"
   ],
-  "command": "pholama pull phi3.5-mini"
+  "command": "pholama pull phi3.5-mini",
+  "toolTier": "none"
  },
  {
   "id": "gemma3-4b",
@@ -479,7 +496,8 @@
   "command": "pholama pull gemma3-4b",
   "bytes": 2489894016,
   "sizeGB": 2.32,
-  "minRamGB": 5
+  "minRamGB": 5,
+  "toolTier": "none"
  },
  {
   "id": "phi4-mini",
@@ -503,7 +521,8 @@
   "command": "pholama pull phi4-mini",
   "bytes": 2491874272,
   "sizeGB": 2.32,
-  "minRamGB": 5
+  "minRamGB": 5,
+  "toolTier": "good"
  },
  {
   "id": "mistral-7b",
@@ -525,7 +544,8 @@
    "chat",
    "tools"
   ],
-  "command": "pholama pull mistral-7b"
+  "command": "pholama pull mistral-7b",
+  "toolTier": "good"
  },
  {
   "id": "olmo2-7b",
@@ -544,7 +564,8 @@
   "command": "pholama pull olmo2-7b",
   "bytes": 4472020544,
   "sizeGB": 4.16,
-  "minRamGB": 7
+  "minRamGB": 7,
+  "toolTier": "none"
  },
  {
   "id": "deepseek-r1-7b",
@@ -567,7 +588,8 @@
    "reasoning",
    "thinking"
   ],
-  "command": "pholama pull deepseek-r1-7b"
+  "command": "pholama pull deepseek-r1-7b",
+  "toolTier": "none"
  },
  {
   "id": "qwen2.5-7b",
@@ -589,7 +611,8 @@
    "chat",
    "tools"
   ],
-  "command": "pholama pull qwen2.5-7b"
+  "command": "pholama pull qwen2.5-7b",
+  "toolTier": "good"
  },
  {
   "id": "qwen2.5-coder-7b",
@@ -609,7 +632,8 @@
    "chat",
    "code"
   ],
-  "command": "pholama pull qwen2.5-coder-7b"
+  "command": "pholama pull qwen2.5-coder-7b",
+  "toolTier": "none"
  },
  {
   "id": "internlm2.5-7b",
@@ -628,7 +652,8 @@
   "command": "pholama pull internlm2.5-7b",
   "bytes": 4712768640,
   "sizeGB": 4.39,
-  "minRamGB": 8
+  "minRamGB": 8,
+  "toolTier": "none"
  },
  {
   "id": "exaone3.5-7.8b",
@@ -647,7 +672,8 @@
   "command": "pholama pull exaone3.5-7.8b",
   "bytes": 4770650304,
   "sizeGB": 4.44,
-  "minRamGB": 8
+  "minRamGB": 8,
+  "toolTier": "none"
  },
  {
   "id": "ministral-8b",
@@ -669,7 +695,8 @@
   "command": "pholama pull ministral-8b",
   "bytes": 4911500096,
   "sizeGB": 4.57,
-  "minRamGB": 8
+  "minRamGB": 8,
+  "toolTier": "good"
  },
  {
   "id": "hermes3-8b",
@@ -691,7 +718,8 @@
   "command": "pholama pull hermes3-8b",
   "bytes": 4920734624,
   "sizeGB": 4.58,
-  "minRamGB": 8
+  "minRamGB": 8,
+  "toolTier": "good"
  },
  {
   "id": "deepseek-r1-8b",
@@ -714,7 +742,8 @@
    "reasoning",
    "thinking"
   ],
-  "command": "pholama pull deepseek-r1-8b"
+  "command": "pholama pull deepseek-r1-8b",
+  "toolTier": "none"
  },
  {
   "id": "llama3.1-8b",
@@ -736,7 +765,8 @@
    "chat",
    "tools"
   ],
-  "command": "pholama pull llama3.1-8b"
+  "command": "pholama pull llama3.1-8b",
+  "toolTier": "good"
  },
  {
   "id": "granite3-8b",
@@ -758,7 +788,8 @@
    "chat",
    "tools"
   ],
-  "command": "pholama pull granite3-8b"
+  "command": "pholama pull granite3-8b",
+  "toolTier": "good"
  },
  {
   "id": "granite3.1-8b",
@@ -780,7 +811,8 @@
   "command": "pholama pull granite3.1-8b",
   "bytes": 4942858720,
   "sizeGB": 4.6,
-  "minRamGB": 8
+  "minRamGB": 8,
+  "toolTier": "good"
  },
  {
   "id": "qwen3-8b",
@@ -805,7 +837,8 @@
   "command": "pholama pull qwen3-8b",
   "bytes": 5027783488,
   "sizeGB": 4.68,
-  "minRamGB": 8
+  "minRamGB": 8,
+  "toolTier": "good"
  },
  {
   "id": "yi1.5-9b",
@@ -824,7 +857,8 @@
   "command": "pholama pull yi1.5-9b",
   "bytes": 5328957952,
   "sizeGB": 4.96,
-  "minRamGB": 8
+  "minRamGB": 8,
+  "toolTier": "none"
  },
  {
   "id": "gemma2-9b",
@@ -843,7 +877,8 @@
   "caps": [
    "chat"
   ],
-  "command": "pholama pull gemma2-9b"
+  "command": "pholama pull gemma2-9b",
+  "toolTier": "none"
  },
  {
   "id": "gemma3-12b",
@@ -865,7 +900,8 @@
   "command": "pholama pull gemma3-12b",
   "bytes": 7300778336,
   "sizeGB": 6.8,
-  "minRamGB": 11
+  "minRamGB": 11,
+  "toolTier": "none"
  },
  {
   "id": "mistral-nemo-12b",
@@ -889,7 +925,8 @@
    "tools",
    "slow"
   ],
-  "command": "pholama pull mistral-nemo-12b"
+  "command": "pholama pull mistral-nemo-12b",
+  "toolTier": "good"
  },
  {
   "id": "deepseek-r1-14b",
@@ -914,7 +951,8 @@
    "slow",
    "thinking"
   ],
-  "command": "pholama pull deepseek-r1-14b"
+  "command": "pholama pull deepseek-r1-14b",
+  "toolTier": "none"
  },
  {
   "id": "qwen2.5-14b",
@@ -938,7 +976,8 @@
    "tools",
    "slow"
   ],
-  "command": "pholama pull qwen2.5-14b"
+  "command": "pholama pull qwen2.5-14b",
+  "toolTier": "good"
  },
  {
   "id": "qwen2.5-coder-14b",
@@ -961,7 +1000,8 @@
    "slow",
    "code"
   ],
-  "command": "pholama pull qwen2.5-coder-14b"
+  "command": "pholama pull qwen2.5-coder-14b",
+  "toolTier": "none"
  },
  {
   "id": "phi4-14b",
@@ -983,7 +1023,8 @@
    "chat",
    "slow"
   ],
-  "command": "pholama pull phi4-14b"
+  "command": "pholama pull phi4-14b",
+  "toolTier": "none"
  },
  {
   "id": "gpt-oss-20b",
@@ -1010,7 +1051,8 @@
   "command": "pholama pull gpt-oss-20b",
   "bytes": 11624759488,
   "sizeGB": 10.83,
-  "minRamGB": 16
+  "minRamGB": 16,
+  "toolTier": "good"
  },
  {
   "id": "deepseek-r1-32b",
@@ -1035,7 +1077,8 @@
    "slow",
    "thinking"
   ],
-  "command": "pholama pull deepseek-r1-32b"
+  "command": "pholama pull deepseek-r1-32b",
+  "toolTier": "none"
  },
  {
   "id": "qwen2.5-coder-32b",
@@ -1058,7 +1101,8 @@
    "slow",
    "code"
   ],
-  "command": "pholama pull qwen2.5-coder-32b"
+  "command": "pholama pull qwen2.5-coder-32b",
+  "toolTier": "none"
  },
  {
   "id": "mistral-small-24b",
@@ -1082,7 +1126,8 @@
   "command": "pholama pull mistral-small-24b",
   "bytes": 14333910496,
   "sizeGB": 13.35,
-  "minRamGB": 19
+  "minRamGB": 19,
+  "toolTier": "good"
  },
  {
   "id": "tinyllama-1.1b",
@@ -1104,7 +1149,8 @@
    "fast"
   ],
   "sizeGB": 0.62,
-  "command": "pholama pull tinyllama-1.1b"
+  "command": "pholama pull tinyllama-1.1b",
+  "toolTier": "none"
  },
  {
   "id": "qwen2-1.5b",
@@ -1126,7 +1172,8 @@
    "fast"
   ],
   "sizeGB": 0.92,
-  "command": "pholama pull qwen2-1.5b"
+  "command": "pholama pull qwen2-1.5b",
+  "toolTier": "none"
  },
  {
   "id": "stablelm-zephyr-1.6b",
@@ -1148,6 +1195,7 @@
    "fast"
   ],
   "sizeGB": 0.96,
-  "command": "pholama pull stablelm-zephyr-1.6b"
+  "command": "pholama pull stablelm-zephyr-1.6b",
+  "toolTier": "none"
  }
 ]

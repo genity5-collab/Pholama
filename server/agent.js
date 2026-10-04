@@ -11,6 +11,7 @@ const DAILY = +process.env.PHOLAMA_DAILY_CREDITS || 1000;
 const COST = { search: 0, fetch: 0, calc: 0, time: 0, mcp: 0, thinking: 25, memory: 0, ghread: 0, ghwrite: 0, cmd: 0, studio: 0 };
 const github = require('./github');
 const studio = require('./studio');
+const tools2 = require('./tools2');
 const sources = require('./sources');
 const power = require('./power');
 
@@ -158,6 +159,8 @@ function allowed() {
      github: s.prefs.github, search: s.prefs.search, tools: s.prefs.tools, mcp: s.prefs.mcp && s.mcp.length > 0, thinking: ok && s.prefs.thinking, prefs: s.prefs, credits: ok };   // tools are free; only thinking needs credits
 }
 
+let agentTier = 'basic';   // set per request by the server: 'good' models get the fuller tool instructions
+function setTier(t) { agentTier = t === 'good' ? 'good' : 'basic'; }
 function systemPrompt(tools, thinking, memories, effort) {
   // Rules for this prompt: short, no talk ABOUT itself, the user's own message comes first.
   // The model is told the instructions are private and must never be quoted, summarised, or referred to.
@@ -181,6 +184,14 @@ function systemPrompt(tools, thinking, memories, effort) {
     const list = tools.map(t => `- ${t.name}: ${t.desc}`).join('\n');
     p += `\n[private tool access]\nIf (and only if) the user's message needs fresh facts, exact math or the date, reply with ONLY one line: <tool>{"name":"TOOL_NAME","args":{...}}</tool>\nYou will get the result, then answer normally without mentioning the tool call or how you got it. Otherwise just answer; never use a tool for small talk, opinions or things you know. Never invent a tool result.\n${list}\n` +
     `Examples (follow the pattern, never repeat them):\nUser: what is 12*13?\nAssistant: <tool>{"name":"calculator","args":{"expression":"12*13"}}</tool>\nUser: what day is it?\nAssistant: <tool>{"name":"current_time","args":{}}</tool>\nUser: hi\nAssistant: Hi! How can I help?\n`;
+  }
+  if (tools.length && agentTier === 'good') {   // a model that can really use tools gets the fuller, Qwen/Hermes-style instructions
+    const names = tools.map(t => t.name);
+    p += '\n[how to work]\nYou may call ONE tool per turn. To call it, write exactly: <tool_call>{"name": "TOOL_NAME", "arguments": {...}}</tool_call> and stop. You will get the result, then continue. Call another tool if the task needs more steps, and answer in plain words when it is done.\n' +
+      'Work in steps: look first, then change, then check. Never guess a file\'s content: list_files and read_file first. After write_file or edit_file, read the file again to check it. Use edit_file for small changes and write_file for new files. Never claim you did something a tool did not confirm.\n' +
+      (names.includes('write_file') ? 'Files live in the Pholama workspace folder. Use short relative paths like "notes/todo.txt".\n' : '') +
+      (names.includes('web_search') ? 'For news, prices, weather or anything after your training, use web_search then fetch_page, and say where it came from.\n' : '') +
+      (names.includes('calculator') ? 'Use calculator for any exact maths instead of doing it in your head.\n' : '');
   }
   return p;
 }
@@ -326,6 +337,7 @@ function studioPrompt(project, files) {
 async function buildTools(a) {
   const tools = [];
   for (const [name, t] of Object.entries(BUILTIN)) if (a[t.group]) tools.push({ name, desc: t.desc, kind: t.kind });
+  if (a.tools) tools.push(...tools2.tools());   // workspace files + helpers: local, free, confined to one folder
   if (a.github) tools.push(...github.tools());
   if (a.studio && a.inStudio) tools.push(...studio.tools());
   if (a.terminal) tools.push({ name: 'run_command', desc: 'Run ONE shell command on the user\'s PC. The user must click Allow first; nothing runs until they do. args: {"command": string, "cwd": string (optional folder inside the home folder), "why": string (one short sentence for the user)}', kind: 'cmd' });
@@ -338,6 +350,11 @@ async function runTool(tools, name, args, ctx) {
   const t = tools.find(x => x.name === name); if (!t) throw new Error('unknown tool ' + name);
   if (name === 'run_command') {
     return power.propose(args || {}, ctx);
+  }
+  if (tools2.isTool2(name)) {   // local and free, works even with 0 credits
+    const out = tools2.run(name, args);
+    if (/^(write_file|append_file|edit_file|delete_file|make_folder)$/.test(name)) { try { power.logEntry({ kind: 'file', status: 'ok', tool: name, path: String((args && args.path) || '').slice(0, 200), by: 'ai' }); } catch {} }
+    return out;
   }
   if (studio.isStudio(name)) return studio.run(name, args);   // local and free, works even with 0 credits
   if (github.isGithub(name)) {
@@ -381,7 +398,7 @@ function routeIntent(text, tools) {
   return null;
 }
 
-const TOOL_RE = /<tool>([\s\S]*?)<\/tool>/;
+const TOOL_RE = /<tool(?:_call)?>([\s\S]*?)<\/tool(?:_call)?>/;   // <tool> is Pholama's own tag, <tool_call> is the Qwen/Hermes tag that big models are trained on
 // Small models often break the closing of the JSON (a missing } or a stray >). Repair only those slips, and accept
 // the result only if it is a real call: a string name plus an object of args.
 // Escape raw newlines/tabs that sit INSIDE a JSON string (illegal in JSON, very common in model-written file content).
@@ -415,9 +432,10 @@ function parseFileBlock(text, project) {
 }
 function parseTool(text) {
   let m = TOOL_RE.exec(text);
-  if (!m) { const open = /<tool>([\s\S]*)$/.exec(text); if (!open) return null; m = open; }   // the model stopped before writing </tool>
+  if (!m) { const open = /<tool(?:_call)?>([\s\S]*)$/.exec(text); if (!open) return null; m = open; }   // the model stopped before writing </tool>
   let j; try { j = JSON.parse(m[1].trim()); } catch { j = repairJson(m[1]); }
   if (!j || typeof j.name !== 'string' || !j.name) return null;
+  if (j.args == null && j.arguments != null) { if (typeof j.arguments === 'string') { try { j.arguments = JSON.parse(j.arguments); } catch { j.arguments = repairJson(j.arguments) || {}; } } j.args = j.arguments; }   // Qwen/Hermes writes "arguments", Pholama's own tag writes "args"
   if (j.args != null && (typeof j.args !== 'object' || Array.isArray(j.args))) return null;
   return j;
 }
@@ -436,4 +454,4 @@ function aboutUserHint(text, memories) {
     : '\n[this question is about the user, and you know nothing about them yet. Reply only: "I don\'t know that about you yet. Tell me and I\'ll remember it." Do not talk about your own preferences or the internet.]\n';
 }
 
-module.exports = { tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+module.exports = { setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

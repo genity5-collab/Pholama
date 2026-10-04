@@ -1,0 +1,62 @@
+// Pholama core checks. Run: node test/core.test.js   (no model needed, no network)
+const fs = require('fs'), os = require('os'), path = require('path');
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'ph-')); process.env.HOME = tmp; process.env.USERPROFILE = tmp;
+process.env.PHOLAMA_WORKSPACE = path.join(tmp, 'ws'); process.env.PHOLAMA_STUDIO = path.join(tmp, 'studio');
+let P = 0, F = 0; const ok = (n, c, x) => { if (c) P++; else { F++; console.log('FAIL', n, x === undefined ? '' : String(x).slice(0, 160)); } };
+const thr = (n, f) => { try { f(); F++; console.log('FAIL (should refuse)', n); } catch { P++; } };
+const root = path.join(__dirname, '..');
+const cat = JSON.parse(fs.readFileSync(path.join(root, 'models.pc.json'), 'utf8'));
+
+// ---- model tiers ----
+ok('catalog size', cat.length >= 50);
+ok('every model has a tier', cat.every(m => ['good', 'basic', 'none'].includes(m.toolTier)));
+ok('tools tag only on good', cat.every(m => (m.caps.includes('tools')) === (m.toolTier === 'good')));
+ok('Tool running list = good', cat.every(m => m.categories.includes('tools') === (m.toolTier === 'good')));
+ok('no model under 3B is "good"', cat.filter(m => m.toolTier === 'good').every(m => m.sizeGB >= 1.8));
+ok('tiny models are not good', cat.filter(m => m.sizeGB < 1.5).every(m => m.toolTier !== 'good'));
+ok('known tool models are good', ['qwen2.5-7b', 'qwen3-8b', 'llama3.1-8b', 'hermes3-8b'].every(id => cat.find(m => m.id === id).toolTier === 'good'));
+ok('known weak models have no tools', ['smollm2-135m', 'tinyllama-1.1b', 'gemma3-1b'].every(id => cat.find(m => m.id === id).toolTier === 'none'));
+ok('ids unique', new Set(cat.map(m => m.id)).size === cat.length);
+ok('files unique', new Set(cat.map(m => m.file)).size === cat.length);
+
+// ---- parsing ----
+const a = require('../server/agent.js');
+let t = a.parseTool('<tool>{"name":"calculator","args":{"expression":"2+2"}}</tool>'); ok('own tag', t && t.name === 'calculator' && t.args.expression === '2+2');
+t = a.parseTool('<tool_call>{"name":"read_file","arguments":{"path":"a.txt"}}</tool_call>'); ok('hermes tag', t && t.name === 'read_file' && t.args.path === 'a.txt', JSON.stringify(t));
+t = a.parseTool('<tool_call>{"name":"read_file","arguments":"{\\"path\\":\\"b.txt\\"}"}</tool_call>'); ok('arguments as string', t && t.args.path === 'b.txt', JSON.stringify(t));
+t = a.parseTool('<tool_call>\n{"name": "current_time", "arguments": {}}'); ok('unclosed tag', t && t.name === 'current_time', JSON.stringify(t));
+ok('plain text is not a tool', !a.parseTool('Hello there, how can I help?'));
+ok('bad json is not a tool', !a.parseTool('<tool>{nope</tool>'));
+
+// ---- workspace tools: works and cannot escape ----
+const w = require('../server/tools2.js'); const out = path.join(tmp, 'outside'); fs.mkdirSync(out); fs.writeFileSync(path.join(out, 's.txt'), 'SECRET');
+ok('write', /Created/.test(w.run('write_file', { path: 'n/a.txt', content: 'one\ntwo\none' })));
+ok('read', /1: one/.test(w.run('read_file', { path: 'n/a.txt' })));
+thr('edit ambiguous', () => w.run('edit_file', { path: 'n/a.txt', find: 'one', replace: 'x' }));
+ok('edit', /Edited/.test(w.run('edit_file', { path: 'n/a.txt', find: 'two', replace: '2' })) && /2/.test(w.run('read_file', { path: 'n/a.txt' })));
+ok('search', /a.txt:2/.test(w.run('search_files', { query: '2' })));
+for (const bad of ['../outside/s.txt', 'n/../../outside/s.txt', out + '/s.txt', 'C:/Windows/win.ini', '..\\outside\\s.txt']) thr('escape ' + bad, () => w.run('read_file', { path: bad }));
+thr('write outside', () => w.run('write_file', { path: '../outside/x.txt', content: 'x' }));
+thr('exe blocked', () => w.run('write_file', { path: 'a.exe', content: 'x' }));
+thr('bat blocked', () => w.run('write_file', { path: 'a.bat', content: 'x' }));
+thr('too big', () => w.run('write_file', { path: 'big.txt', content: 'x'.repeat(300000) }));
+try { fs.symlinkSync(out, path.join(process.env.PHOLAMA_WORKSPACE, 'link')); thr('symlink read', () => w.run('read_file', { path: 'link/s.txt' })); thr('symlink write', () => w.run('write_file', { path: 'link/n.txt', content: 'x' })); ok('symlink no leak', !fs.existsSync(path.join(out, 'n.txt'))); } catch {}
+ok('units', w.run('convert_units', { value: 100, from: 'c', to: 'f' }) === '212 f');
+ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) === '5');
+
+// ---- agent wiring ----
+(async () => {
+  const r = await a.buildTools({ search: true, tools: true, terminal: true });
+  const names = r.tools.map(x => x.name);
+  ok('agent has 19 tools', names.length === 19, names.length);
+  ok('agent has file tools', ['read_file', 'write_file', 'edit_file', 'list_files'].every(n => names.includes(n)));
+  const off = await a.buildTools({ search: false, tools: false, terminal: false }); ok('switches off = no tools', off.tools.length === 0, off.tools.length);
+  ok('agent runs a file tool', /Created/.test(await a.runTool(r.tools, 'write_file', { path: 'z.txt', content: 'hi' }, {})));
+  a.setTier('good'); const pg = a.systemPrompt(r.tools, false, [], 'normal'); ok('good model gets tool_call guide', /<tool_call>/.test(pg) && /look first/i.test(pg));
+  a.setTier('basic'); const pb = a.systemPrompt(r.tools, false, [], 'normal'); ok('basic model keeps the short prompt', !/<tool_call>/.test(pb));
+  // ---- API docs ----
+  const d = require('../server/apidocs.js').page(11435); ok('docs page', /v1\/chat\/completions/.test(d) && /Roblox/.test(d) && /localhost:11435/.test(d) && /<\/html>$/.test(d));
+  // ---- syntax of every file ----
+  for (const f of fs.readdirSync(path.join(root, 'server'))) if (f.endsWith('.js')) { try { new (require('vm').Script)(fs.readFileSync(path.join(root, 'server', f), 'utf8').replace(/^#!.*/, '')); P++; } catch (e) { F++; console.log('FAIL syntax', f, e.message); } }
+  console.log(`${P} passed, ${F} failed`); process.exit(F ? 1 : 0);
+})();

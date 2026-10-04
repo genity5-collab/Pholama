@@ -51,7 +51,7 @@ function hardware() {
 // The RECOMMENDED model is the smallest one that can run tools (so Max-style actions work) and still fits this PC.
 // Computed from the catalog, never hard-coded, so it stays right when models are added.
 function pickRecommended(list, budget) {
-  const ok = list.filter(m => (m.caps || []).includes('tools') && budget >= m.minRamGB);
+  const ok = list.filter(m => m.toolTier === 'good' && budget >= m.minRamGB);   // never recommend a model that cannot really run tools
   ok.sort((a, b) => a.bytes - b.bytes);
   return ok.length ? ok[0].id : null;
 }
@@ -116,7 +116,7 @@ async function startLlamaNow(file) {
     bin = findLlamaServer();
     if (!bin) throw new Error('The AI engine (llama.cpp) could not be set up automatically' + (inst.error ? ': ' + inst.error : '') + '. Check your internet connection and try again, or install Ollama from ollama.com and leave it running.');
   }
-  const args = ['-m', path.join(MODELS_DIR, file), '--port', String(LLAMA_PORT), '-c', String(ctx), '-ngl', '99'];
+  const args = ['-m', path.join(MODELS_DIR, file), '--port', String(LLAMA_PORT), '-c', String(ctx), '-ngl', '99', '--embeddings', '--pooling', 'mean'];
   llamaCtx = ctx;
   // No console window (Windows would open a black terminal for the engine) - its output goes to a log file instead.
   const logPath = path.join(os.homedir(), '.pholama', 'engine.log');
@@ -266,12 +266,15 @@ async function modelCaps(model) {
     try {
       const r = await fetch(OLLAMA + '/api/show', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model.slice(7) }) });
       const j = await r.json();
-      if (Array.isArray(j.capabilities)) caps = { tools: j.capabilities.includes('tools'), thinking: j.capabilities.includes('thinking'), source: 'ollama' };
+      if (Array.isArray(j.capabilities)) {
+        const tl = j.capabilities.includes('tools'), bn = String((j.details && j.details.parameter_size) || '').toUpperCase(), bil = /M$/.test(bn) ? parseFloat(bn) / 1000 : parseFloat(bn);
+        caps = { tools: tl, thinking: j.capabilities.includes('thinking'), tier: !tl ? 'none' : (bil >= 3 || !isFinite(bil)) ? 'good' : 'basic', source: 'ollama' };
+      }
     } catch {}
-    if (!caps) return { tools: false, thinking: false, source: 'unknown' };   // cannot tell: do not guess, plain chat (not cached, so it retries)
+    if (!caps) return { tools: false, tier: 'none', thinking: false, source: 'unknown' };   // cannot tell: do not guess, plain chat (not cached, so it retries)
   } else {
-    const m = CATALOG.find(x => x.id === model.replace(/^gguf:/, '')), tags = (m && m.caps) || [];
-    caps = { tools: tags.includes('tools'), thinking: tags.includes('thinking'), source: 'catalog' };
+    const m = CATALOG.find(x => x.id === model.replace(/^gguf:/, '')), tags = (m && m.caps) || [], tier = (m && m.toolTier) || 'none';
+    caps = { tools: tier !== 'none', tier, thinking: tags.includes('thinking'), source: 'catalog' };   // 'good' = real agent, 'basic' = Pholama guides it, 'none' = plain chat
   }
   return (capCache[model] = caps);
 }
@@ -336,7 +339,7 @@ async function chat(req, res, b) {
     const allow = b.agent ? agent.allowed() : { search: false, tools: false, mcp: false, thinking: false };
     // 1) The model must be able to do it. 2) The per-message switch in the page must be on. 3) Credits (already in `allow`).
     const caps = await modelCaps(model), sw = b.switches || {};
-    const canTools = !!caps.tools;
+    const canTools = !!caps.tools; agent.setTier(caps.tier);
     for (const k of ['search', 'tools', 'mcp', 'github', 'terminal']) { if (!canTools) allow[k] = false; else if (sw[k] === false) allow[k] = false; }
     if (sw.thinking === false) allow.thinking = false;   // the per-message switch in the page. Any model can think: models without a native mode get a host reasoning pass.
     if (b.agent && !canTools) log('step', caps.source === 'unknown' ? 'Could not read this model\'s abilities, so tools are off (plain chat).' : 'This model does not support tools, so it gets a plain prompt. Pick one tagged "tools" to use search and tools.');
@@ -553,7 +556,8 @@ async function chat(req, res, b) {
 // OpenAI-style wrapper around chat(): collects the NDJSON stream and answers in OpenAI format (streaming or not).
 async function openaiChat(req, res, b) {
   const model = String(b.model || ''); if (!model) return json(res, 400, { error: { message: 'model is required' } });
-  const msgs = (Array.isArray(b.messages) ? b.messages : []).slice(-40).map(m => ({ role: ['system', 'user', 'assistant'].includes(m.role) ? m.role : 'user', content: typeof m.content === 'string' ? m.content.slice(0, 20000) : JSON.stringify(m.content || '').slice(0, 20000) }));
+  const txt = c => typeof c === 'string' ? c : Array.isArray(c) ? c.map(x => typeof x === 'string' ? x : (x && (x.text || (x.type === 'text' && x.content))) || '').filter(Boolean).join('\n') : (c == null ? '' : JSON.stringify(c));   // SDKs send content as [{type:'text',text:'...'}]
+  const msgs = (Array.isArray(b.messages) ? b.messages : []).slice(-40).map(m => ({ role: ['system', 'user', 'assistant'].includes(m.role) ? m.role : m.role === 'developer' ? 'system' : 'user', content: txt(m.content).slice(0, 20000) })).filter(m => m.content.trim());
   if (!msgs.length) return json(res, 400, { error: { message: 'messages is required' } });
   const id = 'chatcmpl-' + Date.now().toString(36), created = Math.floor(Date.now() / 1000), stream = b.stream === true;
   const opts = {}; if (+b.max_tokens > 0) opts.num_predict = Math.min(+b.max_tokens, 4096); if (typeof b.temperature === 'number') opts.temperature = b.temperature;
@@ -577,7 +581,7 @@ async function openaiChat(req, res, b) {
 // True when this PC has a local AI that can run tools: a downloaded model tagged "tools", or an Ollama model that reports the tools ability.
 async function hasToolAI() {
   try {
-    for (const m of CATALOG) if ((m.caps || []).includes('tools') && fs.existsSync(path.join(MODELS_DIR, m.file))) return true;
+    for (const m of CATALOG) if (m.toolTier && m.toolTier !== 'none' && fs.existsSync(path.join(MODELS_DIR, m.file))) return true;
     if (await ollamaUp()) {
       const o = JSON.parse((await get(OLLAMA + '/api/tags')).body);
       for (const m of (o.models || []).slice(0, 25)) { const c = await modelCaps('ollama:' + m.name); if (c.tools) return true; }
@@ -605,7 +609,7 @@ const server = http.createServer(async (req, res) => {
       req.who = a.who;
       // A remote API key is for plain chat only: the OpenAI-style /v1 routes and reading credits. Everything else
       // (settings, the agent and its tools, commands, GitHub approvals, downloads, logs) answers to this PC alone.
-      const REMOTE_OK = p.startsWith('/v1/') || ['/api/credits', '/api/chat', '/api/tags', '/api/caps'].includes(p);
+      const REMOTE_OK = p.startsWith('/v1/') || ['/api/credits', '/api/chat', '/api/tags', '/api/caps', '/api/version', '/api/ps', '/api/show', '/api/embed', '/api/embeddings', '/api/docs'].includes(p);
       if (req.who !== 'local' && !REMOTE_OK) return json(res, 403, { error: 'This can only be done on the PC itself.' });
     }
     // serve / shutdown: only from this PC
@@ -640,7 +644,7 @@ const server = http.createServer(async (req, res) => {
     // OpenAI-compatible API so other apps can use your local AI. Plain chat only: no tools, no credits, no GitHub.
     if (p === '/v1/models') return json(res, 200, { object: 'list', data: (await listModels()).map(m => ({ id: m.name, object: 'model', owned_by: 'pholama' })) });
     if (p === '/v1/chat/completions' && req.method === 'POST') return openaiChat(req, res, await body(req));
-    if (p === '/api/caps') { const m = u.searchParams.get('model') || ''; const c = await modelCaps(m); return json(res, 200, { ...c, nativeThinking: !!c.thinking, thinking: true, search: c.tools, mcp: c.tools, github: c.tools }); }   // thinking works on every model now: models without a native mode get the host reasoning pass
+    if (p === '/api/caps') { const m = u.searchParams.get('model') || ''; const c = await modelCaps(m); return json(res, 200, { ...c, nativeThinking: !!c.thinking, thinking: true, search: c.tools, mcp: c.tier === 'good', github: c.tools }); }   // thinking works on every model now: models without a native mode get the host reasoning pass
     if (p.startsWith('/api/studio/')) {
       const stu = require('./studio'); const seg = p.split('/').slice(3).map(decodeURIComponent);
       try {
@@ -700,6 +704,37 @@ const server = http.createServer(async (req, res) => {
       if (req.who !== 'local') { cb.agent = false; cb.memory = false; delete cb.switches; delete cb.tools; }
       return chat(req, res, cb);
     }
+    // ---- Ollama / OpenAI style extras so games and sites can use this PC's AI the way they would use Ollama ----
+    if (p === '/api/version') return json(res, 200, { version: require('../package.json').version, name: 'pholama' });
+    if (p === '/api/ps') return json(res, 200, { models: served ? [{ name: 'gguf:' + served, model: 'gguf:' + served }] : [] });
+    if (p === '/api/show' && req.method === 'POST') {
+      const b = await body(req), id = String(b.model || b.name || '').replace(/^gguf:/, ''), m = CATALOG.find(x => x.id === id);
+      if (!m) return json(res, 404, { error: 'model not found' });
+      return json(res, 200, { name: 'gguf:' + m.id, details: { family: m.family, parameter_size: m.params, format: 'gguf' }, capabilities: ['completion'].concat(m.toolTier === 'good' ? ['tools'] : [], (m.caps || []).includes('thinking') ? ['thinking'] : []), context_length: m.ctx, license: m.license });
+    }
+    if (p === '/v1/completions' && req.method === 'POST') {   // classic text completion: wrap the prompt as one message
+      const b = await body(req), pr = Array.isArray(b.prompt) ? b.prompt.join('\n') : String(b.prompt || '');
+      if (!pr.trim()) return json(res, 400, { error: { message: 'prompt is required' } });
+      let text = '', err = null, buf = '', usage = null;
+      const sink = { cors: res.cors, writeHead() {}, on: (ev, f) => res.on(ev, f), setHeader() {}, end() {}, write(c) { buf += c; let i; while ((i = buf.indexOf('\n')) >= 0) { const l = buf.slice(0, i); buf = buf.slice(i + 1); let o; try { o = JSON.parse(l); } catch { continue; } if (o.error) err = o.error; if (o.usage) usage = o.usage; const t = o.message && o.message.content; if (t && !o.done) text += t; } return true; } };
+      await chat(req, sink, { model: String(b.model || ''), messages: [{ role: 'user', content: pr.slice(0, 20000) }], agent: false, options: { ...(+b.max_tokens > 0 ? { num_predict: Math.min(+b.max_tokens, 4096) } : {}), ...(typeof b.temperature === 'number' ? { temperature: b.temperature } : {}) }, effort: 'normal' });
+      if (err && !text) return json(res, 502, { error: { message: String(err) } });
+      const u = usage || { in: 0, out: 0, total: 0 };
+      return json(res, 200, { id: 'cmpl-' + Date.now().toString(36), object: 'text_completion', created: Math.floor(Date.now() / 1000), model: String(b.model || ''), choices: [{ index: 0, text, finish_reason: 'stop' }], usage: { prompt_tokens: u.in, completion_tokens: u.out, total_tokens: u.total } });
+    }
+    if ((p === '/v1/embeddings' || p === '/api/embed' || p === '/api/embeddings') && req.method === 'POST') {
+      const b = await body(req), model = String(b.model || ''), raw = b.input != null ? b.input : b.prompt, inputs = (Array.isArray(raw) ? raw : [raw]).map(x => String(x == null ? '' : x).slice(0, 8000)).filter(Boolean).slice(0, 64);
+      if (!inputs.length) return json(res, 400, { error: { message: 'input is required' } });
+      try {
+        let vecs;
+        if (model.startsWith('ollama:')) { const r = await fetch(OLLAMA + '/api/embed', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: model.slice(7), input: inputs }) }); const j = await r.json(); if (!r.ok) throw new Error(j.error || 'embedding failed'); vecs = j.embeddings; }
+        else { const m = CATALOG.find(x => x.id === model.replace(/^gguf:/, '')); if (!m) return json(res, 404, { error: { message: 'unknown model' } }); if (!fs.existsSync(path.join(MODELS_DIR, m.file))) return json(res, 409, { error: { message: 'Model not downloaded yet' } });
+          await startLlama(m.file); const r = await fetch(`http://127.0.0.1:${LLAMA_PORT}/v1/embeddings`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ input: inputs }) }); const j = await r.json(); if (!r.ok) throw new Error((j.error && j.error.message) || 'This model cannot make embeddings'); vecs = (j.data || []).map(d => d.embedding); }
+        if (p === '/v1/embeddings') return json(res, 200, { object: 'list', model, data: vecs.map((e, i) => ({ object: 'embedding', index: i, embedding: e })), usage: { prompt_tokens: 0, total_tokens: 0 } });
+        return json(res, 200, p === '/api/embed' ? { model, embeddings: vecs } : { embedding: vecs[0] });
+      } catch (e) { return json(res, 502, { error: { message: String(e.message || e).slice(0, 200) } }); }
+    }
+    if (p === '/api/docs') { res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8', ...(res.cors || {}) }); return res.end(require('./apidocs').page(PORT)); }
     if (p === '/api/generate' && req.method === 'POST') { // Ollama-compatible generate -> chat
       const b = await body(req); b.messages = [{ role: 'user', content: b.prompt || '' }];
       return chat(req, res, b);

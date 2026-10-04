@@ -87,11 +87,16 @@ Model sizes by what your PC has:
 | 9 to 16 GB | Gemma 2 9B, Gemma 3 12B, Qwen2.5 14B, Phi-4 14B, GPT-OSS 20B | 5 to 11 GB |
 | 17 GB and up | DeepSeek-R1 32B, Qwen2.5-Coder 32B, Mistral Small 24B | 11 to 13.4 GB |
 
-**A good start:** Pholama + engine + one small model is roughly **1 to 3 GB** in total. Each model you add is a separate file, so free space is the only limit. All 47 models together would be about 194 GB, so nobody needs to download them all.
+**A good start:** Pholama + engine + one small model is roughly **1 to 3 GB** in total. Each model you add is a separate file, so free space is the only limit. All 51 models together would be about 200 GB, so nobody needs to download them all.
 
 Models are saved in one folder, so you can delete any you stop using (`pholama rm <model>`) to get the space back.
 
-**Recommended model:** `pholama pull qwen2.5-1.5b` (about 1 GB). It is the smallest model that runs tools well.
+**Recommended model:** `pholama pull llama3.2-3b` (about 1.9 GB, needs 4 GB RAM). It is the smallest model that **really** runs tools. If you have 8 GB or more, `qwen2.5-7b` or `qwen3-8b` is much better.
+
+**Which models can run tools?** Every model in the list has a label:
+- **Runs tools** (16 models, 3B and bigger, for example Qwen2.5 7B, Qwen3 8B, Llama 3.1 8B, Hermes 3): trained to call tools and big enough to do it well. These get the full agent.
+- **Basic tools only** (Qwen2.5 1.5B, Qwen3 0.6B): too small to act as an agent. Pholama guides them, so Studio builds and edits still work, but they are not a real agent.
+- **Chat only** (the rest): fine for talking, not for tools. Pholama never recommends them for agent work.
 
 **Keeps your PC smooth:** while a local AI runs, Pholama watches the PC. If it really starts to lag (memory almost full, or the PC freezing up; a busy CPU alone never stops it, because a model writing a reply is meant to use the CPU) it stops all local AIs and tells you why. Only local AIs are stopped. When you close Pholama, every local AI is stopped too.
 
@@ -103,10 +108,25 @@ Then read:
 - [Full PC guide](docs-md/PC.md)
 - [Tools, search, credits, switches, tokens, live log](docs-md/AGENT.md)
 - [All models](docs-md/MODELS.md)
+- [Use your local AI in a game or website](docs-md/API.md)
 
 ## Add your own tools for the AI to run (PC only)
 
-The AI can only use tools on the **PC version**, with a model tagged **tools**. All tools are free. There are three ways to give it more.
+The AI can only use tools on the **PC version**, with a model labelled **Runs tools**. All tools are free. Out of the box it already has 19.
+
+### Built-in tools (no setup)
+| Tool | What it does |
+|---|---|
+| `web_search`, `fetch_page` | Search the web and read a page |
+| `calculator`, `current_time`, `convert_units` | Exact maths, the date, unit conversion |
+| `list_files`, `read_file`, `search_files` | Look around your **workspace folder** |
+| `write_file`, `append_file`, `edit_file`, `make_folder`, `delete_file` | Create and change files in the workspace |
+| `json_tool`, `text_stats`, `hash_text`, `random_number`, `system_info` | Small helpers |
+| `run_command` | Needs the Terminal switch and your **Allow** click |
+
+File tools can only touch one folder: `~/.pholama/workspace` (on Windows `C:\Users\you\.pholama\workspace`). They cannot read or change anything outside it, and they refuse `.exe`, `.bat` and other program files. Every change is written to the edit log.
+
+There are three ways to give it more.
 
 ### 1. Let it run programs on your PC (any platform)
 Open **Tools** and turn on **Terminal**. The AI can then suggest one command at a time. Nothing runs until you press **Allow**. Commands work the same on Windows, Mac and Linux, so install the program you want once and the AI can call it:
@@ -141,6 +161,7 @@ Write a tiny MCP server in any language that answers `tools/list` and `tools/cal
 - Only add servers you trust. A tool can do whatever its server can do.
 - Writing to GitHub and every command always asks you first.
 - Phones and other devices that connect with a key get plain chat only. They can never run tools or commands on your PC.
+- The AI's file tools are locked to the workspace folder.
 
 ## Updates without reinstalling (PC only)
 
@@ -160,4 +181,5 @@ The PC app checks GitHub a few seconds after it starts and then every 6 hours. I
 - [`web/account.js`](web/account.js) name + password accounts and memory (Supabase, row-level security)
 - [`web/loader.js`](web/loader.js) the llama download loader
 - [`models.json`](models.json) the model list
-- Ollama-compatible API: see [the PC guide](docs-md/PC.md#api-ollama-compatible)
+- Ollama and OpenAI compatible API for games and sites: see [docs-md/API.md](docs-md/API.md) (or open `http://localhost:11435/api/docs` while Pholama runs)
+- [`server/tools2.js`](server/tools2.js) the workspace file tools and helpers

@@ -70,3 +70,13 @@ Works in almost any modern browser. Expect a few words per second.
 | Qwen2.5 14B | 9.0 GB | 24 GB | Chat, Many languages, Tool use, Code, Reasoning |
 
 Models with **Thinks** show their thinking live before the answer.
+
+## Which PC models can run tools?
+
+On the PC list every model shows a label.
+
+- **Runs tools**: Llama 3.2 3B, Qwen2.5 3B, Granite 4.2 3B, Phi-4 Mini, Mistral 7B, Qwen2.5 7B, Ministral 8B, Hermes 3 8B, Llama 3.1 8B, Granite 3 and 3.1 8B, Qwen3 8B, Mistral Nemo 12B, Qwen2.5 14B, GPT-OSS 20B, Mistral Small 24B.
+- **Basic tools only**: Qwen2.5 1.5B and Qwen3 0.6B. Pholama guides them for Studio builds and edits, but they are not a real agent.
+- **Chat only**: every other model.
+
+The smallest model that really runs tools is Llama 3.2 3B (1.9 GB, 4 GB RAM).

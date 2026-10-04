@@ -319,7 +319,7 @@ async function paintSwitches() {
     try { const c = await (await api('api/caps?model=' + encodeURIComponent(sel.value))).json(); await refreshCredits();
     const mp = (cred && cred.allowed && cred.allowed.prefs) || {};
     let hasMcp = false; try { hasMcp = ((await (await api('api/mcp')).json()).servers || []).length > 0; } catch {}
-    swCaps = { terminal: c.tools && mp.terminal === true, github: c.github && mp.github !== false, search: c.search && mp.search !== false, tools: c.tools && mp.tools !== false, mcp: c.mcp && mp.mcp !== false, _hasMcp: hasMcp, thinking: c.thinking && mp.thinking !== false, _src: c.source };
+    swCaps = { _tier: c.tier, terminal: c.tools && c.tier !== 'basic' && mp.terminal === true, github: c.github && mp.github !== false, search: c.search && mp.search !== false, tools: c.tools && mp.tools !== false, mcp: c.mcp && mp.mcp !== false, _hasMcp: hasMcp, thinking: c.thinking && mp.thinking !== false, _src: c.source };
     } catch {}
   }
   row.innerHTML = '';
@@ -331,8 +331,9 @@ async function paintSwitches() {
   }
   if (!shown.length && server && sel.value && (sel.value.startsWith('ollama:') || sel.value.startsWith('gguf:'))) {
     const n = document.createElement('span'); n.className = 'swnote';
-    n.textContent = swCaps._src === 'unknown' ? 'Tools off: could not read this model\'s abilities.' : 'Plain chat: this model does not support tools.'; row.appendChild(n);
+    n.textContent = swCaps._src === 'unknown' ? 'Tools off: could not read this model\'s abilities.' : 'Plain chat: this model cannot run tools. Pick one tagged "Runs tools" in Models (for example Qwen3 8B or Qwen2.5 7B).'; row.appendChild(n);
   }
+  if (shown.length && swCaps._tier === 'basic') { const n = document.createElement('span'); n.className = 'swnote'; n.textContent = 'Small model: Pholama guides it. Studio builds and edits work, but it is not a full agent. A bigger model runs tools better.'; row.appendChild(n); }
   row.style.display = row.children.length ? '' : 'none';
 }
 sel.addEventListener('change', () => { paintSwitches(); paintEffort(); paintComposerPill(); });
@@ -715,7 +716,9 @@ function renderPC() {
     const catTxt = (m.categories || []).map(c => (PC_CATS.find(x => x[0] === c) || [0, c])[1]).join(' · ');
     const base = `${fmtMB(bytes)} · needs about ${m.minRamGB} GB RAM · ${m.fits ? 'fits your PC' : 'may be too big for your PC'}${catTxt ? ' · ' + catTxt : ''}`;
     r.sub.textContent = base;
-    if (m.recommended) { const badge = document.createElement('span'); badge.className = 'chip rec'; badge.textContent = 'Recommended'; badge.title = 'Smallest model that runs tools well'; r.sub.parentNode.insertBefore(badge, r.sub); }
+    { const tc = document.createElement('span'); const t = m.toolTier || 'none'; tc.className = 'chip ' + (t === 'good' ? 'rec' : 'warn'); tc.textContent = t === 'good' ? 'Runs tools' : t === 'basic' ? 'Basic tools only' : 'Chat only, no tools';
+      tc.title = t === 'good' ? 'Trained for tool calling and big enough to use it well.' : t === 'basic' ? 'Too small to call tools on its own. Pholama guides it for Studio builds and edits, but it is not a real agent.' : 'This model cannot run tools. Good for chat, not for building or using tools.'; r.sub.parentNode.insertBefore(tc, r.sub); }
+    if (m.recommended) { const badge = document.createElement('span'); badge.className = 'chip rec'; badge.textContent = 'Recommended'; badge.title = 'Smallest model that really runs tools, and fits your PC'; r.sub.parentNode.insertBefore(badge, r.sub); }
     if (m.blurb) { const bl = document.createElement('small'); bl.textContent = m.blurb; r.sub.parentNode.insertBefore(bl, r.bar); }
     const cmd = document.createElement('div'); cmd.className = 'cmdrow';
     const code = document.createElement('code'); code.textContent = m.command || ('pholama pull ' + m.id);

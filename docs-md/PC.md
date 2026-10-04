@@ -27,12 +27,14 @@ HOST=0.0.0.0 node server/server.js          # Windows: set HOST=0.0.0.0 && node 
 Then open `http://<your-PC-IP>:11435` on your phone. The phone uses the PC's power.
 Only do this on a network you trust: there is no login.
 
-## API (Ollama-compatible)
+## API (Ollama and OpenAI compatible)
 
-`GET /api/tags`, `POST /api/chat`, `POST /api/generate` stream NDJSON like Ollama.
+Your games and websites can use the AI on this PC the same way they would use Ollama or OpenAI. See the full guide: [API.md](API.md), or open `http://localhost:11435/api/docs`.
+
+`GET /api/tags`, `POST /api/chat`, `POST /api/generate` stream NDJSON like Ollama. `GET /v1/models`, `POST /v1/chat/completions`, `/v1/completions` and `/v1/embeddings` work like OpenAI.
 Plus `GET /api/hardware`, `POST /api/pull {id}`, `POST /api/install-llama`.
 
-Env vars: `PORT`, `HOST`, `PHOLAMA_MODELS` (model folder), `OLLAMA_URL`, `LLAMA_SERVER_DIR`.
+Env vars: `PORT`, `HOST`, `PHOLAMA_MODELS` (model folder), `PHOLAMA_WORKSPACE` (the AI's file folder), `PHOLAMA_ORIGINS` (websites allowed to call the API), `OLLAMA_URL`, `LLAMA_SERVER_DIR`.
 
 ## Keeping the PC smooth
 
