@@ -76,8 +76,31 @@ export async function checkCelebrate(current, getReleases) {
   if (!current) return false;
   if (!seen) { try { localStorage.setItem(KEY_SEEN, current); } catch {} return false; }   // first ever run: nothing to celebrate
   if (cmpVer(current, seen) <= 0) return false;
-  let rel = []; try { rel = await getReleases(); } catch {}
+  let rel = null; try { rel = await getReleases(); } catch {}
+  if (!Array.isArray(rel) || !rel.length) return 'retry';   // could not read the release notes: do NOT mark this version as seen, try again later
   const fresh = newSince(rel, seen, current);
   if (!shouldCelebrate(seen, current, fresh)) { try { localStorage.setItem(KEY_SEEN, current); } catch {} return false; }
   showWhatsNew(fresh, current); return true;
+}
+// Calls checkCelebrate until it has an answer (not 'retry'). Waits a little longer each time, up to `tries` attempts.
+export async function celebrateWithRetry(getVersion, getReleases, { tries = 5, wait = ms => new Promise(r => setTimeout(r, ms)), first = 1200, step = 2500 } = {}) {
+  await wait(first);
+  for (let i = 0; i < tries; i++) {
+    let cur = null; try { cur = await getVersion(); } catch {}
+    if (cur) { const r = await checkCelebrate(cur, getReleases); if (r !== 'retry') return r; }
+    if (i < tries - 1) await wait(step * (i + 1));
+  }
+  return false;
+}
+
+// ---- 4. automatic updates ----
+// When the server comes back as a NEW version (an automatic update), play the installing scene to the end, then reload.
+// `pending` remembers which version we were moving to, so a page that reloads half way still finishes the story.
+export function noteUpdating(version) { try { localStorage.setItem(KEY_PENDING, version || ''); } catch {} }
+export function pendingVersion() { try { return localStorage.getItem(KEY_PENDING) || ''; } catch { return ''; } }
+export async function playAutoUpdate(version, { reload = () => location.reload(), wait = ms => new Promise(r => setTimeout(r, ms)), open = openInstalling } = {}) {
+  const scene = open(version);
+  scene.step(1); await wait(600); scene.step(2); await wait(600); scene.step(3); await wait(500);
+  scene.done(); await wait(900);
+  reload();
 }

@@ -33,6 +33,21 @@ s.end(JSON.stringify({choices:[{message:{content:out}}]}))})}).listen(port,'127.
     ok('small talk does NOT search', !/"name":"web_search"/.test(t), t);
     t = await chat('write me a function that adds two numbers');
     ok('a coding request does NOT search', !/"name":"web_search"/.test(t), t);
+    // ---- @plugin: calling a plugin by name turns it on for that one message, even if its switch is off
+    const seenFile = path.join(home, 'model-saw.txt'), seenNow = () => (fs.existsSync(seenFile) ? fs.readFileSync(seenFile, 'utf8') : '');
+    const ask = async (q, sw) => { const before = seenNow().length; const txt = await (await fetch(B + '/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ model: 'gguf:' + m.id, agent: true, switches: sw || {}, messages: [{ role: 'user', content: q }] }) })).text(); return { txt, saw: seenNow().slice(before) }; };
+    let q = await ask('what is in my repo', { github: false });
+    ok('without a mention and with GitHub off, the AI is NOT given GitHub tools', q.saw.length > 0 && !/github_search_repos|github_read_file/.test(q.saw), q.saw.slice(0, 200));
+    q = await ask('@github what is in my repo', { github: false });
+    ok('@github gives the AI the GitHub tools even with the switch off', /github_[a-z_]+/.test(q.saw), q.saw.slice(0, 300));
+    ok('the AI is told the user called @github and must not say it cannot access it', /called these plugins by name/.test(q.saw) && /@github/.test(q.saw), q.saw.slice(0, 300));
+    ok('the live log tells the person the plugin was turned on', /"log"[^\n]*You called @github|You called @github/.test(q.txt), q.txt.slice(0, 300));
+    q = await ask('mail bob@github.com about it', { github: false });
+    ok('an email address does NOT turn GitHub on', !/called these plugins by name/.test(q.saw), q.saw.slice(0, 200));
+    q = await ask('@terminal run ls', { terminal: false });
+    ok('@terminal does nothing (the terminal has its own switch)', !/run_command/.test(q.saw) && !/called these plugins by name/.test(q.saw), q.saw.slice(0, 200));
+    q = await ask('@nothing_here hello', {});
+    ok('an unknown @name is ignored', !/called these plugins by name/.test(q.saw), q.saw.slice(0, 200));
     // ---- my tools: the API only works from this PC, secrets are never sent back
     const J = (p, b) => fetch(B + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ s: r.status, j: await r.json() }));
     let r = await J('/api/mytools/secret', { name: 'SB_KEY', value: 'sbp_TOPSECRETVALUE_123' }); ok('saves a secret', r.j.ok && r.j.secrets.includes('SB_KEY'), JSON.stringify(r));

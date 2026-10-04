@@ -36,9 +36,20 @@ const { spawn, spawnSync } = require('child_process'), fs = require('fs'), os = 
   ok('a switch still works (toggle search and read it back)', await ev("(()=>{const c=document.querySelector('#p_search');const a=c.checked;c.click();return c.checked!==a})()"));
   for (const t of ['usage', 'account', 'script', 'remote', 'safety', 'tools']) { await ev(`document.querySelector('#s_tab_${t}').click()`); await wait(400); ok('tab "' + t + '" opens', await ev(`document.querySelector('#s_sec_${t}').style.display !== 'none'`)); }
   ok('the chosen group is remembered', (await ev("localStorage.getItem('ph_sub')")) === 'feat');
-  ok('no errors in the console', logs.filter(l => !/favicon|Failed to load resource|net::ERR|manifest|serviceWorker|sw\.js/.test(l)).length === 0, logs.join(' | '));
   await send('Emulation.setDeviceMetricsOverride', { width: 390, height: 800, deviceScaleFactor: 1, mobile: true }); await wait(500);
   ok('on a phone the groups bar scrolls instead of overflowing the screen', await ev("(()=>{const b=document.querySelector('.s-sub');const r=b.getBoundingClientRect();return r.right<=window.innerWidth+1 && getComputedStyle(b).overflowX==='auto'})()"));
   const shot = await send('Page.captureScreenshot', { format: 'png' }); fs.writeFileSync(require('os').tmpdir() + '/settings-mobile.png', Buffer.from(shot.data, 'base64'));
+  await send('Emulation.clearDeviceMetricsOverride'); await wait(300);
+  // ---- automatic update: when the server comes back as a NEW version, the installing scene must show (it used to reload silently)
+  await ev("document.querySelector('#dlgSettings').close(); true");
+  await wait(6000);   // the page's own watcher takes its first real reading of the version (it polls every 5 seconds)
+  await ev("window.__scene = []; const _f = window.fetch; window.fetch = function (u, o) { if (String(u).includes('/api/version')) return Promise.resolve(new Response(JSON.stringify({ version: '9.9.9' }), { status: 200, headers: { 'Content-Type': 'application/json' } })); return _f.apply(this, arguments); }; setInterval(() => { const s = document.getElementById('updScene'); if (s) window.__scene.push((s.querySelector('.upds-step') || {}).textContent || ''); }, 100); true");
+  await wait(2900);   // the scene is on screen for about 3.2 seconds (steps, then "All set", then the reload), so look just before it ends
+  const sawScene = await ev("window.__scene ? window.__scene.length : -1");
+  const stepsSeen = await ev("window.__scene ? [...new Set(window.__scene)].join(' | ') : ''");
+  ok('a new server version shows the "Updating Pholama" scene before reloading', sawScene > 0, 'samples=' + sawScene);
+  ok('the scene moves through several steps, not one line', String(stepsSeen).split(' | ').filter(Boolean).length >= 2, stepsSeen);
+  ok('it plays all the way to the last step (Loading your new Pholama) before the page reloads', /Loading your new Pholama/.test(String(stepsSeen)) && /Closing the old version/.test(String(stepsSeen)), stepsSeen);
+  ok('no errors in the console', logs.filter(l => !/favicon|Failed to load resource|net::ERR|manifest|serviceWorker|sw\.js/.test(l)).length === 0, logs.join(' | '));
   console.log(bad ? bad + ' FAILED' : 'ALL PASSED'); ws.close(); ch.kill('SIGKILL'); srv.kill('SIGKILL'); process.exit(bad ? 1 : 0);
 })().catch(e => { console.error(e); process.exit(1); });

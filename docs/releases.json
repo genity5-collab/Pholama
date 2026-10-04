@@ -1,6 +1,18 @@
 {
- "latest": "0.9.22",
+ "latest": "0.9.23",
  "releases": [
+  {
+   "version": "0.9.23",
+   "date": "2026-10-04",
+   "title": "@plugin mentions, and the update animation is back",
+   "notes": [
+    "Type @github, @search, @tools, @skills, @mcp or @platform (or @ and the name of a tool you made) and that plugin is used for that message, even if its switch is off",
+    "The AI is told which plugin you meant, so it no longer says it cannot access your files on GitHub",
+    "@terminal is never turned on by a mention, and models that cannot run tools are not forced to. Email addresses like me@github.com are ignored",
+    "Automatic updates now play the Updating animation before the page reloads. They used to reload with no animation at all",
+    "The What's new card is tried again if the release notes are slow to load, instead of being lost"
+   ]
+  },
   {
    "version": "0.9.22",
    "date": "2026-10-04",

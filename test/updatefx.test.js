@@ -34,16 +34,58 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   ok('at most 6 notes per release', tidyNotes(Array.from({ length: 20 }, (_, i) => 'n' + i)).length === 6);
   ok('empty and non-text notes are dropped', tidyNotes(['a', '', '  ', 5, null, 'b']).join() === 'a,b');
   ok('notes that are not a list are safe', tidyNotes(undefined).length === 0 && tidyNotes('x').length === 0);
+  // ---- the celebration must survive a slow or failed start (it used to be lost for good)
+  const store = {}; global.localStorage = { getItem: k => (k in store ? store[k] : null), setItem: (k, v) => { store[k] = String(v); }, removeItem: k => { delete store[k]; } };
+  global.document = { getElementById: () => null, createElement: () => ({ style: {}, classList: { add() {}, remove() {}, toggle() {} }, setAttribute() {}, appendChild() {}, querySelector: () => ({ onclick: null, focus() {}, appendChild() {} }), addEventListener() {}, remove() {} }), body: { appendChild() {} }, addEventListener() {}, removeEventListener() {} };
+  const REL = [{ version: '0.9.22', title: 'New', notes: ['a'] }];
+  store.pholama_seen_version = '0.9.21';
+  let r = await m.checkCelebrate('0.9.22', async () => { throw new Error('offline'); });
+  ok('release notes could not load -> asks to retry, does not give up', r === 'retry', r);
+  ok('and the version is NOT marked as seen (so the card is not lost)', store.pholama_seen_version === '0.9.21', store.pholama_seen_version);
+  r = await m.checkCelebrate('0.9.22', async () => []);
+  ok('an empty notes list also retries instead of marking it seen', r === 'retry' && store.pholama_seen_version === '0.9.21');
+  r = await m.checkCelebrate('0.9.22', async () => REL);
+  ok('when the notes load, the card opens', r === true);
+  store.pholama_seen_version = '0.9.22';
+  ok('already seen -> nothing to show, no retry', (await m.checkCelebrate('0.9.22', async () => REL)) === false);
+  delete store.pholama_seen_version;
+  ok('first ever run is remembered and does not celebrate', (await m.checkCelebrate('0.9.22', async () => REL)) === false && store.pholama_seen_version === '0.9.22');
+
+  // retry wrapper: no real waiting in the test
+  const fast = { wait: async () => {}, tries: 5 };
+  store.pholama_seen_version = '0.9.21'; let calls = 0;
+  r = await m.celebrateWithRetry(async () => '0.9.22', async () => { calls++; if (calls < 3) throw new Error('slow'); return REL; }, fast);
+  ok('a slow start is retried until the notes arrive, then the card opens', r === true && calls === 3, 'calls=' + calls + ' r=' + r);
+  store.pholama_seen_version = '0.9.21'; calls = 0;
+  r = await m.celebrateWithRetry(async () => { calls++; if (calls < 3) throw new Error('server starting'); return '0.9.22'; }, async () => REL, fast);
+  ok('a server that is still starting is retried, then the card opens', r === true && calls === 3, 'calls=' + calls);
+  store.pholama_seen_version = '0.9.21'; calls = 0;
+  r = await m.celebrateWithRetry(async () => '0.9.22', async () => { calls++; throw new Error('down'); }, { ...fast, tries: 4 });
+  ok('gives up after the limit, never loops forever, and keeps the version unseen', r === false && calls === 4 && store.pholama_seen_version === '0.9.21', 'calls=' + calls);
+  store.pholama_seen_version = '0.9.22'; calls = 0;
+  r = await m.celebrateWithRetry(async () => '0.9.22', async () => { calls++; return REL; }, fast);
+  ok('nothing new: answers at once without retrying', r === false && calls === 0 || (r === false && calls <= 1), 'calls=' + calls);
+
+  // automatic updates play the installing scene, then reload (they used to reload silently)
+  const steps = []; let reloaded = 0, closed = 0;
+  await m.playAutoUpdate('0.9.22', { wait: async () => {}, reload: () => { reloaded++; }, open: v => ({ step: i => steps.push(i), done: () => steps.push('done'), fail() {}, close: () => { closed++; } }) });
+  ok('an automatic update shows every step in order, then "All set", then reloads once', steps.join() === '0,1,2,3,done'.replace('0,', '') || steps.join() === '1,2,3,done', steps.join());
+  ok('it reloads exactly once', reloaded === 1, reloaded);
+  m.noteUpdating('0.9.22'); ok('the version being installed is remembered across the reload', m.pendingVersion() === '0.9.22');
+
   // wiring
   const R2 = p => fs.readFileSync(path.join(__dirname, '..', p), 'utf8'), app = R2('web/app.js'), css = R2('web/style.css'), sw = R2('web/sw.js'), fx = R2('web/updatefx.js');
   ok('the app loads the update animations', /from '\.\/updatefx\.js'/.test(app));
+  ok('an automatic update plays the scene instead of reloading silently', /playAutoUpdate\(v\.version\)/.test(app) && !/v\.version !== loadedServerVersion\) location\.reload\(\)/.test(app));
+  ok('the scene cannot start twice', /updatePlaying/.test(app));
+  ok('the celebration is retried, not a one-shot timer', /celebrateWithRetry\(/.test(app) && !/setTimeout\(async \(\) => \{ try \{ const v = await \(await fetch\(server/.test(app));
   ok('Restart opens the installing scene and closes the banner', /hideBanner\(\); const scene = openInstalling\(version\)/.test(app));
   ok('the scene reports success before reloading', /scene\.done\(\);[^]*location\.reload\(\)/.test(app));
   ok('the scene shows a failure instead of hanging forever', /fail\('Could not restart from here'\)/.test(app) && /fail\('Pholama did not come back'\)/.test(app));
   ok('a network error during restart is treated as the old server exiting', /NetworkError\|Failed to fetch/.test(app));
   ok('restart waits for the expected new server version', /v\.version === version/.test(app));
   ok('an already-open PC tab reloads after the server version changes', /setInterval\(watchServerVersion, 5000\)/.test(app) && /location\.reload\(\)/.test(app));
-  ok('the celebration is checked at start-up', /checkCelebrate\(cur,/.test(app));
+  ok('the celebration is checked at start-up (with retries)', /celebrateWithRetry\(async \(\) => \{ const v = await/.test(app));
   ok('the new files work offline (service worker list)', /'studiofx\.js', 'updatefx\.js'/.test(sw));
   ok('all colours come from the theme (no fixed hex) in the update styles', !/\.(updb|upds|updn)[^{]*\{[^}]*#[0-9a-fA-F]{3,6}\b/.test(css.slice(css.indexOf('Update animations:'))));
   ok('every theme variable used in the update styles exists', (() => { const t = css.slice(css.indexOf('Update animations:')); const used = [...new Set([...t.matchAll(/var\(--([a-z]+)/g)].map(x => x[1]))]; const own = ['s', 'x', 'y', 'rot']; const root = css.split('\n')[0]; return used.filter(u => !own.includes(u) && !new RegExp('--' + u + ':').test(root)).length === 0; })());

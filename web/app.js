@@ -13,7 +13,7 @@ import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 import { downloadDecision, readCached, writeCached } from './pclink.js';
 import { canSave, usedText } from './memlimit.js';
 import { loadReader, readerLoaded } from './reader.js';
-import { showBanner, hideBanner, openInstalling, checkCelebrate } from './updatefx.js';
+import { showBanner, hideBanner, openInstalling, checkCelebrate, celebrateWithRetry, playAutoUpdate } from './updatefx.js';
 import { mediaCard, toolAsk, paintMyTools } from './mytools.js';
 import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
 import { READER } from './attach.js';
@@ -1578,8 +1578,8 @@ $('#updPill').onclick = () => { $('#opt').click(); };
 paintUpdate(); setInterval(paintUpdate, 5 * 60 * 1000);
 // An automatic update restarts the server in the background; once the replacement reports
 // a different version, refresh this already-open tab so it cannot keep serving stale Studio code.
-{ let loadedServerVersion = ''; const watchServerVersion = async () => { if (!server) return; try { const r = await fetch('/api/version', { cache: 'no-store' }); if (!r.ok) return; const v = await r.json(); if (!loadedServerVersion) loadedServerVersion = v.version; else if (v.version && v.version !== loadedServerVersion) location.reload(); } catch {} }; watchServerVersion(); setInterval(watchServerVersion, 5000); }
-setTimeout(async () => { try { const v = await (await fetch(server ? '/api/version' : 'releases.json', { cache: 'no-cache' })).json(); const cur = server ? v.version : v.latest; await checkCelebrate(cur, async () => (await (await fetch('releases.json', { cache: 'no-cache' })).json()).releases || []); } catch {} }, 1800);
+{ let loadedServerVersion = '', updatePlaying = false; const watchServerVersion = async () => { if (!server) return; try { const r = await fetch('/api/version', { cache: 'no-store' }); if (!r.ok) return; const v = await r.json(); if (!loadedServerVersion) loadedServerVersion = v.version; else if (v.version && v.version !== loadedServerVersion && !updatePlaying) { updatePlaying = true; playAutoUpdate(v.version); } } catch {} }; watchServerVersion(); setInterval(watchServerVersion, 5000); }
+celebrateWithRetry(async () => { const v = await (await fetch(server ? '/api/version' : 'releases.json', { cache: 'no-cache' })).json(); return server ? v.version : v.latest; }, async () => (await (await fetch('releases.json', { cache: 'no-cache' })).json()).releases || []).catch(() => {});
 
 
 // ---------- PC celebration banner (website only; hidden on the PC app itself, and once dismissed) ----------
