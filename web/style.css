@@ -430,3 +430,26 @@ header{border-bottom:1px solid var(--line);backdrop-filter:blur(18px);background
 .media-link{display:inline-block;margin:6px 10px;font-size:12px;color:var(--acc)}
 .media-cap,.media-fail{display:block;padding:0 10px 8px;color:var(--mut);font-size:12px}
 @media (prefers-reduced-motion:reduce){.mediacard{animation:none}}
+
+/* Settings > Tools: the groups bar, and tool cards. */
+.s-sub{display:flex;gap:6px;overflow-x:auto;padding:2px 0 8px;margin:6px 0 4px;-webkit-overflow-scrolling:touch}
+.s-sub button{flex:0 0 auto;border:1px solid var(--line);background:var(--card);padding:6px 12px;border-radius:999px;font-size:13px;min-height:34px;cursor:pointer;white-space:nowrap}
+.s-sub button.on{background:var(--fg);color:var(--bg);border-color:var(--fg);font-weight:600}
+.s-pane{animation:updn-item .25s ease-out both}
+.tl-list{display:grid;gap:8px;margin:8px 0}
+.tl-card{display:flex;gap:10px;align-items:flex-start;padding:10px;border:1px solid var(--line);border-radius:14px;background:var(--card);text-align:left}
+.tl-thumb{width:44px;height:44px;border-radius:10px;object-fit:cover;flex:0 0 auto;background:var(--card2)}
+.tl-ph{display:flex;align-items:center;justify-content:center;font-weight:700;font-size:18px;color:var(--mut)}
+.tl-edit .tl-thumb{width:56px;height:56px}
+.tl-info{display:grid;gap:4px;flex:1;min-width:0}
+.tl-info small{color:var(--mut);overflow-wrap:anywhere}
+.tl-info input,.tl-info textarea{width:100%}
+.tl-id{font-family:ui-monospace,monospace;font-size:11px}
+.tl-head{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+.tl-badge{font-size:11px;padding:1px 7px;border-radius:999px;border:1px solid var(--line);color:var(--mut)}
+.tl-ctl{display:flex;flex-direction:column;gap:4px;align-items:flex-end;flex:0 0 auto}
+.tl-box{display:grid;gap:6px;margin-top:12px;padding:10px;border:1px solid var(--line);border-radius:14px;text-align:left}
+.tl-box summary{cursor:pointer;font-weight:600}
+.tl-review{display:grid;gap:6px;margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:12px}
+.tl-review input,.tl-review textarea{width:100%}
+@media (prefers-reduced-motion:reduce){.s-pane{animation:none}}

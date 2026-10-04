@@ -1,6 +1,19 @@
 {
- "latest": "0.9.21",
+ "latest": "0.9.22",
  "releases": [
+  {
+   "version": "0.9.22",
+   "date": "2026-10-04",
+   "title": "Settings is organised, and the AI can create tools for you",
+   "notes": [
+    "Settings > Tools is now split into groups: Features, Plugins and skills, My tools, MCP, and Updates and log. Only one shows at a time, and Pholama remembers your last one",
+    "New: Create a tool with AI. Say what you want, paste the API key, and the AI writes the tool. You check it, then save it",
+    "The AI never sees your API key. It is saved on your PC first and the AI is only told the key's name",
+    "Every tool is now a card with a picture, a title and a description. You can rename a tool, change its description and give it a picture or remove it",
+    "Pictures only accept png, jpeg, webp, gif or an https link. SVG is refused because it can carry script",
+    "Agent Max now has a third backup key: if the first two are busy or rejected, the third one answers"
+   ]
+  },
   {
    "version": "0.9.21",
    "date": "2026-10-04",

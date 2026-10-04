@@ -318,7 +318,7 @@ async function paintPlugins() {
     cb.onchange = async () => { cb.disabled = true; try { await api('api/plugins/switch', { method: 'POST', body: JSON.stringify({ id: p.id, on: cb.checked }) }); } catch {} cb.disabled = false; paintPlugins(); };
   }
   const h = $('#plHealth'); if (h) h.textContent = d.check.ok ? 'Self-check: everything is healthy.' : 'Self-check found ' + d.check.problems.length + ' problem(s): ' + d.check.problems.slice(0, 3).join('; ') + '. Broken skills are ignored, chat keeps working.';
-  { const mt = $('#myToolsBox'); if (mt) paintMyTools(mt, api); }
+  { const mt = $('#myToolsBox'); if (mt) paintMyTools(mt, api, { model: () => sel.value }); }
   const sk = $('#skList'); if (!sk) return; sk.textContent = '';
   if (!d.skills.length) { const e = document.createElement('div'); e.className = 'sys'; e.textContent = 'No skills yet.'; sk.append(e); }
   for (const k of d.skills) {
@@ -1025,6 +1025,16 @@ for (const t of ['usage', 'tools', 'account', 'script', 'remote', 'safety']) {
   const btn = $('#s_tab_' + t);
   if (btn) btn.onclick = () => openSettings(t);
 }
+// Inside Tools: Features, Plugins and skills, My tools, MCP, Updates and log. One group shows at a time, and Pholama remembers which.
+function showSub(key) {
+  const bar = document.querySelector('.s-sub'); if (!bar) return;
+  if (!document.querySelector('.s-pane[data-pane="' + key + '"]')) key = 'feat';
+  for (const b of bar.querySelectorAll('button')) { const on = b.dataset.sub === key; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); }
+  for (const p of document.querySelectorAll('.s-pane')) p.style.display = p.dataset.pane === key ? '' : 'none';
+  try { localStorage.setItem('ph_sub', key); } catch {}
+}
+{ const bar = document.querySelector('.s-sub'); if (bar) { for (const b of bar.querySelectorAll('button')) b.onclick = () => showSub(b.dataset.sub); let k = 'feat'; try { k = localStorage.getItem('ph_sub') || 'feat'; } catch {} showSub(k); } }
+window.phShowSub = showSub;
 $('#settingsBtn').onclick = () => openSettings('usage');
 $('#closeSettings').onclick = () => $('#dlgSettings').close();
 $('#opt').onclick = () => openSettings('tools');

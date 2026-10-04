@@ -101,6 +101,24 @@
     <div id="t_off" class="sys" style="display:none;text-align:left">Tools, web search, GitHub and MCP run on the Pholama PC host. Connect your PC in Remote access.</div>
     <div id="t_body">
       <div id="t_cr" class="sys" style="text-align:left"></div>
+      <div class="s-sub" role="tablist" aria-label="Tool settings">
+        <button type="button" data-sub="feat" class="on">Features</button>
+        <button type="button" data-sub="plug" class="">Plugins and skills</button>
+        <button type="button" data-sub="mine" class="">My tools</button>
+        <button type="button" data-sub="mcp" class="">MCP</button>
+        <button type="button" data-sub="upd" class="">Updates and log</button>
+      </div>
+      <div class="s-pane" data-pane="feat">
+        <div class="sys" style="text-align:left;margin-bottom:4px">Turn abilities on or off. They only act on models that support them.</div>
+      <label class="sw"><input type="checkbox" id="p_search"><span>Live web search<small>Only for models that support tools. Uses a few credits. Off at 0 credits.</small></span></label>
+      <label class="sw"><input type="checkbox" id="p_tools"><span>Tools<small>Only for models that support tools. Calculator and clock, 1 credit each.</small></span></label>
+      <label class="sw"><input type="checkbox" id="p_terminal"><span>Terminal (off by default)<small>Only for models that support tools. The AI can suggest a command, but it never runs until you click Allow. Blocked: deleting whole folders, formatting, shutting down, admin rights. Runs at low priority and stops after 60 seconds.</small></span></label>
+      <label class="sw"><input type="checkbox" id="p_github"><span>GitHub<small>Search repos, read files and issues. Uses a few credits. Writing always asks you first.</small></span></label>
+      <div class="sys" style="display:flex;gap:6px;align-items:center;margin:6px 0"><input id="ghTok" type="password" placeholder="GitHub token (optional, needed to write)" autocomplete="off" style="flex:1"><button id="ghSave">Save</button><button id="ghClear">Clear</button></div>
+      <div id="ghState" class="sys" style="text-align:left"></div>
+      <label class="sw"><input type="checkbox" id="p_thinking"><span>Thinking<small>Works with every model. The AI writes working notes first, then answers. Costs 25 credits a message, more with higher effort (Long +10, Max +25, and +25 more when Thinking and Max are both on). Each model also has its own chip above the message box.</small></span></label>
+      </div>
+      <div class="s-pane" data-pane="plug" style="display:none">
       <div class="elhead"><b class="sp">Plugins</b><button id="plRefresh" type="button">Refresh</button></div>
       <div class="sys" style="text-align:left">Switch any plugin on or off. An off plugin is not given to the AI at all.</div>
       <div id="plList"></div>
@@ -108,8 +126,6 @@
       <div class="elhead"><b class="sp">Skills</b></div>
       <div class="sys" style="text-align:left">A skill is a saved recipe the AI follows. Write one, or ask the AI in chat: "make a skill that ...".</div>
       <div id="skList"></div>
-      <div class="elhead"><b class="sp">My tools</b></div>
-      <div id="myToolsBox"></div>
       <div class="sys" style="display:flex;flex-direction:column;gap:6px;text-align:left;margin:6px 0">
         <input id="skName" maxlength="39" placeholder="Skill name, e.g. summarise-article" autocomplete="off">
         <input id="skWhen" maxlength="200" placeholder="When to use it" autocomplete="off">
@@ -117,12 +133,21 @@
         <div style="display:flex;gap:6px"><button id="skSave" type="button" class="p">Save skill</button><button id="skAi" type="button">Write it with the AI</button></div>
         <div id="skMsg" class="sys" style="text-align:left"></div>
       </div>
-      <label class="sw"><input type="checkbox" id="p_search"><span>Live web search<small>Only for models that support tools. Uses a few credits. Off at 0 credits.</small></span></label>
-      <label class="sw"><input type="checkbox" id="p_tools"><span>Tools<small>Only for models that support tools. Calculator and clock, 1 credit each.</small></span></label>
-      <label class="sw"><input type="checkbox" id="p_terminal"><span>Terminal (off by default)<small>Only for models that support tools. The AI can suggest a command, but it never runs until you click Allow. Blocked: deleting whole folders, formatting, shutting down, admin rights. Runs at low priority and stops after 60 seconds.</small></span></label>
-      <label class="sw"><input type="checkbox" id="p_github"><span>GitHub<small>Search repos, read files and issues. Uses a few credits. Writing always asks you first.</small></span></label>
-      <div class="sys" style="display:flex;gap:6px;align-items:center;margin:6px 0"><input id="ghTok" type="password" placeholder="GitHub token (optional, needed to write)" autocomplete="off" style="flex:1"><button id="ghSave">Save</button><button id="ghClear">Clear</button></div>
-      <div id="ghState" class="sys" style="text-align:left"></div>
+      </div>
+      <div class="s-pane" data-pane="mine" style="display:none">
+      <div class="elhead"><b class="sp">My tools</b></div>
+      <div id="myToolsBox"></div>
+      </div>
+      <div class="s-pane" data-pane="mcp" style="display:none">
+      <label class="sw"><input type="checkbox" id="p_mcp"><span>MCP tools<small>Tools from MCP servers you add. Uses a few credits.</small></span></label>
+      <h4>MCP servers</h4>
+      <div id="mcpList"></div>
+      <input type="text" id="mName" placeholder="Name (e.g. files)">
+      <input type="text" id="mUrl" placeholder="https://host/mcp (HTTP MCP server)">
+      <input type="text" id="mAuth" placeholder="Authorization header (optional, e.g. Bearer abc)">
+      <button id="mAdd">Add server</button> <span id="mMsg" class="sys"></span>
+      </div>
+      <div class="s-pane" data-pane="upd" style="display:none">
       <div class="sys" id="updBox" style="text-align:left;margin-top:10px;display:none">
         <div style="display:flex;gap:6px;align-items:center"><b class="sp">Updates</b><button id="updCheck">Check now</button><button id="updRestart" style="display:none" title="Close Pholama and open it again on its own, so the new version loads">Restart now</button></div>
         <div id="updMsg" style="margin-top:4px"></div>
@@ -132,16 +157,9 @@
       <div id="elSummary" class="elsum">Nothing yet</div>
       <div id="elFilters" class="elfilters" role="tablist" aria-label="Filter the edit log"></div>
       <div id="editLog" class="editlog"></div>
-      <label class="sw"><input type="checkbox" id="p_mcp"><span>MCP tools<small>Tools from MCP servers you add. Uses a few credits.</small></span></label>
-      <label class="sw"><input type="checkbox" id="p_thinking"><span>Thinking<small>Works with every model. The AI writes working notes first, then answers. Costs 25 credits a message, more with higher effort (Long +10, Max +25, and +25 more when Thinking and Max are both on). Each model also has its own chip above the message box.</small></span></label>
-      <h4>MCP servers</h4>
-      <div id="mcpList"></div>
-      <input type="text" id="mName" placeholder="Name (e.g. files)">
-      <input type="text" id="mUrl" placeholder="https://host/mcp (HTTP MCP server)">
-      <input type="text" id="mAuth" placeholder="Authorization header (optional, e.g. Bearer abc)">
-      <button id="mAdd">Add server</button> <span id="mMsg" class="sys"></span>
-    </div>
+      </div>
   </div>
+    </div>
 
   <div id="s_sec_account" class="s-sec" style="display:none">
     <h3>Account</h3>

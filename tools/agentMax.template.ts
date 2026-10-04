@@ -100,8 +100,8 @@ const SCHEMA = { type: 'object', properties: {
 const GROQ_MODELS = ['qwen/qwen3.8-27b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
 const JSON_RULE = 'Reply with ONLY one JSON object, no other text, shaped like: {"action":"tool" or "answer","tool":"calculator"|"clock"|"site_help"|"ui" (only when action is tool),"thinking":"one short sentence","input":{"expression":"","question":"","action":""},"answer":"the final reply (only when action is answer)"}. You are Agent Max, never say you are Qwen or any other model.';
 async function groqJson(prompt: string): Promise<any> {
-  // Two keys: the second (GROQ_API_KEY_2) takes over when the first is rate limited or rejected. Keys are read from the environment only.
-  const keys = [Deno.env.get('GROQ_API_KEY'), Deno.env.get('GROQ_API_KEY_2')].filter((k): k is string => !!k);
+  // Three keys, tried in order: GROQ_API_KEY, then GROQ_API_KEY_2, then THIRD_API_KEY. The next one takes over when the one before is rate limited or rejected. Keys are read from the environment only.
+  const keys = [Deno.env.get('GROQ_API_KEY'), Deno.env.get('GROQ_API_KEY_2'), Deno.env.get('THIRD_API_KEY')].filter((k): k is string => !!k);
   if (!keys.length) throw new Error('no key');
   let last = '';
   for (const key of keys) for (const model of GROQ_MODELS) {

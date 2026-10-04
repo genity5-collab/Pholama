@@ -823,6 +823,31 @@ const server = http.createServer(async (req, res) => {
       if (p === '/api/cmd/stop' && req.method === 'POST') return json(res, 200, { ok: agent.power.stopRunning() });
       // ---- "My tools": tools you make yourself. Secrets stay on this PC and are never sent back. ----
       if (p === '/api/mytools' && req.method === 'GET') return json(res, 200, { tools: agent.usertools.list(), secrets: agent.usertools.secretNames() });
+      if (p === '/api/mytools/update' && req.method === 'POST') { const b = await body(req); try { const n = agent.usertools.update(b.name, { name: b.newName, title: b.title, what: b.what, thumb: b.thumb }); return json(res, 200, { ok: true, name: n, tools: agent.usertools.list() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+      if (p === '/api/mytools/draft' && req.method === 'POST') {   // the AI writes the recipe. The API key is saved as a secret FIRST and the AI is only told its NAME. NOTHING is saved as a tool here.
+        const b = await body(req), model = String(b.model || ''), service = String(b.service || '').replace(/\s+/g, ' ').trim().slice(0, 200), want = String(b.want || '').replace(/\s+/g, ' ').trim().slice(0, 500), docs = String(b.docs || '').replace(/\s+/g, ' ').trim().slice(0, 1500);
+        if (want.length < 8) return json(res, 400, { error: 'Say what the tool should do, in a sentence.' });
+        if (!model) return json(res, 400, { error: 'Pick a model at the top first.' });
+        const secretName = String(b.secretName || '').replace(/[^A-Za-z0-9_]/g, '').toUpperCase().slice(0, 40) || 'MY_API_KEY', keyValue = String(b.apiKey || '').trim();
+        try {
+          if (keyValue) { if (keyValue.length < 4 || /\s/.test(keyValue)) return json(res, 400, { error: 'That API key does not look right. Paste only the key.' }); agent.usertools.setSecret(secretName, keyValue); }
+          else if (!agent.usertools.secretNames().includes(secretName) && b.needsKey !== false) return json(res, 400, { error: 'Paste the API key, or tick "no key needed".' });
+          const haveKey = agent.usertools.secretNames().includes(secretName);
+          const values = Object.values(agent.usertools.secretValues ? agent.usertools.secretValues() : {}).filter(Boolean);
+          const brief = 'Service: ' + (service || 'not said') + '\nWhat the tool should do: ' + want + (docs ? '\nAddress or notes from the user: ' + docs : '') + '\n' + (haveKey ? 'The API key is already saved as a secret named ' + secretName + '. Use it as {{secret.' + secretName + '}}.' : 'This service needs no key. Do not use any secret.');
+          for (let tries = 0; tries < 2; tries++) {
+            let text = ''; await streamTurnBase(model, [{ role: 'system', content: agent.usertools.TOOL_WRITER_PROMPT }, { role: 'user', content: brief }], { num_predict: 600, temperature: 0.2 }, t => { text += t; }, AbortSignal.timeout(90000), { in: 0, out: 0, got: false });
+            const o = agent.usertools.parseToolJson(text.replace(/<think>[\s\S]*?(<\/think>|$)/g, '')); if (!o) continue;
+            try {
+              const t = agent.usertools.sanitizeDraft(o, values, haveKey ? [secretName] : []);
+              if (!haveKey && agent.usertools.secretNames().length === 0 && /\{\{\s*secret\./.test(JSON.stringify([t.url, t.headers, t.body]))) continue;
+              const bad = agent.usertools.problem(t); if (bad) continue;
+              return json(res, 200, { draft: { name: agent.usertools.slugify(t.name), title: String(o.title || '').slice(0, 60), what: t.what, method: String(t.method || 'GET').toUpperCase(), url: t.url, headers: t.headers || {}, body: t.body || '', params: t.params || [] }, secret: haveKey ? secretName : '' });
+            } catch { continue; }
+          }
+          return json(res, 422, { error: 'The AI did not write a usable tool. Add the service address under "Notes", or try again.' });
+        } catch (e) { return json(res, 500, { error: 'The AI could not write it: ' + String(e.message).slice(0, 120) }); }
+      }
       if (p === '/api/mytools/save' && req.method === 'POST') { const b = await body(req); try { const n = agent.usertools.save({ ...b, by: 'user' }); return json(res, 200, { ok: true, name: n, tools: agent.usertools.list() }); } catch (e) { return json(res, 400, { error: e.message }); } }
       if (p === '/api/mytools/delete' && req.method === 'POST') { const b = await body(req); try { agent.usertools.remove(b.name); return json(res, 200, { ok: true, tools: agent.usertools.list() }); } catch (e) { return json(res, 400, { error: e.message }); } }
       if (p === '/api/mytools/switch' && req.method === 'POST') { const b = await body(req); try { agent.usertools.setOn(b.name, b.on === true); return json(res, 200, { ok: true, tools: agent.usertools.list() }); } catch (e) { return json(res, 400, { error: e.message }); } }

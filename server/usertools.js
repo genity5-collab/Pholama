@@ -54,23 +54,47 @@ function problem(t) {
   if (/\{\{\s*secret\./.test(String(t.url))) { /* secrets in the address are allowed but discouraged */ }
   return null;
 }
+// A thumbnail is a small picture shown on the tool card. Only a safe raster image is accepted: a data URL (png, jpeg, webp, gif, up to 60 KB)
+// or an https link. SVG is refused on purpose, because an SVG can carry script.
+const THUMB_DATA = /^data:image\/(?:png|jpeg|webp|gif);base64,[A-Za-z0-9+\/]+={0,2}$/;
+function cleanThumb(v) {
+  const t = String(v == null ? '' : v).trim(); if (!t) return '';
+  if (t.startsWith('data:')) return t.length <= 80000 && THUMB_DATA.test(t) ? t : '';
+  try { const u = new URL(t); return u.protocol === 'https:' && !u.username && !u.password && t.length <= 500 && !/\.svg(?:$|[?#])/i.test(u.pathname + u.search) ? u.toString() : ''; } catch { return ''; }
+}
 function clean(t) {
   const name = slugify(t.name);
   return { name, what: String(t.what || '').replace(/\s+/g, ' ').trim().slice(0, 240), method: String(t.method || 'GET').toUpperCase(), url: String(t.url).trim().slice(0, 600),
     headers: Object.fromEntries(Object.entries(t.headers || {}).slice(0, 12).map(([k, v]) => [String(k).replace(/[^A-Za-z0-9-]/g, '').slice(0, 60), String(v).slice(0, 400)]).filter(([k]) => k && !/^(host|content-length|connection|transfer-encoding)$/i.test(k))),
     body: t.body == null ? '' : String(t.body).slice(0, 4000), params: (Array.isArray(t.params) ? t.params : []).map(p => String(p).replace(/[^A-Za-z0-9_]/g, '').slice(0, 32)).filter(Boolean).slice(0, 10),
+    title: String(t.title || '').replace(/\s+/g, ' ').trim().slice(0, 60), thumb: cleanThumb(t.thumb),
     on: t.on !== false, by: t.by === 'ai' ? 'ai' : 'user' };
 }
 function ensure() { try { fs.mkdirSync(DIR, { recursive: true }); } catch {} }
 function read(slug) { try { const o = JSON.parse(fs.readFileSync(file(slug), 'utf8')); return o && !problem(o) ? clean(o) : null; } catch { return null; } }
 function list() { ensure(); let out = []; try { out = fs.readdirSync(DIR).filter(f => f.endsWith('.json')).map(f => read(f.slice(0, -5))).filter(Boolean); } catch {} return out.sort((a, b) => a.name.localeCompare(b.name)); }
 function save(t) { const p = problem(t); if (p) throw new Error(p); ensure(); const c = clean(t); if (list().length >= 30 && !read(c.name)) throw new Error('You can keep up to 30 custom tools.'); fs.writeFileSync(file(c.name), JSON.stringify(c, null, 1)); return c.name; }
+// Edit how a tool looks and is described. A rename moves the file; the recipe (address, headers, body) stays exactly as it was.
+function update(name, patch) {
+  const old = read(slugify(name)); if (!old) throw new Error('No tool called ' + slugify(name) + '.');
+  const p = patch || {}; const next = { ...old };
+  if (p.title != null) next.title = p.title;
+  if (p.what != null) next.what = p.what;
+  if (p.thumb != null) { const th = cleanThumb(p.thumb); if (String(p.thumb).trim() && !th) throw new Error('That picture is not allowed. Use a png, jpeg, webp or gif under 60 KB, or an https link.'); next.thumb = th; }
+  const newName = p.name != null && slugify(p.name) !== old.name ? slugify(p.name) : old.name;
+  if (newName !== old.name) { if (!SLUG.test(newName)) throw new Error('the name needs 3 to 32 letters, numbers or _'); if (read(newName)) throw new Error('There is already a tool called ' + newName + '.'); next.name = newName; }
+  const pr = problem(next); if (pr) throw new Error(pr);
+  ensure(); const c = clean(next); fs.writeFileSync(file(c.name), JSON.stringify(c, null, 1));
+  if (c.name !== old.name) { try { fs.unlinkSync(file(old.name)); } catch {} }
+  return c.name;
+}
 function remove(name) { const s = slugify(name); if (!SLUG.test(s)) throw new Error('No such tool.'); try { fs.unlinkSync(file(s)); } catch {} return true; }
 function setOn(name, on) { const s = slugify(name), o = read(s); if (!o) throw new Error('No tool called ' + s + '.'); o.on = !!on; fs.writeFileSync(file(s), JSON.stringify(o, null, 1)); }
 
 // Secrets live in their own file, never in the tool and never sent to the AI.
 const SECRETS = path.join(DIR, '..', 'usertools-secrets.json');
 function readSecrets() { try { const o = JSON.parse(fs.readFileSync(SECRETS, 'utf8')); return o && typeof o === 'object' ? o : {}; } catch { return {}; } }
+function secretValues() { return readSecrets(); }   // server use only: lets a draft be scrubbed of any real key the model wrote out
 function secretNames() { return Object.keys(readSecrets()).sort(); }
 function setSecret(name, value) { const n = String(name || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 40); if (!n) throw new Error('Give the secret a name like SUPABASE_KEY.'); const o = readSecrets(); if (value == null || value === '') delete o[n]; else { if (Object.keys(o).length >= 40 && !(n in o)) throw new Error('Up to 40 secrets.'); o[n] = String(value).slice(0, 2000); } ensure(); fs.writeFileSync(SECRETS, JSON.stringify(o), { mode: 0o600 }); return n; }
 
@@ -101,6 +125,19 @@ const MAKER_TOOL = { name: 'create_plugin', desc: 'Make a NEW custom tool for th
 // Which saved secrets does this tool use? (looks at the address, headers and body)
 const needed = t => [...new Set([...(JSON.stringify([t.url, t.headers, t.body]).matchAll(/\{\{\s*secret\.([A-Za-z0-9_]+)/g))].map(m => m[1]))];
 const isMaker = n => n === 'create_plugin';
+// "Create a tool with AI": the person pastes the service, what they want, and the API key. The key is saved as a secret FIRST under a chosen name;
+// the model is told only that secret's NAME (for example {{secret.NOTION_KEY}}) and never the value.
+const TOOL_WRITER_PROMPT = 'You design ONE custom web tool for a chat app. Reply with ONLY one JSON object, no other text: {"name":"short_snake_case","title":"Short Title","what":"one sentence: what it does and when to use it","method":"GET|POST|PUT|PATCH|DELETE","url":"https://... with {{value}} placeholders","headers":{"Header":"value"},"body":"JSON text with {{value}} placeholders, or empty","params":["value"]}. '
+  + 'Rules: the url MUST be https. {{value}} is something the chat AI will fill in later (list each in params). Use ONLY the secret names you are given, written exactly as {{secret.NAME}}, in a header such as "Authorization": "Bearer {{secret.NAME}}". NEVER write a real key. Use GET for reading. Use the service\'s real public API address you are confident about. If you are not sure of the address, use the one the user gave.';
+function parseToolJson(text) { try { const m = String(text).match(/\{[\s\S]*\}/); if (!m) return null; const o = JSON.parse(m[0]); return o && typeof o === 'object' ? o : null; } catch { return null; } }
+// Keeps only secret names that really exist, and removes any real key the model may have written out by mistake.
+function sanitizeDraft(o, secretValues, allowed) {
+  const t = { ...o }; const scrub = v => { let x = String(v == null ? '' : v); for (const sv of secretValues) if (sv && sv.length >= 4) x = x.split(sv).join(allowed[0] ? '{{secret.' + allowed[0] + '}}' : '[removed]'); return x; };
+  t.url = scrub(t.url); t.body = scrub(t.body); t.headers = Object.fromEntries(Object.entries(t.headers || {}).map(([k, v]) => [k, scrub(v)]));
+  t.by = 'ai'; t.on = true;
+  const used = needed(t); const bad = used.filter(n => !allowed.includes(n)); if (bad.length) throw new Error('The AI used a secret that does not exist: ' + bad[0]);
+  return t;
+}
 function runMaker(args) { const a = args || {}; const name = save({ ...a, by: 'ai', on: true }); const t = read(name); return `MADE custom tool x_${name} (${t.method}). It is on now. ${needed(t).length ? 'The user must add these secret(s) in Plugins > My tools before it works: ' + needed(t).join(', ') + '. ' : ''}${t.method !== 'GET' ? 'It will ask for approval before each use.' : ''}`; }
 
-module.exports = { TOOL_PREFIX, slugify, privateIp, checkUrl, fill, fillUrl, problem, clean, list, read, save, remove, setOn, secretNames, setSecret, asTools, isUserTool, needsApproval, run, MAKER_TOOL, isMaker, runMaker, hide, needed };
+module.exports = { secretValues, update, cleanThumb, TOOL_WRITER_PROMPT, parseToolJson, sanitizeDraft, TOOL_PREFIX, slugify, privateIp, checkUrl, fill, fillUrl, problem, clean, list, read, save, remove, setOn, secretNames, setSecret, asTools, isUserTool, needsApproval, run, MAKER_TOOL, isMaker, runMaker, hide, needed };

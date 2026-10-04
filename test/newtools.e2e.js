@@ -11,7 +11,8 @@ async function main() {
   const script = path.join(home, 'fake.js');
   fs.writeFileSync(script, `const http=require('http');const a=process.argv.slice(2);const port=+a[a.indexOf('--port')+1];
 http.createServer((q,s)=>{let b='';q.on('data',c=>b+=c);q.on('end',()=>{s.setHeader('Content-Type','application/json');if(q.url==='/health'){s.end('{"status":"ok"}');return}
-const out='Here is a gallery of cat pictures from example.com.';
+require('fs').appendFileSync(process.env.HOME+'/model-saw.txt', b+'\\n');
+const out=/design ONE custom web tool/.test(b)?'{"name":"notion_read","title":"Notion reader","what":"Read a Notion page by its id","method":"GET","url":"https://api.notion.com/v1/pages/{{page}}","headers":{"Authorization":"Bearer {{secret.NOTION_KEY}}"},"params":["page"]}':'Here is a gallery of cat pictures from example.com.';
 if(/"stream":true/.test(b)){s.setHeader('Content-Type','text/event-stream');s.write('data: '+JSON.stringify({choices:[{delta:{content:out}}]})+'\\n\\n');s.write('data: [DONE]\\n\\n');s.end();return}
 s.end(JSON.stringify({choices:[{message:{content:out}}]}))})}).listen(port,'127.0.0.1');`);
   fs.copyFileSync(process.execPath, path.join(home, 'real')); fs.chmodSync(path.join(home, 'real'), 0o755);
@@ -40,6 +41,23 @@ s.end(JSON.stringify({choices:[{message:{content:out}}]}))})}).listen(port,'127.
     r = await J('/api/mytools/save', { name: 'bad', what: 'points at my own PC', url: 'https://127.0.0.1/x' }); ok('a tool can be saved but is blocked when run', r.j.ok || r.s === 400, JSON.stringify(r));
     r = await J('/api/mytools/save', { name: 'nohttp', what: 'uses plain http here', url: 'http://example.com' }); ok('http:// is refused', r.s === 400, JSON.stringify(r));
     r = await fetch(B + '/api/mytools', { headers: { Origin: 'https://evil.example' } }); ok('a website cannot read or change your tools', r.status === 403, r.status);
+    // ---- create a tool with the AI: the key is saved first, the model only ever sees the secret's NAME
+    r = await J('/api/mytools/draft', { model: 'gguf:' + m.id, service: 'Notion', want: 'Read a page from my workspace by its id', apiKey: 'secret_SUPERPRIVATEKEY_98765', secretName: 'notion_key' });
+    ok('the AI drafts a tool', r.s === 200 && r.j.draft && r.j.draft.name === 'notion_read' && r.j.secret === 'NOTION_KEY', JSON.stringify(r));
+    ok('the draft uses the secret name, not the key', r.j.draft && r.j.draft.headers.Authorization === 'Bearer {{secret.NOTION_KEY}}' && !JSON.stringify(r).includes('SUPERPRIVATEKEY'), JSON.stringify(r.j));
+    const saw = fs.existsSync(path.join(home, 'model-saw.txt')) ? fs.readFileSync(path.join(home, 'model-saw.txt'), 'utf8') : '';
+    ok('the model was asked to design the tool', /design ONE custom web tool/.test(saw), saw.slice(0, 200));
+    ok('THE MODEL NEVER SAW THE API KEY', !/SUPERPRIVATEKEY/.test(saw), 'the key reached the model');
+    ok('the model was told the secret NAME', /NOTION_KEY/.test(saw));
+    ok('the key is saved as a secret', (await fetch(B + '/api/mytools').then(x => x.json())).secrets.includes('NOTION_KEY'));
+    ok('drafting does NOT save a tool yet', !(await fetch(B + '/api/mytools').then(x => x.json())).tools.some(x => x.name === 'notion_read'));
+    r = await J('/api/mytools/save', { ...r.j.draft }); ok('after review, saving makes the tool', r.j.ok, JSON.stringify(r));
+    r = await J('/api/mytools/update', { name: 'notion_read', newName: 'notion_page', title: 'My Notion', what: 'Read a Notion page using its id', thumb: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUg==' });
+    ok('a tool can be renamed, re-described and given a picture', r.j.ok && r.j.tools.some(x => x.name === 'notion_page' && x.title === 'My Notion' && x.thumb.startsWith('data:image/png')), JSON.stringify(r).slice(0, 300));
+    r = await J('/api/mytools/update', { name: 'notion_page', thumb: 'javascript:alert(1)' }); ok('a dangerous picture is refused', r.s === 400, JSON.stringify(r));
+    r = await J('/api/mytools/draft', { model: 'gguf:' + m.id, want: 'x' }); ok('a vague request is refused', r.s === 400, JSON.stringify(r));
+    r = await J('/api/mytools/draft', { model: 'gguf:' + m.id, want: 'Read a page from my workspace', secretName: 'nothing_saved', service: 'Zzz' }); ok('no key and none saved: asks for the key', r.s === 400 && /key/i.test(r.j.error), JSON.stringify(r));
+    r = await fetch(B + '/api/mytools/draft', { method: 'POST', headers: { 'Content-Type': 'application/json', Origin: 'https://evil.example' }, body: '{}' }); ok('a website cannot ask the AI to make tools', r.status === 403, r.status);
     r = await J('/api/mytools/approve', { id: 'doesnotexist', approve: true }); ok('approving something that does not exist is harmless', r.j.ok === false, JSON.stringify(r));
   } finally { srv.kill('SIGKILL'); await wait(400); try { process.kill(+fs.readFileSync(path.join(home, '.pholama', 'llama.pid'), 'utf8'), 'SIGKILL'); } catch {} }
   console.log(bad ? bad + ' FAILED' : 'ALL PASSED'); process.exit(bad ? 1 : 0);
