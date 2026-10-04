@@ -1,6 +1,18 @@
 {
- "latest": "0.9.14",
+ "latest": "0.9.15",
  "releases": [
+  {
+   "version": "0.9.15",
+   "date": "2026-10-04",
+   "title": "Animated Studio updates",
+   "notes": [
+    "When a new version is ready, a banner slides in from the top with the version and what it brings. Press Update now, or close it to do it later",
+    "Updating now shows a full screen scene: a progress ring and four steps (saving your chats, closing the old version, starting the new one, loading it) that tick off one by one",
+    "The first time you open a new version, a What's new card pops up with confetti and lists the new features one by one. It shows once, and never on a brand new install",
+    "Works in light and dark, fits a phone screen, and calms down if your system is set to reduce motion",
+    "If the update does not come back, the scene says so instead of hanging"
+   ]
+  },
   {
    "version": "0.9.14",
    "date": "2026-10-04",

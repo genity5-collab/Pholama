@@ -13,6 +13,7 @@ import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 import { downloadDecision, readCached, writeCached } from './pclink.js';
 import { canSave, usedText } from './memlimit.js';
 import { loadReader, readerLoaded } from './reader.js';
+import { showBanner, hideBanner, openInstalling, checkCelebrate } from './updatefx.js';
 import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
 import { READER } from './attach.js';
 import { buildKeysPanel, friendlyModelName } from './keys.js';
@@ -1527,31 +1528,37 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
 
 
 // ---------- updates (PC app only; the server says if it is the PC app) ----------
+let shownBanner = null;
 async function paintUpdate() {
   try {
     const r = await fetch('/api/update'); if (!r.ok) return; const u = await r.json();
     $('#updBox').style.display = ''; $('#updAuto').checked = u.auto !== false;
     $('#updPill').style.display = u.ready ? '' : 'none'; $('#updRestart').style.display = u.ready ? '' : 'none';
+    if (u.ready) { if (shownBanner !== u.latest) { shownBanner = u.latest; let t = ''; try { t = ((await (await fetch('releases.json', { cache: 'no-cache' })).json()).releases || []).find(r => r.version === u.latest)?.title || ''; } catch {} showBanner({ version: u.latest, title: t, onRestart: () => restartPholama($('#updRestart'), u.latest) }); } } else { shownBanner = null; hideBanner(); }
     $('#updMsg').textContent = u.ready ? `Version ${u.latest} is downloaded. Press Restart now to use it.`
       : u.error ? u.error : u.latest && u.latest !== u.current ? `New version ${u.latest} is available. Turn on automatic updates or press Check now.`
       : `You have the newest version (${u.current}).`;
   } catch {}
 }
 // Ask this PC's server to start a fresh copy of itself, wait for it to come back, then reload the page so the new version is what you see.
-async function restartPholama(btn) {
+async function restartPholama(btn, version) {
+  hideBanner(); const scene = openInstalling(version); let sceneOpen = true;
+  const fail = m => { if (sceneOpen) { sceneOpen = false; scene.fail(m); } };
   if (btn) { btn.disabled = true; btn.textContent = 'Restarting...'; }
+  await new Promise(r => setTimeout(r, 700)); scene.step(1);
   try { const r = await fetch('/api/restart', { method: 'POST' }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed'); }
-  catch (e) { if (btn) { btn.disabled = false; btn.textContent = 'Restart now'; } alert('Could not restart from here (' + e.message + '). Close Pholama and open it again.'); return; }
-  await new Promise(r => setTimeout(r, 2500));
-  for (let i = 0; i < 40; i++) { try { const r = await fetch('/api/update', { cache: 'no-store' }); if (r.ok) { location.reload(); return; } } catch {} await new Promise(r => setTimeout(r, 700)); }
-  if (btn) { btn.disabled = false; btn.textContent = 'Restart now'; } alert('Pholama did not come back on its own. Open it again from your Desktop icon.');
+  catch (e) { if (btn) { btn.disabled = false; btn.textContent = 'Restart now'; } fail('Could not restart from here'); alert('Could not restart from here (' + e.message + '). Close Pholama and open it again.'); return; }
+  scene.step(2); await new Promise(r => setTimeout(r, 2500));
+  for (let i = 0; i < 40; i++) { try { const r = await fetch('/api/update', { cache: 'no-store' }); if (r.ok) { scene.done(); await new Promise(r => setTimeout(r, 900)); location.reload(); return; } } catch {} await new Promise(r => setTimeout(r, 700)); }
+  if (btn) { btn.disabled = false; btn.textContent = 'Restart now'; } fail('Pholama did not come back'); alert('Pholama did not come back on its own. Open it again from your Desktop icon.');
 }
 window.restartPholama = restartPholama;
-$('#updRestart').onclick = e => restartPholama(e.currentTarget);
+$('#updRestart').onclick = e => restartPholama(e.currentTarget, null);
 $('#updCheck').onclick = async () => { $('#updMsg').textContent = 'Checking...'; try { await fetch('/api/update/check', { method: 'POST' }); } catch {} paintUpdate(); };
 $('#updAuto').onchange = async e => { try { await fetch('/api/update/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: e.target.checked }) }); } catch {} paintUpdate(); };
 $('#updPill').onclick = () => { $('#opt').click(); };
 paintUpdate(); setInterval(paintUpdate, 10 * 60 * 1000);
+setTimeout(async () => { try { const v = await (await fetch(server ? '/api/version' : 'releases.json', { cache: 'no-cache' })).json(); const cur = server ? v.version : v.latest; await checkCelebrate(cur, async () => (await (await fetch('releases.json', { cache: 'no-cache' })).json()).releases || []); } catch {} }, 1800);
 
 
 // ---------- PC celebration banner (website only; hidden on the PC app itself, and once dismissed) ----------

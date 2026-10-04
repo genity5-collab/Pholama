@@ -1,6 +1,6 @@
 {
   "name": "pholama",
-  "version": "0.9.14",
+  "version": "0.9.15",
   "description": "Pholama: run AI models on your own PC. CLI: pholama pull | chat | serve | rm | update.",
   "bin": {
     "pholama": "server/cli.js",
@@ -10,7 +10,7 @@
   "scripts": {
     "start": "node server/server.js",
     "sync-site": "node scripts/sync-site.js",
-    "test": "node scripts/sync-site.js --check && node test/core.test.js && node test/recommend.test.js && node test/tools.test.js && node test/rewards-claim.test.js && node test/toollimit.test.js && node test/platform-plugin.test.js && node test/providers.test.js && node test/cleanup.test.js && node test/studiofx.test.js",
+    "test": "node scripts/sync-site.js --check && node test/core.test.js && node test/recommend.test.js && node test/tools.test.js && node test/rewards-claim.test.js && node test/toollimit.test.js && node test/platform-plugin.test.js && node test/providers.test.js && node test/cleanup.test.js && node test/studiofx.test.js && node test/updatefx.test.js",
     "test:e2e": "node test/lowram.e2e.js && node test/pricing.e2e.js && node test/sleep.e2e.js && node test/retry.e2e.js && node test/lazy.e2e.js && node test/limit.e2e.js && node test/plugins.e2e.js && node test/texttool.e2e.js && node test/livelog.e2e.js && node test/forcedsearch.e2e.js && node test/byok.e2e.js && node test/maxstudio.e2e.js && node test/keycheck.e2e.js"
   },
   "engines": {
