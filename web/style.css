@@ -1,5 +1,5 @@
-:root{--bg:#fff;--fg:#111;--mut:#737373;--line:#e5e5e5;--card:#f7f7f7;--card2:#efefef;--acc:#111;--acct:#fff;--ok:#1a9d55;--err:#d93025;--warn:#b26a00;--bubble:#f0f0f0;--r:14px}
-@media (prefers-color-scheme:dark){:root{--bg:#0b0b0c;--fg:#f2f2f2;--mut:#9a9a9f;--line:#26262a;--card:#151517;--card2:#1e1e21;--acc:#f2f2f2;--acct:#0b0b0c;--ok:#4cc38a;--err:#ff7b72;--warn:#e3b341;--bubble:#1d1d20}}
+:root{--bg:#f5f7fb;--fg:#10131a;--mut:#6f7785;--line:#dce2ec;--card:#ffffff;--card2:#eef2f7;--acc:#5b5ce2;--acct:#fff;--ok:#0f9f77;--err:#cf3f55;--warn:#b97818;--bubble:#e9ebff;--r:16px;--glow:rgba(91,92,226,.18)}
+@media (prefers-color-scheme:dark){:root{--bg:#090b10;--fg:#edf1f7;--mut:#8d96a6;--line:#252c39;--card:#11151d;--card2:#181e29;--acc:#8d7aff;--acct:#0a0b10;--ok:#42d6a4;--err:#ff7186;--warn:#f0b45b;--bubble:#20243a;--glow:rgba(141,122,255,.22)}}
 *{box-sizing:border-box}html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--fg);font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
 header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;padding-top:max(10px,env(safe-area-inset-top));position:sticky;top:0;background:var(--bg);z-index:5}
@@ -287,3 +287,22 @@ code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:13px}
 .achip img{width:26px;height:26px;object-fit:cover;border-radius:6px}.achip span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:46vw}
 .achip button{min-height:0;width:22px;height:22px;padding:0;border-radius:50%;line-height:1;background:transparent;border:0;color:var(--mut);cursor:pointer;font-size:16px}
 .st-msg.think{font-style:italic;opacity:.8}
+
+/* Studio pass: sharper hierarchy, workbench surfaces, and readable edit telemetry. */
+header{border-bottom:1px solid var(--line);backdrop-filter:blur(18px);background:color-mix(in srgb,var(--bg) 86%,transparent)}
+.brand{letter-spacing:.02em}.brand span{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:15px;text-transform:uppercase;letter-spacing:.12em}
+.viewsw{box-shadow:0 0 0 1px color-mix(in srgb,var(--acc) 12%,transparent)}
+.viewsw button.on,.st-tab.on,.elf.on,.chipbtn.on{box-shadow:0 0 18px var(--glow)}
+#hero{max-width:680px;margin-top:12vh}.hero-kicker{font:11px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.18em;text-transform:uppercase;color:var(--acc)}
+#hero h1{font-size:clamp(28px,4vw,48px);line-height:1.04;max-width:620px;margin-inline:auto}
+#hero p{max-width:500px;margin-inline:auto}
+.composer{box-shadow:0 12px 36px color-mix(in srgb,var(--acc) 10%,transparent)}.composer:focus-within{border-color:var(--acc);box-shadow:0 0 0 4px var(--glow)}
+.dwrap{padding-top:10px}.dhero{padding:18px 20px;border:1px solid var(--line);border-radius:20px;background:linear-gradient(135deg,color-mix(in srgb,var(--acc) 12%,var(--card)),var(--card));box-shadow:0 18px 50px color-mix(in srgb,var(--acc) 8%,transparent)}
+.dhero h2{font-size:clamp(26px,4vw,40px)}.dtile,.dcard{box-shadow:0 10px 30px color-mix(in srgb,#000 9%,transparent);transition:transform .18s,border-color .18s,box-shadow .18s}.dtile:hover,.dcard:hover{transform:translateY(-2px);border-color:color-mix(in srgb,var(--acc) 45%,var(--line));box-shadow:0 14px 36px color-mix(in srgb,var(--acc) 12%,transparent)}
+#studio{padding:12px 16px 16px;background:radial-gradient(circle at 75% 0%,color-mix(in srgb,var(--acc) 12%,transparent),transparent 34%)}
+.st-bar{padding:4px 2px 8px}.st-bar b{font:600 12px ui-monospace,SFMono-Regular,Menlo,monospace;letter-spacing:.12em;text-transform:uppercase;color:var(--mut)}
+.st-left,.st-right{border-radius:18px;box-shadow:0 16px 40px color-mix(in srgb,#000 13%,transparent)}.st-tabs{background:var(--card2)}
+#stCode{background:linear-gradient(180deg,color-mix(in srgb,var(--card2) 45%,transparent),transparent 20%);padding:16px;font-size:13.5px}
+.st-con{background:#080b11;color:#c7d0df;border-top:1px solid var(--line);font-size:11.5px}.st-l{padding:1px 0}.st-ai{border-radius:16px;box-shadow:0 8px 24px color-mix(in srgb,#000 12%,transparent)}
+.elhead{padding-top:8px;border-top:1px solid var(--line)}.editlog{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--acc) 7%,transparent)}.elrow>summary{padding:10px 12px}.elrow>summary:hover{background:color-mix(in srgb,var(--acc) 9%,var(--card2))}.elchip{letter-spacing:.04em}.elbody code{border-left:2px solid var(--acc)}
+@media(max-width:760px){#studio{padding:8px}.st-left,.st-right{border-radius:14px}.dhero{padding:14px}.brand span{font-size:13px}}
