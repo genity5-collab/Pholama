@@ -291,16 +291,70 @@ let cred = null;
 async function refreshCredits() {
   if (!server) { $('#cr').style.display = 'none'; paintComposerPill(); return; }
   try { cred = await (await api('api/credits')).json(); } catch { return; }
-  const c = $('#cr'); c.style.display = ''; c.textContent = cred.left; c.title = cred.left + ' of ' + cred.daily + ' daily credits left' + (cred.left === 0 ? '. Search, tools, MCP and thinking are off until tomorrow.' : '. Resets daily.');
+  const c = $('#cr'); c.style.display = ''; c.textContent = cred.left; c.title = cred.left + ' of ' + cred.daily + ' daily credits left' + (cred.left === 0 ? '. ' + restockLine(cred) : '. Resets daily.');
   c.className = 'pill' + (cred.left === 0 ? ' zero' : cred.left < cred.daily * 0.2 ? ' low' : '');
   paintComposerPill();
   paintUsage();
+}
+// ----- Plugins and skills: everything is drawn with textContent, so a skill or plugin text can never inject markup. -----
+async function paintPlugins() {
+  if (!server) return;
+  let d; try { d = await (await api('api/plugins')).json(); } catch { return; }
+  const box = $('#plList'); if (!box) return; box.textContent = '';
+  for (const p of d.plugins) {
+    const lab = document.createElement('label'); lab.className = 'sw';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!p.on;
+    const sp = document.createElement('span'), sm = document.createElement('small');
+    sp.append(p.name); sm.textContent = p.desc + (p.on && p.paid && !p.usable ? ' (paused: no credits left today)' : p.paid ? ' Uses a few credits.' : '');
+    sp.append(sm); lab.append(cb, sp); box.append(lab);
+    cb.onchange = async () => { cb.disabled = true; try { await api('api/plugins/switch', { method: 'POST', body: JSON.stringify({ id: p.id, on: cb.checked }) }); } catch {} cb.disabled = false; paintPlugins(); };
+  }
+  const h = $('#plHealth'); if (h) h.textContent = d.check.ok ? 'Self-check: everything is healthy.' : 'Self-check found ' + d.check.problems.length + ' problem(s): ' + d.check.problems.slice(0, 3).join('; ') + '. Broken skills are ignored, chat keeps working.';
+  const sk = $('#skList'); if (!sk) return; sk.textContent = '';
+  if (!d.skills.length) { const e = document.createElement('div'); e.className = 'sys'; e.textContent = 'No skills yet.'; sk.append(e); }
+  for (const k of d.skills) {
+    const row = document.createElement('div'); row.className = 'sys'; row.style.cssText = 'display:flex;gap:6px;align-items:center;text-align:left';
+    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = k.on;
+    const t = document.createElement('span'); t.style.flex = '1'; t.textContent = k.name + ': ' + k.when + (k.by === 'ai' ? ' (written by the AI)' : '');
+    const del = document.createElement('button'); del.type = 'button'; del.textContent = 'Delete';
+    row.append(cb, t, del); sk.append(row);
+    cb.onchange = async () => { await api('api/skills/switch', { method: 'POST', body: JSON.stringify({ name: k.name, on: cb.checked }) }); paintPlugins(); };
+    del.onclick = async () => { if (!confirm('Delete the skill "' + k.name + '"?')) return; await api('api/skills/delete', { method: 'POST', body: JSON.stringify({ name: k.name }) }); paintPlugins(); };
+  }
+}
+async function saveSkillFromForm() {
+  const m = $('#skMsg'); m.textContent = '';
+  try {
+    const r = await api('api/skills', { method: 'POST', body: JSON.stringify({ name: $('#skName').value, when: $('#skWhen').value, steps: $('#skSteps').value }) }); const j = await r.json();
+    if (!r.ok) { m.textContent = j.error || 'Could not save.'; return; }
+    m.textContent = 'Saved "' + j.name + '".'; $('#skName').value = $('#skWhen').value = $('#skSteps').value = ''; paintPlugins();
+  } catch { m.textContent = 'Could not reach the PC app.'; }
+}
+if ($('#skSave')) $('#skSave').onclick = saveSkillFromForm;
+if ($('#plRefresh')) $('#plRefresh').onclick = paintPlugins;
+// "Write it with the AI": the chosen model drafts the skill as JSON, the server checks it, and it lands in the form for you to read before saving.
+if ($('#skAi')) $('#skAi').onclick = async () => {
+  const m = $('#skMsg'), idea = ($('#skWhen').value || $('#skName').value || '').trim();
+  if (idea.length < 5) { m.textContent = 'Type what the skill is for in "When to use it" first.'; return; }
+  m.textContent = 'Writing...'; $('#skAi').disabled = true;
+  try {
+    const r = await api('api/skills/draft', { method: 'POST', body: JSON.stringify({ model: sel.value, idea }) }); const j = await r.json();
+    if (!r.ok) { m.textContent = j.error || 'The AI could not write it. Try again or write it yourself.'; return; }
+    $('#skName').value = j.skill.name || ''; $('#skWhen').value = j.skill.when || ''; $('#skSteps').value = j.skill.steps || ''; m.textContent = 'Drafted. Read it, change anything, then press Save skill.';
+  } catch { m.textContent = 'The AI could not write it. Try again or write it yourself.'; }
+  finally { $('#skAi').disabled = false; }
+};
+// The restock sentence comes from the PC with the numbers already worked out, so this can never show "NaN".
+function restockLine(c) {
+  const r = c && c.restock, w = r && typeof r.wait === 'string' && r.wait && !/NaN|undefined/.test(r.wait) ? r.wait : 'until tomorrow';
+  return 'Integration credit limit reached. Please wait ' + w + (r && r.clock && !/NaN/.test(r.clock) ? ' for a restock (tomorrow at ' + r.clock + ')' : ' for a restock') + '. Search, web pages, GitHub, thinking and memory are off until then. Plain chat on your own model stays free.';
 }
 async function openOpts() {
   const off = !server; $('#t_off').style.display = off ? '' : 'none';
   if (!off) {
     await refreshCredits();
-    $('#t_cr').textContent = cred.left === 0 ? 'Out of credits. Thinking mode is off until tomorrow. Tools and chat still work.' : `${cred.left} of ${cred.daily} credits left today` + (cred.bonus ? ` (includes ${cred.bonus} bonus from logging in).` : '.') + ' Resets at midnight.';
+    $('#t_cr').textContent = cred.left === 0 ? restockLine(cred) : `${cred.left} of ${cred.daily} credits left today` + (cred.bonus ? ` (includes ${cred.bonus} bonus from logging in).` : '.') + ' Resets at midnight.';
+    paintPlugins();
     const pr = cred.allowed.prefs; ghPaint(); for (const k of ['terminal', 'github', 'search', 'tools', 'mcp', 'thinking']) $('#p_' + k).checked = !!pr[k];
     paintEditLog();
     await listMcpUI();
@@ -1025,6 +1079,7 @@ function paintPcWelcome() {
   box.style.display = '';
 }
 function paintUsage() {
+  const cn = $('#t_collect'); if (cn && !cn.dataset.on) { cn.dataset.on = '1'; cn.onclick = async () => { cn.disabled = true; await collectRewards(true); cn.disabled = false; await refreshCredits(); }; }
   paintFallback(); paintPcWelcome();
   let uData = null;
   try { uData = JSON.parse(localStorage.getItem('pholama.maxUsage') || 'null'); } catch {}
@@ -1288,14 +1343,22 @@ $('#clearHistBtn').onclick = () => {
 init().then(refreshCredits).then(() => showView('dash'));
 
 // ----- Report rewards + moderator gifts: the database says how many are waiting, the PC server collects them with your own login. -----
-async function collectRewards() {
-  if (!server || remoteBase()) return;
+let collecting = false;
+async function collectRewards(say) {
+  if (!server || remoteBase() || collecting) return 0;
+  collecting = true;
   try {
-    const t = Account.token(); if (!t) return;
+    const t = Account.token(); if (!t) { if (say) add('sys', 'Sign in first, then press Collect now.'); return 0; }
     const r = await (await api('api/bonus/rewards', { method: 'POST', body: JSON.stringify({ token: t }) })).json();
-    if (r && r.granted > 0) { await refreshCredits(); add('sys', '+' + r.granted + ' integration credits added (report rewards and moderator gifts).'); }
-  } catch {}
+    if (r && r.granted > 0) { await refreshCredits(); add('sys', '+' + r.granted + ' integration credits added (report rewards and moderator gifts).'); return r.granted; }
+    if (say) add('sys', 'Nothing waiting right now.');
+  } catch { if (say) add('sys', 'Could not reach the account server. Try again in a moment.'); }
+  finally { collecting = false; }
+  return 0;
 }
+// Gifts and rewards are picked up by themselves every 2 minutes while Pholama is open and you are signed in (not while the tab is hidden).
+setInterval(() => { if (!document.hidden && server && !remoteBase()) collectRewards(); }, 120000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden && server && !remoteBase()) collectRewards(); });
 // ----- GitHub on both: this page only reports where you signed in. The database decides, and the PC server grants the 250. -----
 async function githubBothBonus() {
   if (!server || remoteBase()) return;   // only the real PC app counts as the PC
@@ -1381,7 +1444,7 @@ $('#logClear').onclick = async () => { if (!confirm('Clear the edit log? This ca
 const GHK = 'pholama_gh_token';
 // A pasted token wins. Otherwise a GitHub sign-in supplies it, so nothing has to be pasted.
 const ghToken = () => { try { return localStorage.getItem(GHK) || Account.githubToken() || ''; } catch { return ''; } };
-function ghHeaders() { const t = ghToken(); return t ? { 'x-github-token': t } : {}; }
+function ghHeaders() { const t = ghToken(), p = (typeof Account !== 'undefined' && Account.token && Account.token()) || ''; return { ...(t ? { 'x-github-token': t } : {}), ...(p ? { 'x-pholama-token': p } : {}) }; }   // the Platform login is only used so the AI can READ the Platform as you
 function ghPaint() { const t = ghToken(); const el = $('#ghState'); if (el) el.textContent = t ? (localStorage.getItem(GHK) ? 'GitHub connected on this device (token saved here only).' : 'GitHub connected through your GitHub sign-in. No token needed.') : 'Not connected. Reading public repos works without a token.'; }
 $('#ghSave').onclick = () => { const v = $('#ghTok').value.trim(); if (!v) return; try { localStorage.setItem(GHK, v); } catch {} $('#ghTok').value = ''; ghPaint(); };
 $('#ghClear').onclick = () => { try { localStorage.removeItem(GHK); } catch {} ghPaint(); };

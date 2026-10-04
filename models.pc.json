@@ -1483,5 +1483,138 @@
   "toolTier": "good",
   "released": "2026-02",
   "added": "2026-10-04"
+ },
+ {
+  "id": "qwen3-4b-instruct-2507",
+  "name": "Qwen3 4B Instruct 2507",
+  "family": "Qwen",
+  "params": "4B",
+  "url": "https://huggingface.co/unsloth/Qwen3-4B-Instruct-2507-GGUF/resolve/main/Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+  "file": "Qwen3-4B-Instruct-2507-Q4_K_M.gguf",
+  "bytes": 2497281120,
+  "sizeGB": 2.33,
+  "minRamGB": 5,
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "fast"
+  ],
+  "blurb": "Qwen3 4B, July 2025 update. Follows instructions well and calls tools reliably for its size. A strong everyday choice.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "fast"
+  ],
+  "command": "pholama pull qwen3-4b-instruct-2507",
+  "toolTier": "good",
+  "released": "2025-08",
+  "added": "2026-10-04"
+ },
+ {
+  "id": "qwen3-4b-thinking-2507",
+  "name": "Qwen3 4B Thinking 2507",
+  "family": "Qwen",
+  "params": "4B",
+  "url": "https://huggingface.co/unsloth/Qwen3-4B-Thinking-2507-GGUF/resolve/main/Qwen3-4B-Thinking-2507-Q4_K_M.gguf",
+  "file": "Qwen3-4B-Thinking-2507-Q4_K_M.gguf",
+  "bytes": 2497281152,
+  "sizeGB": 2.33,
+  "minRamGB": 5,
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "reasoning"
+  ],
+  "blurb": "Qwen3 4B that reasons step by step before it answers. Slower, better at maths, logic and planning.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "reasoning",
+   "thinking"
+  ],
+  "command": "pholama pull qwen3-4b-thinking-2507",
+  "toolTier": "good",
+  "released": "2025-08",
+  "added": "2026-10-04"
+ },
+ {
+  "id": "qwen2.5-coder-3b",
+  "name": "Qwen2.5 Coder 3B",
+  "family": "Qwen",
+  "params": "3B",
+  "url": "https://huggingface.co/unsloth/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf",
+  "file": "Qwen2.5-Coder-3B-Instruct-Q4_K_M.gguf",
+  "bytes": 1929902496,
+  "sizeGB": 1.8,
+  "minRamGB": 4,
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "A small model made for code. Good at Lua, Python and web pages. Simple tools only.",
+  "license": "Other",
+  "caps": [
+   "chat",
+   "fast",
+   "code"
+  ],
+  "command": "pholama pull qwen2.5-coder-3b",
+  "toolTier": "basic",
+  "released": "2024-11",
+  "added": "2026-10-04"
+ },
+ {
+  "id": "gemma3n-e2b",
+  "name": "Gemma 3n E2B",
+  "family": "Gemma",
+  "params": "2B",
+  "url": "https://huggingface.co/unsloth/gemma-3n-E2B-it-GGUF/resolve/main/gemma-3n-E2B-it-Q4_K_M.gguf",
+  "file": "gemma-3n-E2B-it-Q4_K_M.gguf",
+  "bytes": 3026881888,
+  "sizeGB": 2.82,
+  "minRamGB": 5,
+  "ctx": 8192,
+  "categories": [
+   "fast"
+  ],
+  "blurb": "Google model built to run on small devices. Friendly chat and writing. No tool use.",
+  "license": "Gemma",
+  "caps": [
+   "chat",
+   "fast"
+  ],
+  "command": "pholama pull gemma3n-e2b",
+  "toolTier": "none",
+  "released": "2025-06",
+  "added": "2026-10-04"
+ },
+ {
+  "id": "granite4-h-tiny",
+  "name": "Granite 4.0 H Tiny",
+  "family": "Granite",
+  "params": "7B (1B active)",
+  "url": "https://huggingface.co/unsloth/granite-4.0-h-tiny-GGUF/resolve/main/granite-4.0-h-tiny-Q4_K_M.gguf",
+  "file": "granite-4.0-h-tiny-Q4_K_M.gguf",
+  "bytes": 4254815392,
+  "sizeGB": 3.96,
+  "minRamGB": 6,
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "fast"
+  ],
+  "blurb": "IBM mixture-of-experts model: 7B of knowledge but only about 1B working at a time, so it answers fast. Supports tool calls.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "fast"
+  ],
+  "command": "pholama pull granite4-h-tiny",
+  "toolTier": "good",
+  "released": "2025-10",
+  "added": "2026-10-04"
  }
 ]

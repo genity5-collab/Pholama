@@ -14,6 +14,7 @@ const studio = require('./studio');
 const tools2 = require('./tools2');
 const sources = require('./sources');
 const power = require('./power');
+const plugins = require('./plugins');
 
 function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
 function load() { try { return JSON.parse(fs.readFileSync(FILE, 'utf8')); } catch { return {}; } }
@@ -34,7 +35,20 @@ function messageCost(thinking, effort) {
   const e = EFFORT_COST[effort] || 0, t = thinking ? COST.thinking : 0;
   return { thinking: t, effort: e, combo: thinking && effort === 'max' ? COMBO_COST : 0, total: t + e + (thinking && effort === 'max' ? COMBO_COST : 0) };
 }
-const credits = () => { const s = state(), d = dailyNow(); return { daily: d, used: s.used, left: Math.max(0, d - s.used), day: s.day, cost: COST, bonus: power.bonusTotal() }; };
+// When do credits come back? At the next local midnight. Worked out HERE as plain numbers so no page can ever print "NaN".
+function restock(now = new Date()) {
+  const next = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1, 0, 0, 0, 0);
+  const ms = Math.max(0, next - now), minutes = Math.ceil(ms / 60000), hours = Math.floor(minutes / 60), mins = minutes % 60;
+  const clock = next.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
+  const wait = hours >= 1 ? hours + (hours === 1 ? ' hour' : ' hours') + (mins ? ' ' + mins + ' min' : '') : Math.max(1, minutes) + ' min';
+  return { at: next.toISOString(), minutes, hours, wait, clock };
+}
+// The one sentence shown when the daily credits are gone.
+function limitMessage(now = new Date()) {
+  const r = restock(now);
+  return 'Integration credit limit reached. Please wait ' + r.wait + ' for a restock (tomorrow at ' + r.clock + '). Credit features (thinking, search, tools, memory, pictures, pasted code and Studio) are off until then. Plain chat on your own model stays free.';
+}
+const credits = () => { const s = state(), d = dailyNow(); return { daily: d, used: s.used, left: Math.max(0, d - s.used), day: s.day, cost: COST, bonus: power.bonusTotal(), restock: restock() }; };
 // Try to spend. Returns false (and spends nothing) if there is not enough left.
 function spend(n) { const s = state(); if (s.used + n > dailyNow()) return false; s.used += n; save(s); return true; }
 const hasCredits = () => credits().left > 0;
@@ -156,7 +170,9 @@ function setPrefs(p) { const s = state(); s.prefs = { ...s.prefs, ...p }; save(s
 function allowed() {
   const s = state(), ok = hasCredits();
   return { studio: true, terminal: s.prefs.terminal === true,   // free: works even at 0 credits
-     github: s.prefs.github, search: s.prefs.search, tools: s.prefs.tools, mcp: s.prefs.mcp && s.mcp.length > 0, thinking: ok && s.prefs.thinking, prefs: s.prefs, credits: ok };   // tools are free; only thinking needs credits
+     // Out of credits: the online and paid features really stop (search, web pages, GitHub, MCP, thinking, memory). Plain chat on your own model and the local file tools stay free.
+     github: ok && plugins.isOn(s.prefs, 'github'), search: ok && plugins.isOn(s.prefs, 'search'), platform: ok && plugins.isOn(s.prefs, 'platform'), skills: plugins.isOn(s.prefs, 'skills'),
+     tools: plugins.isOn(s.prefs, 'tools'), mcp: ok && plugins.isOn(s.prefs, 'mcp') && s.mcp.length > 0, thinking: ok && s.prefs.thinking, prefs: s.prefs, credits: ok };
 }
 
 let agentTier = 'basic';   // set per request by the server: 'good' models get the fuller tool instructions
@@ -339,6 +355,8 @@ async function buildTools(a) {
   for (const [name, t] of Object.entries(BUILTIN)) if (a[t.group]) tools.push({ name, desc: t.desc, kind: t.kind });
   if (a.tools) tools.push(...tools2.tools());   // workspace files + helpers: local, free, confined to one folder
   if (a.github) tools.push(...github.tools());
+  if (a.platform) tools.push(...plugins.PLATFORM_TOOLS);   // read only: newest posts, daily post, projects, rules, updates
+  if (a.skills) tools.push(...plugins.SKILL_TOOLS);
   if (a.studio && a.inStudio) tools.push(...studio.tools());
   if (a.terminal) tools.push({ name: 'run_command', desc: 'Run ONE shell command on the user\'s PC. The user must click Allow first; nothing runs until they do. args: {"command": string, "cwd": string (optional folder inside the home folder), "why": string (one short sentence for the user)}', kind: 'cmd' });
   const mcp = [];
@@ -346,7 +364,19 @@ async function buildTools(a) {
   return { tools, mcp };
 }
 
+// Safety net for EVERY tool, present or future: a hard time limit and a size cap. A hung site, a stalled MCP server or a slow
+// database can no longer freeze a chat; it becomes a normal "Tool error" that the AI can read and work around.
+const TOOL_LIMIT_MS = +process.env.PHOLAMA_TOOL_LIMIT_MS || 45000, TOOL_MAX_CHARS = 20000;
 async function runTool(tools, name, args, ctx) {
+  let timer;
+  const limit = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('"' + name + '" took longer than ' + Math.round(TOOL_LIMIT_MS / 1000) + ' seconds, so it was stopped. Try again or ask differently.')), TOOL_LIMIT_MS); });
+  try {
+    const out = await Promise.race([runToolRaw(tools, name, args, ctx), limit]);
+    const text = typeof out === 'string' ? out : out == null ? '' : String(out);
+    return text.length > TOOL_MAX_CHARS ? text.slice(0, TOOL_MAX_CHARS) + '\n[cut: the result was longer than ' + TOOL_MAX_CHARS + ' characters]' : text;
+  } finally { clearTimeout(timer); }
+}
+async function runToolRaw(tools, name, args, ctx) {
   const t = tools.find(x => x.name === name); if (!t) throw new Error('unknown tool ' + name);
   if (name === 'run_command') {
     return power.propose(args || {}, ctx);
@@ -357,6 +387,8 @@ async function runTool(tools, name, args, ctx) {
     return out;
   }
   if (studio.isStudio(name)) return studio.run(name, args);   // local and free, works even with 0 credits
+  if (plugins.isSkillTool(name)) return plugins.runSkillTool(name, args);   // local and free
+  if (plugins.isPlatform(name)) { if (name !== 'platform_updates' && !spend(COST.search)) throw new Error('out of daily credits'); return plugins.runPlatform(name, args, ctx && ctx.pholamaToken); }
   if (github.isGithub(name)) {
     if (!spend(COST[t.kind])) throw new Error('out of daily credits');
     const r = await github.run(ctx && ctx.ghToken, name, args);
@@ -370,8 +402,40 @@ async function runTool(tools, name, args, ctx) {
 }
 
 
+// A bare "ok start searching" / "look it up" / "search" has no subject. The subject is what the person was talking about just before.
+// Pure function (no I/O) so it is tested on its own. history = earlier messages [{role, content}], oldest first.
+const BARE_SEARCH = /^(?:ok(?:ay)?[,.!\s]+|yes[,.!\s]+|yeah[,.!\s]+|please[,.!\s]+|go (?:on|ahead)[,.!\s]+|now[,.!\s]+)*(?:start |go |just |try |can you |could you |please )*(?:search(?:ing)?|look(?:ing)? (?:it|that|this) up|look up|google it|find (?:it|that|out)|check (?:online|the web|the internet))(?: (?:it|that|this|for it|online|the web|the internet|now|again|please|for me))*[.!?\s]*$/i;
+function searchSubjectFromHistory(text, history) {
+  if (!BARE_SEARCH.test(String(text || '').trim())) return '';
+  const earlier = (Array.isArray(history) ? history : []).filter(m => m && m.role === 'user' && typeof m.content === 'string');
+  for (let i = earlier.length - 1; i >= 0; i--) {
+    const t = earlier[i].content.trim();
+    if (t === String(text || '').trim() || BARE_SEARCH.test(t) || t.length < 3) continue;
+    return t.replace(/^(?:ok(?:ay)?|hey|hi|please|can you|could you|i want to|i need to|tell me|i wanna)\b[,.!\s]*/i, '').replace(/[?.!]+$/, '').slice(0, 120).trim();
+  }
+  return '';
+}
+// The model writing "I found a search result for..." when no search tool actually ran this message. That is an invented result and must not be shown as fact.
+const SAID_SEARCHED = /\b(?:i(?:'ve| have)?\s+(?:found|searched|looked up|checked|located|got)|(?:search|results?)\s+(?:shows?|found|returned)|here(?:'s| is| are) (?:what|the|some) (?:i found|results?|search))\b[^.]{0,80}\b(?:search|result|online|internet|web|website|link|image|picture|photo)/i;
+function inventedSearch(reply, ranSearchTool) {
+  return !ranSearchTool && SAID_SEARCHED.test(String(reply || ''));
+}
+
+// Small models sometimes refuse harmless work ("that is too complex", "beyond the scope", "I cannot create a game"). Catch that and retry once
+// with a firmer instruction. Only used when the person asked for something to be made: never for safety refusals about genuinely harmful requests.
+const MAKE_REQ = /\b(make|create|write|build|code|script|generate|design|develop|add|fix|give me|show me)\b/i;
+const HARMFUL_REQ = /\b(malware|virus|ransomware|keylogger|ddos|exploit|hack (?:into|someone)|steal (?:passwords?|accounts?|cookies)|phish|crack (?:a )?password|bypass (?:auth|login)|credit card (?:dump|generator)|cheat engine for online|aimbot)\b/i;
+const LAZY_REFUSAL = /\b(?:i(?:'m| am) (?:sorry|afraid)[^.]{0,40}\b(?:but )?(?:i )?(?:can(?:'|no)t|cannot|unable|won'?t)|i (?:can(?:'|no)t|cannot|am unable to|'m unable to)\b[^.]{0,60}\b(?:create|make|write|build|code|help with|provide)|(?:would|will|is|are)\b[^.]{0,40}\b(?:too complex|very complex|a complex process|beyond the scope|not possible|out of scope|goes beyond)|beyond the scope of (?:simple )?(?:scripting|what i can)|not (?:really )?(?:designed|meant|intended|suited) for)/i;
+function lazyRefusal(userText, reply) {
+  const u = String(userText || ''), r = String(reply || '').trim();
+  if (!r || r.length > 700) return false;                       // a long, worked answer is not a refusal
+  if (!MAKE_REQ.test(u) || HARMFUL_REQ.test(u)) return false;   // not a "make it" request, or a genuinely harmful one: leave it alone
+  return LAZY_REFUSAL.test(r);
+}
+const LAZY_RETRY = 'That request is normal and allowed. Do not say it is too complex or outside your scope. Give the user a real, working first version right now: short, complete code in one code block, then one line saying what to add next. If it is big, do the smallest useful part first.';
+
 // Small models often ignore the tool format. Route obvious intents on the host so tools still work.
-function routeIntent(text, tools) {
+function routeIntent(text, tools, history) {
   const has = n => tools.some(t => t.name === n), t = String(text || '').trim();
   const math = /(-?\d[\d.,]*\s*(?:[-+*/x×^%]|times|plus|minus|divided by|multiplied by)\s*-?\d[\d.,]*(?:\s*(?:[-+*/x×^%]|times|plus|minus|divided by|multiplied by)\s*-?\d[\d.,]*)*)/i.exec(t);
   if (math && has('calculator')) {
@@ -384,6 +448,7 @@ function routeIntent(text, tools) {
   if (gs && has('github_search_repos')) return { name: 'github_search_repos', args: { query: gs[1].replace(/[?.!]+$/, '') } };
   const gr = /https?:\/\/github\.com\/([A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+?)(?:\.git)?(?:[\/?#]\S*)?(?=$|\s|[),.;])/i.exec(t);
   if (gr && has('github_repo_info')) return { name: 'github_repo_info', args: { repo: gr[1] } };
+  { const subj = searchSubjectFromHistory(t, history); if (subj && has('web_search')) return { name: 'web_search', args: { query: subj } }; }
   const se = /^(?:please\s+)?(?:search(?: the web| online)?(?: for)?|look up|google|find (?:out )?(?:about)?|latest|news (?:about|on))\s+(.{3,})/i.exec(t);
   if (se && has('web_search')) return { name: 'web_search', args: { query: se[1].replace(/[?.!]+$/, '') } };
   const rm = /^(?:please\s+)?(?:remember|memorize|don'?t forget)\s+(?:that\s+)?(?!that\b)(\S.{5,})/i.exec(t);
@@ -493,4 +558,4 @@ function safeShowLength(acc) {
 }
 const isToolFail = r => /^Tool error/.test(String(r || ''));
 
-module.exports = { safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+module.exports = { lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

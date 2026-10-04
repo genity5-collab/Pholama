@@ -1,6 +1,22 @@
 {
- "latest": "0.9.5",
+ "latest": "0.9.6",
  "releases": [
+  {
+   "version": "0.9.6",
+   "date": "2026-10-04",
+   "title": "Plugins, skills, the Pholama Platform plugin, a working credit limit, and 5 more models",
+   "notes": [
+    "Plugins: switch Live search, Pholama Platform, GitHub, Files and tools, Skills, MCP and the Terminal on or off from one list. An off plugin is not given to the AI at all. A self-check reports anything broken and ignores it, so chat keeps working",
+    "New plugin, Pholama Platform: the AI can read the newest community posts, the daily post, projects, the rules and the app updates. It is read only, it uses your own login so it sees only what you can see, and it can never post, edit or moderate",
+    "Skills: a skill is a saved recipe the AI follows. Write one yourself, press Write it with the AI, or just tell the AI in chat to make one. Skills can be switched off or deleted, and a skill can never change the AI's rules",
+    "When your integration credits run out, Pholama now says exactly how long until the restock (never NaN), and search, web pages, GitHub, Platform, MCP, thinking and memory really stop. Plain chat on your own model stays free",
+    "Moderators: help now lists every command, with new me and mods commands. An owner can give credits to anyone, including themselves, with no limit. Normal moderators keep their limits. Gifts reach the app within 2 minutes, or press Collect now",
+    "The AI no longer invents search results: a reply that says it found something when no search ran is replaced with an honest answer, and a bare search such as ok start searching uses what you were just talking about",
+    "A normal request refused as too complex (for example a Lua simulator game) is asked again once, firmly, so you get a real first version. Harmful requests are never pushed",
+    "Every tool now has a 45 second limit and a size cap, so a slow site or a stuck server can no longer freeze a chat",
+    "5 more models under 5 GB: Qwen3 4B Instruct 2507, Qwen3 4B Thinking 2507, Granite 4.0 H Tiny (all run tools), Qwen2.5 Coder 3B (simple tools) and Gemma 3n E2B (chat)"
+   ]
+  },
   {
    "version": "0.9.5",
    "date": "2026-10-04",

@@ -90,6 +90,7 @@
     <div id="u_local_box" class="card-box" style="display:none;margin-top:12px">
       <h4>PC Tool Credits</h4>
       <div id="u_cred_text" class="sys" style="text-align:left;margin:4px 0"></div>
+      <button id="t_collect" type="button" class="g" title="Pick up report rewards and moderator gifts now">Collect now</button>
       <div class="pbar" style="margin-top:6px"><i id="u_cred_fill"></i></div>
     </div>
   </div>
@@ -100,10 +101,24 @@
     <div id="t_off" class="sys" style="display:none;text-align:left">Tools, web search, GitHub and MCP run on the Pholama PC host. Connect your PC in Remote access.</div>
     <div id="t_body">
       <div id="t_cr" class="sys" style="text-align:left"></div>
-      <label class="sw"><input type="checkbox" id="p_search"><span>Live web search<small>Only for models that support tools. Free.</small></span></label>
+      <div class="elhead"><b class="sp">Plugins</b><button id="plRefresh" type="button">Refresh</button></div>
+      <div class="sys" style="text-align:left">Switch any plugin on or off. An off plugin is not given to the AI at all.</div>
+      <div id="plList"></div>
+      <div id="plHealth" class="sys" style="text-align:left"></div>
+      <div class="elhead"><b class="sp">Skills</b></div>
+      <div class="sys" style="text-align:left">A skill is a saved recipe the AI follows. Write one, or ask the AI in chat: "make a skill that ...".</div>
+      <div id="skList"></div>
+      <div class="sys" style="display:flex;flex-direction:column;gap:6px;text-align:left;margin:6px 0">
+        <input id="skName" maxlength="39" placeholder="Skill name, e.g. summarise-article" autocomplete="off">
+        <input id="skWhen" maxlength="200" placeholder="When to use it" autocomplete="off">
+        <textarea id="skSteps" maxlength="1500" rows="4" placeholder="Steps, one per line"></textarea>
+        <div style="display:flex;gap:6px"><button id="skSave" type="button" class="p">Save skill</button><button id="skAi" type="button">Write it with the AI</button></div>
+        <div id="skMsg" class="sys" style="text-align:left"></div>
+      </div>
+      <label class="sw"><input type="checkbox" id="p_search"><span>Live web search<small>Only for models that support tools. Uses a few credits. Off at 0 credits.</small></span></label>
       <label class="sw"><input type="checkbox" id="p_tools"><span>Tools<small>Only for models that support tools. Calculator and clock, 1 credit each.</small></span></label>
       <label class="sw"><input type="checkbox" id="p_terminal"><span>Terminal (off by default)<small>Only for models that support tools. The AI can suggest a command, but it never runs until you click Allow. Blocked: deleting whole folders, formatting, shutting down, admin rights. Runs at low priority and stops after 60 seconds.</small></span></label>
-      <label class="sw"><input type="checkbox" id="p_github"><span>GitHub<small>Search repos, read files and issues. Free. Writing always asks you first.</small></span></label>
+      <label class="sw"><input type="checkbox" id="p_github"><span>GitHub<small>Search repos, read files and issues. Uses a few credits. Writing always asks you first.</small></span></label>
       <div class="sys" style="display:flex;gap:6px;align-items:center;margin:6px 0"><input id="ghTok" type="password" placeholder="GitHub token (optional, needed to write)" autocomplete="off" style="flex:1"><button id="ghSave">Save</button><button id="ghClear">Clear</button></div>
       <div id="ghState" class="sys" style="text-align:left"></div>
       <div class="sys" id="updBox" style="text-align:left;margin-top:10px;display:none">
@@ -115,7 +130,7 @@
       <div id="elSummary" class="elsum">Nothing yet</div>
       <div id="elFilters" class="elfilters" role="tablist" aria-label="Filter the edit log"></div>
       <div id="editLog" class="editlog"></div>
-      <label class="sw"><input type="checkbox" id="p_mcp"><span>MCP tools<small>Tools from MCP servers you add. Free.</small></span></label>
+      <label class="sw"><input type="checkbox" id="p_mcp"><span>MCP tools<small>Tools from MCP servers you add. Uses a few credits.</small></span></label>
       <label class="sw"><input type="checkbox" id="p_thinking"><span>Thinking<small>Works with every model. The AI writes working notes first, then answers. Costs 25 credits a message, more with higher effort (Long +10, Max +25, and +25 more when Thinking and Max are both on). Each model also has its own chip above the message box.</small></span></label>
       <h4>MCP servers</h4>
       <div id="mcpList"></div>

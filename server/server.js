@@ -339,6 +339,8 @@ const leaked = t => LEAK.some(m => t.includes(m));
 const ASKED_WEB = /\b(can|could|do|does|are|will|would)\s+(you|u)\b[^?.!]{0,40}\b(search|browse|google|internet|online|web|look (it )?up|access|live|real[- ]time|news)|\b(search|browse|look up|google)\b[^?.!]{0,30}\b(for me|it|that|this|the (web|internet|news))|\blatest news\b/i;   // about the MODEL's own ability, not just a word like "search"
 const CLAIMS_WEB = /\b(yes\b.{0,40}\b(search|browse|look up|access)|i (can|will|could) (search|browse|look up|check|access)|i('ll| will) (search|look))/i;
 const CANT = 'I can\'t share that.';
+const SEARCHY = /\b(search(?:ing)?|look(?:ing)? (?:it |that |this )?up|google|browse|find (?:out|online)|online|on the (?:web|internet))\b/i;
+const NO_SEARCH_RAN = 'I did not actually run a search just now, so I have no results to show. Tell me what to search for, for example "search for kitten photos", and I will run it for real.';
 const NO_WEB = 'I can\'t browse the web or get live data with this model. I answer from what I already know. Pick a model tagged "tools" to use web search.';
 
 // Chat endpoint. Plain Ollama-style NDJSON. Extra event types: {tool:{...}} / {status:"..."} / {credits:{...}}.
@@ -359,7 +361,7 @@ async function chat(req, res, b) {
     if (sw.thinking === false) allow.thinking = false;   // the per-message switch in the page. Any model can think: models without a native mode get a host reasoning pass.
     if (b.agent && !canTools) log('step', caps.source === 'unknown' ? 'Could not read this model\'s abilities, so tools are off (plain chat).' : 'This model does not support tools, so it gets a plain prompt. Pick one tagged "tools" to use search and tools.');
     if (b.agent) log('step', allow.credits ? `Credits: ${agent.credits().left} left. On: ${['search','tools','mcp','terminal','thinking'].filter(k => allow[k]).join(', ') || 'nothing'}` : 'Credits: 0 left');
-    if (b.agent && !allow.credits) line({ status: 'Daily credits used up: thinking mode is off. Tools and chat still work.' });
+    if (b.agent && !allow.credits) { line({ status: agent.limitMessage() }); log('error', agent.limitMessage()); line({ limit: { restock: agent.credits().restock } }); }
     // Memory is its own switch (set by the signed-in user in the browser). It costs credits, so it is off at 0 credits.
     const memOn = !!(b.agent && canTools && b.memory === true && true);
     if (b.agent && b.memory === true && !memOn) log('error', !canTools ? 'Memory is on, but this model cannot use tools, so it cannot save new memories. Saved notes are still used.' : 'Memory is on, but there are not enough credits to save new memories today.');
@@ -368,7 +370,7 @@ async function chat(req, res, b) {
     const { tools } = await agent.buildTools({ ...allow, memory: memOn, inStudio });
     if (inStudio && !canTools) log('error', 'This model cannot use tools, so it cannot build in Studio. Pick a model tagged "tools" (Qwen3 0.6B is the smallest).');
     const visited = agent.sources.makeCollector(12); let sentSrc = 0;
-    const tctx = { sources: visited, ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), onPending: p => line({ approve: p }) };
+    const tctx = { sources: visited, pholamaToken: String(req.headers['x-pholama-token'] || '').slice(0, 4000), ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), onPending: p => line({ approve: p }) };
     if (tools.length) log('step', `${tools.length} tools ready: ${tools.map(t => t.name).join(', ')}`);
     const effort = ['long', 'max'].includes(b.effort) ? b.effort : 'normal';
     // Price this message from the two levels, then take the credits BEFORE answering so the counter visibly drops.
@@ -412,15 +414,17 @@ async function chat(req, res, b) {
       b.messages = (b.messages || []).map(m => m.role === 'assistant' ? { ...m, content: cl(m.content).slice(0, 1200) } : m).filter(m => m.role !== 'assistant' || m.content).slice(-8);
     }
     let generated = '';   // everything the model wrote this message (all turns), used only for the estimate
-    const messages = [{ role: 'system', content: agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effortUse) + (inStudio && tools.length ? agent.studioPrompt(b.studio.project, (() => { try { return stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })); } catch { return []; } })()) + (() => { try { const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.studioFocus(stu.snapshot(b.studio.project), lu && lu.content, b.studio.project); } catch { return ''; } })() : '') + (() => { if (tools.length) return ''; const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.aboutUserHint(lu && lu.content, b.memory === true && Array.isArray(b.memories) ? b.memories : []); })() }, ...(b.messages || []).filter(m => m.role !== 'system')];
+    const skillNote = allow.skills ? agent.plugins.skillsPrompt(agent.plugins.listSkills()) : '';
+    const messages = [{ role: 'system', content: skillNote + agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effortUse) + (inStudio && tools.length ? agent.studioPrompt(b.studio.project, (() => { try { return stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })); } catch { return []; } })()) + (() => { try { const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.studioFocus(stu.snapshot(b.studio.project), lu && lu.content, b.studio.project); } catch { return ''; } })() : '') + (() => { if (tools.length) return ''; const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.aboutUserHint(lu && lu.content, b.memory === true && Array.isArray(b.memories) ? b.memories : []); })() }, ...(b.messages || []).filter(m => m.role !== 'system')];
     // Host-side routing: obvious intents run their tool before the model answers (weak models skip tool calls).
     if (tools.length) {
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
-      const r0 = lastUser && agent.routeIntent(lastUser.content, tools);
+      const r0 = lastUser && agent.routeIntent(lastUser.content, tools, messages.filter(m => m !== lastUser));
       if (r0) {
         log('action', `Request looks like a job for ${r0.name}. Running it first.`);
         log('action', `${r0.name} ${JSON.stringify(r0.args)}`);
         let result; try { result = String(await agent.runTool(tools, r0.name, r0.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
+        if (/^(web_search|fetch_page|github_|platform_)/.test(r0.name) && !/^Tool error/.test(result)) searchRan = true;
         if (r0.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
         log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
         line({ tool: { name: r0.name, args: r0.args, result: result.slice(0, 400) } }); if (visited.size() !== sentSrc) { sentSrc = visited.size(); line({ sources: visited.list() }); }
@@ -537,6 +541,8 @@ async function chat(req, res, b) {
         } else log('step', 'The model did not give usable files, using the normal way.');
       }
     }
+    let lazyTried = false;   // one firm retry per message when the AI refuses normal work as 'too complex'
+    let searchRan = false;   // did a real search / page / GitHub tool run this message? If not, a reply that says it found results is invented.
     const seenCalls = {}; let badCalls = 0; const failedTry = {}; let retrying = false;   // retrying: a repair round whose words must not be shown twice
     const MAX_ROUNDS = inStudio ? 14 : 5;   // building an app takes many tool steps
     for (let round = 0; round < MAX_ROUNDS && !guidedDone; round++) {
@@ -545,7 +551,8 @@ async function chat(req, res, b) {
       log('step', round === 0 ? 'Loading model and writing the reply...' : 'Writing the final answer from the tool result...');
       let acc = '', mode = tools.length ? 'undecided' : 'stream', sent = 0, first = true;
       let cut = false;
-      const lu = [...messages].reverse().find(m => m.role === 'user'), holdWeb = !tools.length && lu && ASKED_WEB.test(lu.content);   // decide before showing anything
+      const lu = [...messages].reverse().find(m => m.role === 'user'), holdWeb = (!tools.length && lu && ASKED_WEB.test(lu.content)) || (tools.length && !searchRan && lu && SEARCHY.test(lu.content));   // decide before showing anything
+      const watchLazy = !lazyTried && lu && agent.lazyRefusal(lu.content, 'I cannot create');   // a build request: hold only the first few words, a refusal shows itself early
       const flush = () => { if (cut) return; if (leaked(acc)) { cut = true; line({ model, message: { role: 'assistant', content: sent ? '\n' + CANT : CANT }, done: false }); log('step', 'Hid part of the reply that quoted private instructions.'); return; } const safe = tools.length ? (retrying ? 0 : agent.safeShowLength(acc)) : acc.length; if (safe > sent) { line({ model, message: { role: 'assistant', content: acc.slice(sent, safe) }, done: false }); sent = safe; } };
       const onTok = t => {
         acc += t; if (first) { first = false; log('step', 'Model is answering'); }
@@ -555,7 +562,7 @@ async function chat(req, res, b) {
           if (head.startsWith('<tool')) mode = 'tool';
           else if (head.length >= 5 || !'<tool'.startsWith(head)) mode = 'stream';
         }
-        if (mode === 'stream' && !holdWeb) flush();
+        if (mode === 'stream' && !holdWeb && !(watchLazy && acc.length < 160)) flush();   // build request: wait for ~160 characters, then stream as normal
       };
       // Shield: an empty reply or an engine that dropped out before saying anything is retried (engine restarted first), never shown as silence.
       const shot = await shieldedTurn((tok) => streamTurn(model, messages, opts, t => { tok(t); onTok(t); }, ac.signal, usage), {
@@ -585,6 +592,12 @@ async function chat(req, res, b) {
         const lastUser = [...messages].reverse().find(m => m.role === 'user');
         if (cut) break;
         if (leaked(text)) { line({ model, message: { role: 'assistant', content: shown ? '\n' + CANT : CANT }, done: false }); log('step', 'Hid part of the reply that quoted private instructions.'); break; }
+        if (!lazyTried && lastUser && agent.lazyRefusal(lastUser.content, text)) {
+          lazyTried = true; log('step', 'The AI refused a normal request as "too complex". Asking it again, firmly, for a real first version...');
+          messages.push({ role: 'assistant', content: text.slice(0, 300) }, { role: 'user', content: agent.LAZY_RETRY + '\n\nThe request was: ' + String(lastUser.content).slice(0, 500) });
+          retrying = true; continue;
+        }
+        if (holdWeb && tools.length && agent.inventedSearch(text, searchRan)) { line({ model, message: { role: 'assistant', content: NO_SEARCH_RAN }, done: false }); log('step', 'The AI said it found search results, but no search ran. Replaced that with an honest answer.'); break; }
         if (holdWeb && CLAIMS_WEB.test(text)) { line({ model, message: { role: 'assistant', content: NO_WEB }, done: false }); log('step', 'This model has no web access, so its claim to search was replaced.'); break; }
         if (shown < text.length) { const rest = tools.length ? text.slice(shown) : agent.stripToolText(text.slice(shown)); if (rest) line({ model, message: { role: 'assistant', content: rest }, done: false }); } break;
       }
@@ -592,6 +605,7 @@ async function chat(req, res, b) {
         if (seenCalls[sig] >= 3) { log('error', 'The model repeated the same step 3 times, so I stopped it to save your time.'); line({ message: { content: '\n(I stopped because the AI kept repeating the same step. Try a bigger model, or ask for one smaller change.)' } }); break; } }
       log('action', `Model asked for ${call.name} ${JSON.stringify(call.args)}`);
       let result; try { result = String(await agent.runTool(tools, call.name, call.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
+      if (/^(web_search|fetch_page|github_|platform_)/.test(call.name) && !/^Tool error/.test(result)) searchRan = true;
       if (call.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
       log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
       line({ tool: { name: call.name, args: call.args, result: result.slice(0, 400) } }); if (visited.size() !== sentSrc) { sentSrc = visited.size(); line({ sources: visited.list() }); }
@@ -753,6 +767,25 @@ const server = http.createServer(async (req, res) => {
     }
     if (p === '/api/credits') return json(res, 200, { ...agent.credits(), allowed: agent.allowed() });
     if (p === '/api/prefs' && req.method === 'POST') return json(res, 200, agent.setPrefs(await body(req)));
+    // Plugins: the list with on/off state, and one switch. Skills: list, save, switch, delete, and "make one for me".
+    if (p === '/api/plugins' && req.method === 'GET') { const c = agent.credits(); return json(res, 200, { plugins: agent.plugins.list(agent.allowed().prefs, c.left > 0), skills: agent.plugins.listSkills(), check: agent.plugins.selfCheck(agent.allowed().prefs) }); }
+    if (p === '/api/plugins/switch' && req.method === 'POST') { const b = await body(req), pl = agent.plugins.PLUGINS.find(x => x.id === b.id); if (!pl) return json(res, 400, { error: 'No such plugin.' }); agent.setPrefs({ [pl.pref]: b.on === true }); return json(res, 200, { ok: true, plugins: agent.plugins.list(agent.allowed().prefs, agent.credits().left > 0) }); }
+    if (p === '/api/skills' && req.method === 'POST') { const b = await body(req); try { const slug = agent.plugins.saveSkill(b, 'you'); return json(res, 200, { ok: true, name: slug, skills: agent.plugins.listSkills() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+    if (p === '/api/skills/draft' && req.method === 'POST') {   // the model drafts a skill; NOTHING is saved here, the person reads it first
+      const b = await body(req), idea = String(b.idea || '').replace(/\s+/g, ' ').trim().slice(0, 300), model = String(b.model || '');
+      if (idea.length < 5) return json(res, 400, { error: 'Say what the skill is for first.' });
+      if (!model) return json(res, 400, { error: 'Pick a model at the top first.' });
+      try {
+        for (let tries = 0; tries < 2; tries++) {
+          let text = ''; await streamTurn(model, [{ role: 'system', content: agent.plugins.SKILL_WRITER_PROMPT }, { role: 'user', content: 'Skill idea: ' + idea }], { num_predict: 500, temperature: 0.3 }, t => { text += t; }, AbortSignal.timeout(90000), { in: 0, out: 0, got: false });
+          const sk = agent.plugins.parseSkillJson(text.replace(/<think>[\s\S]*?(<\/think>|$)/g, ''));
+          if (sk && !agent.plugins.skillProblem(sk)) return json(res, 200, { skill: { name: agent.plugins.slugify(sk.name), when: String(sk.when).slice(0, 200), steps: String(sk.steps).slice(0, 1500) } });
+        }
+        return json(res, 422, { error: 'The AI did not write a usable skill. Try again, or write it yourself.' });
+      } catch (e) { return json(res, 500, { error: 'The AI could not write it: ' + String(e.message).slice(0, 120) }); }
+    }
+    if (p === '/api/skills/switch' && req.method === 'POST') { const b = await body(req); try { agent.plugins.setSkillOn(b.name, b.on === true); return json(res, 200, { ok: true, skills: agent.plugins.listSkills() }); } catch (e) { return json(res, 400, { error: e.message }); } }
+    if (p === '/api/skills/delete' && req.method === 'POST') { const b = await body(req); try { agent.plugins.deleteSkill(b.name); return json(res, 200, { ok: true, skills: agent.plugins.listSkills() }); } catch (e) { return json(res, 400, { error: e.message }); } }
     if (p === '/api/mcp' && req.method === 'GET') return json(res, 200, { servers: agent.state().mcp.map(x => ({ name: x.name, url: x.url })), tools: await agent.listMcp() });
     if (p === '/api/mcp' && req.method === 'POST') return json(res, 200, { servers: agent.addMcp(await body(req)) });
     if (p === '/api/mcp' && req.method === 'DELETE') { agent.removeMcp(u.searchParams.get('name')); return json(res, 200, { ok: true }); }
