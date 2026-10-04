@@ -196,7 +196,7 @@ async function init() {
   try { const r = await api('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) { server = await r.json(); setLocalToolAI(server.toolAI === true); } } catch { setLocalToolAI(false); }
   tab = server ? 'local' : 'browser';
   if (server) { const tb = $('#tBrowser'); if (tb) tb.style.display = 'none'; const tl = $('#tLocal'); if (tl) tl.textContent = 'Models on this PC'; }   // PC build: phone models are never offered
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) navigator.serviceWorker.register('sw.js').catch(() => {});
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) { navigator.serviceWorker.register('sw.js').then(reg => { if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' }); reg.addEventListener('updatefound', () => { const worker = reg.installing; if (worker) worker.addEventListener('statechange', () => { if (worker.state === 'installed' && navigator.serviceWorker.controller) worker.postMessage({ type: 'SKIP_WAITING' }); }); }); }).catch(() => {}); navigator.serviceWorker.addEventListener('controllerchange', () => { if (!window.__pholamaReloaded) { window.__pholamaReloaded = true; location.reload(); } }); }
   await refreshSelect();
   { const L = llamaLoader(84); $('#heroLogo').appendChild(L.el); L.done(); L.el.classList.remove('ok'); L.el.style.color = 'var(--fg)';
     for (const q of ['Explain how a rocket works', 'Write a short poem', 'Help me plan my day']) { const b = document.createElement('button'); b.textContent = q; b.onclick = () => { inEl.value = q; send(); }; $('#heroChips').appendChild(b); } }
