@@ -88,6 +88,10 @@ body.site-shell #model,body.site-shell #mgr{display:none!important}
 .hist-meta{font-size:12.5px;color:var(--mut);margin-top:2px}
 .hist-del{flex:0 0 auto;padding:4px 10px;font-size:13px;min-height:36px}
 
+/* The public site is an information/platform surface; model management belongs to the PC app. */
+.site-only #mgr,.site-only #model,.site-only #tBrowser,.site-only #tLocal{display:none!important}
+.site-only #chat{display:none}
+
 /* Phones: two rows. Row 1 = logo + buttons, row 2 = model picker full width. Nothing can run off-screen. */
 @media (max-width:640px){
   header{padding:8px 10px;gap:6px}

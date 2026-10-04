@@ -885,7 +885,7 @@ function paintReaderRow() {
   idle(ready ? 'Ready' : 'Download', ready);
 }
 // ---- PC models: every row shows size, categories and the exact command. Phone models never appear here. ----
-const PC_CATS = [['all', 'All'], ['tools', 'Tool running'], ['reasoning', 'Reasoning'], ['fast', 'Fast'], ['slow', 'Slow']];
+const PC_CATS = [['all', 'All'], ['tools', 'Tool running'], ['reasoning', 'Reasoning'], ['compact', 'Under 3 GB'], ['fast', 'Fast'], ['slow', 'Slow']];
 let pcCat = 'all', pcFam = 'all', pcInstalled = false;
 function fmtMB(n) { return n >= 1073741824 ? (n / 1073741824).toFixed(2) + ' GB' : (n / 1048576).toFixed(0) + ' MB'; }
 function renderPC() {

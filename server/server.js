@@ -735,12 +735,9 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/restart' && req.method === 'POST') {
       if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' });
       // Start a fresh copy of this same server (hidden, detached) that waits a moment for this one to let go of the port, then close this one.
-      try {
-        const cp = require('child_process');
-        const child = cp.spawn(process.execPath, ['-e', 'setTimeout(()=>{require("child_process").spawn(process.execPath,[' + JSON.stringify(path.join(__dirname, 'server.js')) + '],{detached:true,stdio:"ignore",windowsHide:true,cwd:' + JSON.stringify(path.join(__dirname, '..')) + ',env:process.env}).unref()},1800)'], { detached: true, stdio: 'ignore', windowsHide: true, env: process.env });
-        child.unref();
-      } catch (e) { return json(res, 500, { error: 'Could not restart: ' + e.message }); }
-      json(res, 200, { ok: true }); setTimeout(() => closeAll(0), 300); return;
+      try { restartSelf(); }
+      catch (e) { return json(res, 500, { error: 'Could not restart: ' + e.message }); }
+      json(res, 200, { ok: true }); return;
     }
     if (p === '/api/shutdown' && req.method === 'POST') { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can do that.' }); json(res, 200, { ok: true }); setTimeout(() => closeAll(0), 200); return; }
     // API keys are managed only from this PC, never remotely
@@ -903,6 +900,18 @@ const server = http.createServer(async (req, res) => {
     res.writeHead(200, { ...hdr, 'Content-Length': st.size }); fs.createReadStream(f).pipe(res);
   } catch (e) { json(res, 500, { error: e.message }); }
 });
+function restartSelf() {
+  // Launch a fresh server after this process releases the port, then close this copy.
+  const cp = require('child_process');
+  const child = cp.spawn(process.execPath, [path.join(__dirname, 'server.js')], {
+    detached: true, stdio: 'ignore', windowsHide: true,
+    cwd: ROOT, env: process.env
+  });
+  child.unref();
+  setTimeout(() => closeAll(0), 1200);
+}
+try { require('./update').setRestartHandler(() => restartSelf()); } catch {}
+
 server.listen(PORT, HOST, () => {
   const h = hardware();
   console.log(`\n  Pholama running\n  Chat UI:  http://localhost:${PORT}\n  RAM: ${h.ramGB} GB${h.gpu ? '  GPU: ' + h.gpu + (h.vramGB ? ' (' + h.vramGB + ' GB)' : '') : ''}\n  Models folder: ${MODELS_DIR}\n`);

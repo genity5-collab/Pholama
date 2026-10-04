@@ -1,6 +1,16 @@
 {
- "latest": "0.9.17",
+ "latest": "0.9.18",
  "releases": [
+  {
+   "version": "0.9.18",
+   "date": "2026-10-04",
+   "title": "PC updates restart cleanly and compact models are easier to find",
+   "notes": [
+    "The public website no longer exposes the browser model manager; model downloads and model management stay in the PC app.",
+    "Turn on automatic updates in PC Settings and Pholama downloads, closes, and reopens on the new version so the updated Studio is active.",
+    "Added an Under 3 GB filter and clearer descriptions for capable compact models, including Qwen3 4B, Phi-4 Mini and Qwen2.5 Coder 3B."
+   ]
+  },
   {
    "version": "0.9.17",
    "date": "2026-10-04",

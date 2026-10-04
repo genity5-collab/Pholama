@@ -25,7 +25,8 @@
    "minRamGB": 2,
    "ctx": 2048,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Lightweight 135M model ideal for embedded devices, ultra-fast generation, and basic chat.",
    "license": "Apache-2.0",
@@ -50,7 +51,8 @@
    "minRamGB": 2,
    "ctx": 2048,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Compact 360M instruction model for low-latency lightweight text processing.",
    "license": "Apache-2.0",
@@ -75,7 +77,8 @@
    "minRamGB": 3,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Ultra-compact Qwen2.5 model for fast multilingual chat and lightweight tasks.",
    "license": "Apache-2.0",
@@ -100,7 +103,8 @@
    "minRamGB": 3,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Tiny coding assistant optimized for code generation and snippet editing on low RAM.",
    "license": "Apache-2.0",
@@ -124,7 +128,8 @@
    "ctx": 8192,
    "categories": [
     "agents",
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "The smallest model here that reliably uses tools (calculator, time). Under 0.4 GB, runs on almost any PC.",
    "license": "Apache-2.0",
@@ -149,7 +154,8 @@
    "file": "gemma-3-1b-it-Q4_K_M.gguf",
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Google Gemma 3 1B ultra-lightweight instruct model for fast mobile and local generation.",
    "license": "Gemma",
@@ -177,7 +183,8 @@
    "minRamGB": 3,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Meta's 1B lightweight model optimized for fast instruction following and summarization.",
    "license": "Llama 3.2 Community",
@@ -202,7 +209,8 @@
    "minRamGB": 3,
    "ctx": 4096,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "IBM Granite lightweight enterprise model optimized for low-latency tasks.",
    "license": "Apache-2.0",
@@ -226,7 +234,8 @@
    "minRamGB": 3,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Compact 1.7B parameter model designed for fast everyday conversation and summarization.",
    "license": "Apache-2.0",
@@ -249,7 +258,8 @@
    "ctx": 8192,
    "categories": [
     "reasoning",
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Lightweight Qwen3 thinking model with fast step-by-step reasoning capabilities.",
    "license": "Apache-2.0",
@@ -279,7 +289,8 @@
    "minRamGB": 3,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Recommended. The smallest model that runs tools well: calculator, time, web search and page reading. Only 1 GB, so it fits most PCs.",
    "license": "Apache-2.0",
@@ -305,7 +316,8 @@
    "minRamGB": 3,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Fast lightweight coding model capable of code generation and explainability.",
    "license": "Apache-2.0",
@@ -332,7 +344,8 @@
    "ctx": 8192,
    "categories": [
     "reasoning",
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Lightweight reasoning model distilled from DeepSeek-R1 with chain-of-thought capabilities.",
    "license": "MIT",
@@ -356,7 +369,8 @@
    "file": "codegemma-2b-Q4_K_M.gguf",
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Google CodeGemma 2B: code completion and short code snippets, not a general chat model.",
    "license": "Gemma",
@@ -384,7 +398,8 @@
    "minRamGB": 4,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Google Gemma 2 2B instruct model with high performance for its size class.",
    "license": "Gemma",
@@ -406,7 +421,8 @@
    "file": "SmolLM3-3B-Q4_K_M.gguf",
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Hugging Face SmolLM3 3B compact model for low-resource devices and quick text processing.",
    "license": "Apache-2.0",
@@ -435,7 +451,8 @@
    "ctx": 8192,
    "categories": [
     "tools",
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Meta Llama 3.2 3B instruct model with strong tool calling and prompt execution capabilities.",
    "license": "Llama 3.2 Community",
@@ -462,7 +479,8 @@
    "ctx": 8192,
    "categories": [
     "tools",
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Capable 3B model with function calling and strong instruction following.",
    "license": "Apache-2.0",
@@ -486,7 +504,8 @@
    "ctx": 8192,
    "categories": [
     "tools",
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "IBM Granite 4.2 3B lightweight enterprise model with fast function execution.",
    "license": "Apache-2.0",
@@ -514,7 +533,8 @@
    "minRamGB": 5,
    "ctx": 4096,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Microsoft Phi-3.5 mini with high reasoning capability in a compact parameter size.",
    "license": "MIT",
@@ -536,7 +556,8 @@
    "file": "gemma-3-4b-it-Q4_K_M.gguf",
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Google Gemma 3 4B instruct model balancing compact size and high conversational quality.",
    "license": "Gemma",
@@ -562,9 +583,10 @@
    "ctx": 8192,
    "categories": [
     "tools",
-    "fast"
+    "fast",
+    "compact"
    ],
-   "blurb": "Microsoft Phi-4 mini lightweight model with built-in tool calling and strong reasoning.",
+   "blurb": "Compact tool-capable model with strong instruction following for PCs with about 5 GB RAM.",
    "license": "MIT",
    "caps": [
     "chat",
@@ -1240,7 +1262,8 @@
    "minRamGB": 2,
    "ctx": 2048,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Very small and very fast everyday chat. Good on older PCs. Chat only, no tools.",
    "license": "Apache-2.0",
@@ -1265,7 +1288,8 @@
    "minRamGB": 3,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Light multilingual chat, summaries and simple code. Chat only, no tools.",
    "license": "Apache-2.0",
@@ -1289,7 +1313,8 @@
    "minRamGB": 3,
    "ctx": 4096,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Friendly assistant style writing in several languages. Chat only, no tools.",
    "license": "StabilityAI Community",
@@ -1311,7 +1336,8 @@
    "file": "Qwen3.5-0.8B-Q4_K_M.gguf",
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Newest-generation Qwen in under 600 MB. The best pick for very small or old computers.",
    "license": "Apache-2.0",
@@ -1337,7 +1363,8 @@
    "ctx": 8192,
    "categories": [
     "reasoning",
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Newest-generation Qwen that thinks step by step and fits in 4 GB of RAM. Simple tools only.",
    "license": "Apache-2.0",
@@ -1366,7 +1393,8 @@
    "categories": [
     "tools",
     "reasoning",
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Newest-generation Qwen with native tool calling and thinking. The best small model that runs tools.",
    "license": "Apache-2.0",
@@ -1511,9 +1539,10 @@
    "ctx": 8192,
    "categories": [
     "tools",
-    "fast"
+    "fast",
+    "compact"
    ],
-   "blurb": "Qwen3 4B, July 2025 update. Follows instructions well and calls tools reliably for its size. A strong everyday choice.",
+   "blurb": "Strong compact tool-capable model for Studio, coding and everyday work; stays under 3 GB.",
    "license": "Apache-2.0",
    "caps": [
     "chat",
@@ -1538,9 +1567,10 @@
    "ctx": 8192,
    "categories": [
     "tools",
-    "reasoning"
+    "reasoning",
+    "compact"
    ],
-   "blurb": "Qwen3 4B that reasons step by step before it answers. Slower, better at maths, logic and planning.",
+   "blurb": "Compact reasoning model with tool support for harder Studio and coding tasks; stays under 3 GB.",
    "license": "Apache-2.0",
    "caps": [
     "chat",
@@ -1565,9 +1595,10 @@
    "minRamGB": 4,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
-   "blurb": "A small model made for code. Good at Lua, Python and web pages. Simple tools only.",
+   "blurb": "Compact coding model for Studio and code edits; about 1.8 GB on disk.",
    "license": "Other",
    "caps": [
     "chat",
@@ -1591,7 +1622,8 @@
    "minRamGB": 5,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Google model built to run on small devices. Friendly chat and writing. No tool use.",
    "license": "Gemma",
@@ -1644,7 +1676,8 @@
    "ctx": 8192,
    "categories": [
     "tools",
-    "agents"
+    "agents",
+    "compact"
    ],
    "blurb": "Nous Research Hermes 3 on the Llama 3.2 3B base. Trained on the exact tool-calling format Pholama uses, so it is a strong pick for agent work at 3B size.",
    "license": "Llama 3.2 Community",
@@ -1669,7 +1702,8 @@
    "minRamGB": 5,
    "ctx": 8192,
    "categories": [
-    "tools"
+    "tools",
+    "compact"
    ],
    "blurb": "The same Llama 3.2 3B, saved at higher quality (Q6_K_L). Small models lose the most from compression, so tool calls and search queries come out more accurate. Needs about 1 GB more memory.",
    "license": "Llama 3.2 Community",
@@ -1694,7 +1728,8 @@
    "minRamGB": 4,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "IBM Granite 3.1 mixture-of-experts: 3B in size but only 0.8B works on each word, so it answers quickly on a normal PC. Marked simple tools only until it has been tested here.",
    "license": "Apache 2.0",
@@ -1719,7 +1754,8 @@
    "minRamGB": 4,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "Llama 3.2 3B tuned for following instructions and chat. Handles simple tool steps but is less reliable than Llama 3.2 or Hermes on multi-step work.",
    "license": "Llama 3.2 Community",
@@ -1744,7 +1780,8 @@
    "minRamGB": 4,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "TII Falcon3 3B. A different family from Llama and Qwen, good at reasoning and maths for its size. Simple tools only.",
    "license": "Falcon LLM",
@@ -1769,7 +1806,8 @@
    "minRamGB": 4,
    "ctx": 8192,
    "categories": [
-    "fast"
+    "fast",
+    "compact"
    ],
    "blurb": "LG EXAONE 3.5, small and quick, strong at following instructions in English and Korean. Simple tools only.",
    "license": "EXAONE AI Model",
