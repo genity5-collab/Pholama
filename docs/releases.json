@@ -1,6 +1,15 @@
 {
- "latest": "0.9.13",
+ "latest": "0.9.14",
  "releases": [
+  {
+   "version": "0.9.14",
+   "date": "2026-10-04",
+   "title": "Studio readability refresh",
+   "notes": [
+    "Improved contrast across the PC Studio editor, preview controls, output log and AI workspace",
+    "Updated the release so the PC updater can install the Studio improvements"
+   ]
+  },
   {
    "version": "0.9.13",
    "date": "2026-10-04",

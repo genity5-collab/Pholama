@@ -86,6 +86,22 @@ header{border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);ba
 .st-aibox textarea{padding:8px!important}.st-aibox button{border-radius:9px!important}
 @media(max-width:760px){.st-main{min-height:0!important}.st-code{min-height:360px!important}.st-right iframe{min-height:300px}}
 
+/* Studio readability: keep the cinematic dark workspace, but make code and logs easy to scan. */
+:root{--studio:#151b26;--studio-line:#3a465b;--studio-panel:#1d2634}
+.st-left,.st-right{background:var(--studio-panel)!important}
+.st-tabs,.st-prevhead,.st-conhead{background:#111722!important;border-color:var(--studio-line)!important}
+.st-tab{color:#b8c3d4!important}.st-tab.on{color:#ffffff!important;background:#263247!important}
+.st-code{background:#182130!important;color:#f3f6fb!important;border-color:var(--studio-line)!important;text-shadow:0 0 1px rgba(255,255,255,.12)}
+.st-code::selection{background:#5267a8!important;color:#fff!important}
+.st-prevhead b,.st-conhead b{color:#c5cfdd!important}
+.st-con,.st-ailog{background:#111722!important;color:#e5ebf4!important;border-color:var(--studio-line)!important}
+.st-l{color:#dbe4f0!important}.st-l.info{color:#b9d4ff!important}.st-l.warn{color:#ffd28a!important}.st-l.error{color:#ff9daa!important}
+.st-ai{background:#182130!important;border-color:var(--studio-line)!important}.st-aibox{background:#111722!important;border-color:var(--studio-line)!important}.st-aibox textarea{color:#f3f6fb!important}
+.st-bar{border-color:var(--studio-line)!important}.st-bar select{color:#f3f6fb!important;background:#111722!important}
+.st-main button,.st-bar button{color:#dce5f1;border-color:var(--studio-line)}
+.st-main button:hover,.st-bar button:hover{background:#2a364b}
+.st-main button.p,.st-bar button.p{color:#fff;background:var(--acc);border-color:var(--acc)}
+
 
 /* Settings tabs & progress bars */
 .s-tabs{display:flex;gap:4px;overflow-x:auto;-webkit-overflow-scrolling:touch;padding:4px;background:var(--card);border-radius:999px;margin-bottom:14px;max-width:100%}
