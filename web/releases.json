@@ -1,0 +1,47 @@
+{
+ "latest": "0.6.1",
+ "releases": [
+  {
+   "version": "0.6.1",
+   "date": "2026-10-04",
+   "title": "A new dashboard",
+   "notes": [
+    "Pholama now opens on a dashboard: newest version, what's new, newest models and your PC at a glance",
+    "The website and the PC app list the same 51 models (the website used to show only 7)",
+    "Chat is one tap away in the top bar",
+    "A release check makes sure the website and PC app always show the newest models and version"
+   ]
+  },
+  {
+   "version": "0.6.0",
+   "date": "2026-10-04",
+   "title": "Real tools and a local API",
+   "notes": [
+    "19 tools for the local AI, including safe file tools locked to one workspace folder",
+    "Every model is labelled Runs tools, Basic tools only or Chat only",
+    "Only models that really run tools are recommended (smallest: Llama 3.2 3B)",
+    "Ollama and OpenAI style local API for games and websites, with a docs page at /api/docs",
+    "New API guide and updated READMEs"
+   ]
+  },
+  {
+   "version": "0.5.4",
+   "date": "2026-10-03",
+   "title": "Studio builds on small models",
+   "notes": [
+    "Guided build writes files itself so small models can build Studio projects",
+    "No more looping: old chatter is removed from history",
+    "Page skeleton repaired in code; bad auto-fixes rolled back"
+   ]
+  },
+  {
+   "version": "0.5.3",
+   "date": "2026-10-03",
+   "title": "Safer file edits",
+   "notes": [
+    "Fixed edits that failed on Windows line endings",
+    "Edits now ignore indentation differences but keep your formatting"
+   ]
+  }
+ ]
+}

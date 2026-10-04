@@ -1,6 +1,6 @@
 {
  "name": "pholama",
- "version": "0.6.0",
+ "version": "0.6.1",
  "description": "Pholama: run AI models on your own PC. CLI: pholama pull | chat | serve | rm | update.",
  "bin": {
   "pholama": "server/cli.js",
@@ -8,7 +8,9 @@
   "pholama-server": "server/server.js"
  },
  "scripts": {
-  "start": "node server/server.js"
+  "start": "node server/server.js",
+  "sync-site": "node scripts/sync-site.js",
+  "test": "node scripts/sync-site.js --check && node test/core.test.js"
  },
  "engines": {
   "node": ">=18"

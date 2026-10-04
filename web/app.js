@@ -841,11 +841,19 @@ function paintFallback() {
 // ---------- Studio (only on the PC itself: it edits files on this computer) ----------
 let studio = null, studioLoading = false;
 function showView(name) {
-  const st = name === 'studio';
-  document.body.classList.toggle('studio-on', st); $('#studio').hidden = !st;
-  $('#vChat').classList.toggle('on', !st); $('#vStudio').classList.toggle('on', st);
-  $('#vChat').setAttribute('aria-selected', String(!st)); $('#vStudio').setAttribute('aria-selected', String(st));
+  const st = name === 'studio', dh = name === 'dash';
+  document.body.classList.toggle('studio-on', st); document.body.classList.toggle('dash-on', dh); $('#studio').hidden = !st; const dz = $('#dash'); if (dz) dz.hidden = !dh;
+  for (const [id, on] of [['#vDash', dh], ['#vChat', name === 'chat'], ['#vStudio', st]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  if (dh) paintDashboard();
   try { localStorage.setItem('pholama_view', name); } catch {}
+}
+let dashMod = null;
+async function paintDashboard() {
+  const el = $('#dash'); if (!el) return;
+  try {
+    dashMod = dashMod || await import('./dashboard.js');
+    await dashMod.mountDashboard(el, { server, openChat: p => { showView('chat'); if (p) { inEl.value = p; inEl.focus(); } else inEl.focus(); }, openModels: () => $('#mgr').click(), openStudio: () => openStudio() });
+  } catch (e) { el.textContent = 'The dashboard could not load: ' + (e && e.message || e); }
 }
 async function openStudio() {
   showView('studio');
@@ -863,6 +871,7 @@ function studioTab(onPc) {
   b.style.display = onPc ? '' : 'none';
   if (!onPc && document.body.classList.contains('studio-on')) showView('chat');
 }
+$('#vDash').onclick = () => showView('dash');
 $('#vChat').onclick = () => showView('chat');
 $('#vStudio').onclick = () => openStudio();
 
@@ -1143,7 +1152,7 @@ $('#clearHistBtn').onclick = () => {
   paintHistoryList();
 };
 
-init().then(refreshCredits);
+init().then(refreshCredits).then(() => showView('dash'));
 
 // ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----
 async function claimBonus() {

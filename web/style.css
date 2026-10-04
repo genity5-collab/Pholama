@@ -203,7 +203,7 @@ button.p.stop{background:var(--fg);color:var(--bg)}
 .viewsw{display:inline-flex;border:1px solid var(--line);border-radius:999px;padding:2px;gap:2px;background:var(--card)}
 .viewsw button{border:0;min-height:30px;padding:4px 14px;border-radius:999px;background:transparent}
 .viewsw button.on{background:var(--acc);color:var(--acct)}
-body.studio-on #chat,body.studio-on footer{display:none!important}
+body.studio-on #chat,body.studio-on footer,body.dash-on #chat,body.dash-on footer{display:none!important}
 /* ---- Studio ---- */
 #studio{display:flex;flex-direction:column;flex:1;min-height:0;gap:8px;padding:8px 12px 12px}
 #studio[hidden]{display:none}
@@ -251,3 +251,31 @@ body.studio-on #chat,body.studio-on footer{display:none!important}
 @media (max-width:600px){.src-img{flex-basis:64px;height:48px}}
 
 .ans-link{color:inherit;text-decoration:underline;text-underline-offset:2px;word-break:break-word}
+/* ---------- dashboard ---------- */
+#dash{flex:1;overflow:auto;padding:14px 14px 40px}#dash[hidden]{display:none}
+.dload{text-align:center;color:var(--mut);padding:40px}
+.dwrap{max-width:1040px;margin:0 auto}
+.dhero{display:flex;justify-content:space-between;align-items:flex-end;gap:12px;flex-wrap:wrap;margin:6px 0 14px}
+.dhero h2{margin:0;font-size:28px;letter-spacing:-.02em}.dhero p{margin:2px 0 0;color:var(--mut)}
+.dver{display:flex;flex-direction:column;align-items:flex-end;gap:2px}.dver small{color:var(--mut)}
+.dbadge{background:var(--acc);color:var(--acct);border-radius:999px;padding:3px 14px;font-weight:700;font-size:18px}
+.dnote{background:var(--card);border:1px solid var(--warn);color:var(--warn);border-radius:var(--r);padding:9px 14px;margin-bottom:12px;font-size:14px}
+.dtiles{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin-bottom:12px}
+.dtile{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:12px 14px;display:flex;flex-direction:column}
+.dtile b{font-size:28px;line-height:1.1;letter-spacing:-.02em}.dtile span{color:var(--mut);font-size:13px}
+.dgrid{display:grid;grid-template-columns:repeat(2,1fr);gap:12px;align-items:start}
+.dcard{background:var(--card);border:1px solid var(--line);border-radius:var(--r);padding:14px 16px;min-width:0}
+.dcard h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.07em;color:var(--mut);font-weight:600}
+.dlist,.dbul,.dkv{list-style:none;margin:0;padding:0}
+.dlist li{display:flex;justify-content:space-between;gap:10px;align-items:center;padding:8px 0;border-top:1px solid var(--line)}.dlist li:first-child{border-top:0;padding-top:0}
+.dlist small,.dold small,.dnewhead small{display:block;color:var(--mut);font-size:12.5px}.dnewhead{display:flex;justify-content:space-between;align-items:baseline;margin-bottom:6px}.dold small{display:inline}
+.dchip{font-size:11.5px;padding:2px 9px;border:1px solid var(--line);border-radius:999px;color:var(--mut);white-space:nowrap}
+.dchip.ok{background:var(--ok);border-color:transparent;color:#fff;font-weight:600}.dchip.warn{color:var(--warn);border-color:var(--warn)}
+.dbul{padding-left:0}.dbul li{position:relative;padding:3px 0 3px 16px;font-size:14px}.dbul li:before{content:"";position:absolute;left:3px;top:11px;width:5px;height:5px;border-radius:50%;background:var(--mut)}
+.dold{margin-top:10px;padding-top:8px;border-top:1px solid var(--line);font-size:14px}details summary{cursor:pointer;color:var(--mut);margin-top:10px;font-size:13.5px}
+.dkv li{display:flex;justify-content:space-between;gap:10px;padding:6px 0;border-top:1px solid var(--line)}.dkv li:first-child{border-top:0}.dkv span{color:var(--mut)}.dkv b{text-align:right;font-weight:600}
+.dpick{margin-top:10px;background:var(--card2);border-radius:10px;padding:9px 12px;font-size:14px}
+.dact{display:flex;flex-wrap:wrap;gap:8px}.dmut{color:var(--mut);font-size:14px;margin:0 0 8px}
+.dlink{display:inline-block;margin-top:10px;color:var(--fg);text-decoration:underline;background:none;border:0;padding:0;min-height:0;border-radius:0;cursor:pointer;font-size:14px}
+code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:13px}
+@media (max-width:720px){.dtiles{grid-template-columns:repeat(2,1fr)}.dgrid{grid-template-columns:1fr}.dhero h2{font-size:24px}}

@@ -1082,7 +1082,24 @@ $('#clearHistBtn').onclick = () => {
   paintHistoryList();
 };
 
-init().then(refreshCredits);
+// ---------- views: the Dashboard is the landing page, Chat is one tap away ----------
+function showView(name) {
+  const dh = name === 'dash';
+  document.body.classList.toggle('dash-on', dh); const dz = $('#dash'); if (dz) dz.hidden = !dh;
+  for (const [id, on] of [['#vDash', dh], ['#vChat', !dh]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  if (dh) paintDashboard();
+}
+let dashMod = null;
+async function paintDashboard() {
+  const el = $('#dash'); if (!el) return;
+  try {
+    dashMod = dashMod || await import('./dashboard.js');
+    await dashMod.mountDashboard(el, { server, openChat: p => { showView('chat'); if (p) { inEl.value = p; inEl.focus(); } else inEl.focus(); }, openModels: () => $('#mgr').click() });
+  } catch (e) { el.textContent = 'The dashboard could not load: ' + (e && e.message || e); }
+}
+$('#vDash').onclick = () => showView('dash');
+$('#vChat').onclick = () => showView('chat');
+init().then(refreshCredits).then(() => showView('dash'));
 
 // ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----
 async function claimBonus() {

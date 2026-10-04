@@ -44,6 +44,37 @@ try { fs.symlinkSync(out, path.join(process.env.PHOLAMA_WORKSPACE, 'link')); thr
 ok('units', w.run('convert_units', { value: 100, from: 'c', to: 'f' }) === '212 f');
 ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) === '5');
 
+
+// ---- website / PC app stay in step (the newest models and version must match everywhere) ----
+{
+  const rel = JSON.parse(fs.readFileSync(path.join(root, 'releases.json'), 'utf8')), pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+  ok('releases latest = package version', rel.latest === pkg.version, rel.latest + ' vs ' + pkg.version);
+  ok('newest release is first', rel.releases[0].version === rel.latest);
+  ok('every release has notes', rel.releases.every(r => r.version && r.date && r.title && r.notes && r.notes.length));
+  for (const dir of ['docs', 'web']) {
+    const site = JSON.parse(fs.readFileSync(path.join(root, dir, 'models.json'), 'utf8'));
+    ok(dir + ' lists every PC model', JSON.stringify(site.local) === JSON.stringify(cat), (site.local || []).length + ' vs ' + cat.length);
+    ok(dir + ' has the version history', JSON.stringify(JSON.parse(fs.readFileSync(path.join(root, dir, 'releases.json'), 'utf8'))) === JSON.stringify(rel));
+    ok(dir + ' has the dashboard', fs.existsSync(path.join(root, dir, 'dashboard.js')) && /id="dash"/.test(fs.readFileSync(path.join(root, dir, 'index.html'), 'utf8')));
+    const sw = fs.readFileSync(path.join(root, dir, 'sw.js'), 'utf8'); ok(dir + ' offline cache has dashboard files', /dashboard\.js/.test(sw) && /releases\.json/.test(sw));
+  }
+  ok('dashboard.js identical in docs and web', fs.readFileSync(path.join(root, 'docs/dashboard.js'), 'utf8') === fs.readFileSync(path.join(root, 'web/dashboard.js'), 'utf8'));
+  ok('every model has an added date', cat.every(m => /^\d{4}-\d{2}-\d{2}$/.test(m.added || '')));
+  ok('release months are valid', cat.every(m => !m.released || /^\d{4}-(0[1-9]|1[0-2])$/.test(m.released)));
+}
+// ---- dashboard logic ----
+(async () => {
+  const d = await import(path.join(root, 'web/dashboard.js'));
+  const n = d.newestModels(cat, 6); ok('newest: 6 shown, newest first', n.length === 6 && n.every((m, i) => !i || n[i - 1].released >= m.released));
+  ok('newest: never shows a model with no release month', d.newestModels(cat, 100).every(m => m.released));
+  ok('stats add up', (() => { const x = d.stats(cat); return x.total === cat.length && x.tools + x.basic + x.chat === x.total; })());
+  ok('pick for 8 GB is a tool model that fits', (() => { const m = d.pickForRam(cat, 8); return m && m.toolTier === 'good' && m.minRamGB <= 8; })());
+  ok('pick for 2 GB is nothing (no tool model fits)', d.pickForRam(cat, 2) === null);
+  ok('pick for 64 GB is a tool model', (d.pickForRam(cat, 64) || {}).toolTier === 'good');
+  ok('version compare', d.compareVersions('0.5.4', '0.6.0') === -1 && d.compareVersions('0.6.0', '0.6.0') === 0 && d.compareVersions('0.10.0', '0.9.9') === 1 && d.compareVersions('1.0', '0.9.9') === 1);
+  ok('empty data does not crash', d.newestModels(null).length === 0 && d.stats(undefined).total === 0 && d.pickForRam(undefined, 8) === null);
+})().then(() => { if (!global.__done) setTimeout(() => {}, 0); });
+
 // ---- agent wiring ----
 (async () => {
   const r = await a.buildTools({ search: true, tools: true, terminal: true });
@@ -58,5 +89,5 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
   const d = require('../server/apidocs.js').page(11435); ok('docs page', /v1\/chat\/completions/.test(d) && /Roblox/.test(d) && /localhost:11435/.test(d) && /<\/html>$/.test(d));
   // ---- syntax of every file ----
   for (const f of fs.readdirSync(path.join(root, 'server'))) if (f.endsWith('.js')) { try { new (require('vm').Script)(fs.readFileSync(path.join(root, 'server', f), 'utf8').replace(/^#!.*/, '')); P++; } catch (e) { F++; console.log('FAIL syntax', f, e.message); } }
-  console.log(`${P} passed, ${F} failed`); process.exit(F ? 1 : 0);
+  await new Promise(r => setTimeout(r, 300)); console.log(`${P} passed, ${F} failed`); process.exit(F ? 1 : 0);
 })();

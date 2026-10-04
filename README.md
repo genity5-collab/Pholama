@@ -110,6 +110,21 @@ Then read:
 - [All models](docs-md/MODELS.md)
 - [Use your local AI in a game or website](docs-md/API.md)
 
+## The dashboard
+
+Pholama opens on a **Dashboard**: the newest version, what's new, the newest models, how many models run tools, and (on the PC app) your memory, graphics card and the best tool model that fits your PC. Tap **Chat** at the top to talk to the AI. The website and the PC app show the same dashboard.
+
+## Releasing an update (for the maker)
+
+The website (`docs/`, used on phones) and the PC app (`web/`) must always show the same newest models and version. Follow this every time:
+
+1. Add or change models in `models.pc.json`. Give each one a `toolTier` (`good`, `basic` or `none`), an `added` date, and a `released` month (`YYYY-MM`) if you know it. A model with no `released` month is simply never listed as "new".
+2. Add a new entry at the **top** of `releases.json` (version, date, title, notes) and set `latest`.
+3. Set the same version in `package.json`.
+4. Run `npm run sync-site`. It copies the full model list and version history into both `docs/` and `web/`.
+5. Run `npm test`. It fails if the website or the PC app is out of date, so a release cannot go out with an old list.
+6. Phone models (the in-browser list) live in `docs/models.json` under `browser` and `cpu`. Update those by hand when a browser model is added.
+
 ## Add your own tools for the AI to run (PC only)
 
 The AI can only use tools on the **PC version**, with a model labelled **Runs tools**. All tools are free. Out of the box it already has 19.
@@ -183,3 +198,4 @@ The PC app checks GitHub a few seconds after it starts and then every 6 hours. I
 - [`models.json`](models.json) the model list
 - Ollama and OpenAI compatible API for games and sites: see [docs-md/API.md](docs-md/API.md) (or open `http://localhost:11435/api/docs` while Pholama runs)
 - [`server/tools2.js`](server/tools2.js) the workspace file tools and helpers
+- [`web/dashboard.js`](web/dashboard.js) the dashboard (a copy lives in `docs/`), [`scripts/sync-site.js`](scripts/sync-site.js) keeps the website and PC app in step
