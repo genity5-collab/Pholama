@@ -263,3 +263,8 @@ body.plat-on #dash{display:none!important}
 .platcom{display:flex;gap:6px;flex-wrap:wrap;margin:12px 0 0}
 .plbody{white-space:pre-wrap;overflow-wrap:anywhere;margin:8px 0}
 .plrx{display:flex;gap:6px;flex-wrap:wrap}.plhid{opacity:.6;border-style:dashed}
+
+.platnav{display:flex;gap:6px;flex-wrap:wrap;margin:14px 0 0;position:sticky;top:0;z-index:2;padding:6px 0;background:var(--bg)}
+.platpane{margin-top:6px}.plwarn{border-color:var(--warn)}
+.plproj{display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:12px;margin-top:12px}.plproj .dcard{margin:0}
+.plimgs{display:grid;grid-template-columns:repeat(2,1fr);gap:6px;margin:8px 0}.plimgs img{width:100%;aspect-ratio:16/10;object-fit:cover;border-radius:8px;border:1px solid var(--line)}

@@ -260,6 +260,32 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
     ok('sql: blocks links and secret keys in posts', /Links are not allowed/.test(sql) && /secret key/.test(sql));
     ok('sql: pictures limited to 256 KB and the owner folder', /file_size_limit[^;]*262144/.test(sql) && /storage\.foldername\(name\)\)\[1\] = auth\.uid\(\)::text/.test(sql));
   }
+  // ---- Platform part 2: moderators, rules, projects, daily ----
+  {
+    const PL = await import('../docs/platform.js'); const sql2 = fs.readFileSync(path.join(root, 'supabase', 'platform2.sql'), 'utf8');
+    const ui = fs.readFileSync(path.join(root, 'docs', 'platformui.js'), 'utf8');
+    const tb2 = (sql2.match(/create table if not exists public\.(\w+)/g) || []).map(x => x.split('.')[1]);
+    ok('sql2: every new table has row-level security', tb2.length === 5 && tb2.every(t => new RegExp('alter table public\\.' + t + ' enable row level security').test(sql2)), tb2.join());
+    const fns = ['pholama_mod_warn', 'pholama_mod_edit', 'pholama_mod_hide', 'pholama_mod_remove', 'pholama_mod_ban', 'pholama_mod_project', 'pholama_mod_cmd', 'pholama_find_user'];
+    ok('sql2: every moderator function exists', fns.every(f => new RegExp('function public\\.' + f + '\\(').test(sql2)));
+    ok('sql2: every moderator function checks for a moderator', fns.every(f => { const i = sql2.indexOf('function public.' + f + '('); const body = sql2.slice(i, i + 900); return /pholama_need_mod\(\)/.test(body); }));
+    ok('sql2: moderators cannot ban themselves or other moderators', /cannot ban yourself/.test(sql2) && /Remove their moderator role first/.test(sql2));
+    ok('sql2: every moderator action is logged', (sql2.match(/pholama_log\(/g) || []).length >= 9);
+    ok('sql2: audit log cannot be written directly', !/create policy "modlog[^;]*for (insert|update|delete)/.test(sql2));
+    ok('sql2: people cannot change their own ban', /new\.banned := old\.banned; new\.ban_reason := old\.ban_reason; new\.banned_until := old\.banned_until/.test(sql2));
+    ok('sql2: timed bans expire', /banned_until is null or banned_until > now\(\)/.test(sql2));
+    ok('sql2: project images must be your own uploads', /\/projects\/\[0-9a-f-\]\{8,40\}/.test(sql2) && /cardinality\(image_paths\) <= 4/.test(sql2));
+    ok('sql2: project limits (3 a day, 12 total) and secret-key block', /n >= 3/.test(sql2) && /n >= 12/.test(sql2) && /secret key/.test(sql2));
+    ok('sql2: rules are readable by everyone and there are 6', /create policy "rules read"/.test(sql2) && (sql2.match(/^ \(\d,'/gm) || []).length === 6);
+    ok('sql2: warnings can only be marked seen', /Only "seen" can change/.test(sql2));
+    ok('sql2: daily post needs a moderator command', /c = 'daily'/.test(sql2) && !/create policy "daily[^;]*for (insert|update)/.test(sql2));
+    ok('ui: dashboard tabs + moderator tab only for moderators', /\['home', 'Home'/.test(ui) && /if \(mod\) defs\.push\(\['mod'/.test(ui));
+    ok('ui: project images only from https', /\/\^https:\\\/\\\//.test(ui));
+    const pj = PL.projectImagePath('u', 'image/png', 'abc12345'); ok('projects: image path is inside your folder', pj === 'u/projects/abc12345.png' && PL.projectImagePath('u', 'image/gif', 'abc12345') === '');
+    ok('projects: title and description checks', !!PL.projectProblem('ab', 'long enough text') && !!PL.projectProblem('Title', 'short') && !PL.projectProblem('Title', 'long enough text'));
+    ok('bans: permanent, timed and expired text', /permanently/.test(PL.banText({ banned: true })) && /until/.test(PL.banText({ banned: true, banned_until: '2999-01-01T00:00:00Z' })) && PL.banText({ banned: true, banned_until: '2000-01-01T00:00:00Z' }) === '');
+    ok('console: only known words are sent', PL.modCommandProblem('ban Zed 24 spam') === '' && !!PL.modCommandProblem('drop table x') && !!PL.modCommandProblem('') && PL.modCommandProblem('HELP') === '');
+  }
   // ---- syntax of every file ----
   for (const f of fs.readdirSync(path.join(root, 'server'))) if (f.endsWith('.js')) { try { new (require('vm').Script)(fs.readFileSync(path.join(root, 'server', f), 'utf8').replace(/^#!.*/, '')); P++; } catch (e) { F++; console.log('FAIL syntax', f, e.message); } }
   await new Promise(r => setTimeout(r, 300)); console.log(`${P} passed, ${F} failed`); process.exit(F ? 1 : 0);

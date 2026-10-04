@@ -47,6 +47,18 @@ export function assistantRule(owned, wanted) {
   return '';
 }
 
+export const MAX_PROJ_IMAGES = 4;
+export function projectProblem(t, b) { const a = String(t || '').trim(), c = String(b || '').trim(); if (a.length < 3) return 'Give the project a title (3+ characters).'; if (c.length < 10) return 'Describe it in at least 10 characters.'; if (c.length > 400) return 'Keep the description under 400 characters.'; return ''; }
+export function projectImagePath(uid, mime, rand) { const ext = { 'image/png': 'png', 'image/jpeg': 'jpg', 'image/webp': 'webp' }[mime]; const id = String(rand || '').replace(/[^0-9a-f-]/g, '').slice(0, 36); return ext && id.length >= 8 ? uid + '/projects/' + id + '.' + ext : ''; }
+export function banText(p, now = Date.now()) {
+  if (!p || !p.banned) return '';
+  if (p.banned_until && new Date(p.banned_until).getTime() <= now) return '';
+  return 'Banned' + (p.banned_until ? ' until ' + new Date(p.banned_until).toLocaleString() : ' permanently') + (p.ban_reason ? '. Reason: ' + p.ban_reason : '.');
+}
+// Moderator command line: only these words are sent, and the database checks you are a moderator.
+export const MOD_WORDS = ['help', 'whois', 'warn', 'ban', 'unban', 'takedown', 'restore', 'delete', 'edit', 'project', 'daily'];
+export function modCommandProblem(line) { const w = String(line || '').trim().split(/\s+/); if (!w[0]) return 'Type a command. Try: help'; if (!MOD_WORDS.includes(w[0].toLowerCase())) return 'Unknown command. Try: help'; if (String(line).length > 700) return 'Too long.'; return ''; }
+
 // ---------- data layer (needs an Account with a rest() helper) ----------
 export function makePlatform(Account, cfg) {
   const base = () => cfg().SUPABASE_URL;
@@ -69,7 +81,7 @@ export function makePlatform(Account, cfg) {
     },
     communities: async () => (await Account.rest('pholama_communities?select=*&order=title.asc')) || [],
     async feed(community) {
-      const posts = (await Account.rest('pholama_posts?select=id,user_id,community,body,created_at,expires_at,hidden&community=eq.' + encodeURIComponent(community) + '&order=created_at.desc&limit=50')) || [];
+      const posts = (await Account.rest('pholama_posts?select=id,user_id,community,body,created_at,expires_at,hidden,edited_by_mod&community=eq.' + encodeURIComponent(community) + '&order=created_at.desc&limit=50')) || [];
       const live = posts.filter(p => isLive(p) || p.user_id === me());
       if (!live.length) return [];
       const ids = live.map(p => p.id).join(','), uids = [...new Set(live.map(p => p.user_id))].join(',');
@@ -93,7 +105,31 @@ export function makePlatform(Account, cfg) {
     report: (postId, reason = 'other') => Account.rest('pholama_reports', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ post_id: postId, reporter: me(), reason: ['spam', 'abuse', 'unsafe', 'other'].includes(reason) ? reason : 'other' }) }),
     async isMod() { try { const r = await Account.rest('pholama_moderators?select=user_id&limit=1'); return !!(r && r.length); } catch { return false; } },
     modHide: (id, hidden) => Account.rest('rpc/pholama_mod_hide', { method: 'POST', body: JSON.stringify({ p_post: id, p_hidden: !!hidden }) }),
-    modBan: (uid, banned) => Account.rest('rpc/pholama_mod_ban', { method: 'POST', body: JSON.stringify({ p_user: uid, p_banned: !!banned }) }),
+    modBan: (uid, banned, reason = null, hours = null) => Account.rest('rpc/pholama_mod_ban', { method: 'POST', body: JSON.stringify({ p_user: uid, p_banned: !!banned, p_reason: reason, p_hours: hours }) }),
+    rules: async () => (await Account.rest('pholama_rules?select=*&order=n.asc')) || [],
+    daily: async () => { const r = await Account.rest('pholama_daily?select=*&order=day.desc&limit=1'); return r && r[0] || null; },
+    async warnings() { return (await Account.rest('pholama_warnings?select=id,reason,created_at,seen&user_id=eq.' + encodeURIComponent(me()) + '&order=created_at.desc&limit=10')) || []; },
+    markWarningsSeen: () => Account.rest('pholama_warnings?user_id=eq.' + encodeURIComponent(me()) + '&seen=eq.false', { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ seen: true }) }),
+    async projects() {
+      const list = (await Account.rest('pholama_projects?select=*&order=created_at.desc&limit=40')) || []; if (!list.length) return [];
+      const uids = [...new Set(list.map(p => p.user_id))].join(',');
+      const pr = await Account.rest('pholama_profiles?select=user_id,platform_name,avatar_path&user_id=in.(' + uids + ')').catch(() => []);
+      const who = new Map((pr || []).map(p => [p.user_id, p]));
+      return list.map(p => ({ ...p, author: (who.get(p.user_id) || {}).platform_name || 'Someone', images: (p.image_paths || []).map(x => publicAvatarUrl(base(), x)) }));
+    },
+    async addProject({ title, blurb, files }) {
+      const bad = projectProblem(title, blurb); if (bad) throw new Error(bad);
+      const fl = Array.from(files || []).slice(0, MAX_PROJ_IMAGES), paths = [];
+      for (const f of fl) { const e = avatarProblem(f); if (e) throw new Error(e); const path = projectImagePath(me(), f.type, (globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '0000')); await Account.storage(path, f); paths.push(path); }
+      await Account.rest('pholama_projects', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: me(), title: String(title).trim(), blurb: String(blurb).trim(), image_paths: paths }) });
+    },
+    deleteProject: id => Account.rest('pholama_projects?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }),
+    modCmd: async line => { const bad = modCommandProblem(line); if (bad) throw new Error(bad); return Account.rest('rpc/pholama_mod_cmd', { method: 'POST', body: JSON.stringify({ p_line: String(line).trim() }) }); },
+    modWarn: (uid, reason) => Account.rest('rpc/pholama_mod_warn', { method: 'POST', body: JSON.stringify({ p_user: uid, p_reason: reason }) }),
+    modEdit: (id, body) => Account.rest('rpc/pholama_mod_edit', { method: 'POST', body: JSON.stringify({ p_post: id, p_body: body }) }),
+    modRemove: id => Account.rest('rpc/pholama_mod_remove', { method: 'POST', body: JSON.stringify({ p_post: id }) }),
+    modProject: (id, hidden) => Account.rest('rpc/pholama_mod_project', { method: 'POST', body: JSON.stringify({ p_project: id, p_hidden: !!hidden }) }),
+    async modLog() { return (await Account.rest('pholama_mod_log?select=action,detail,created_at&order=created_at.desc&limit=25')) || []; },
     async recentAis() { return (await Account.rest('pholama_recent_ais?select=model,seen_at&order=seen_at.desc&limit=12')) || []; },
   };
 }

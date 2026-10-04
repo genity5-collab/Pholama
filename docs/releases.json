@@ -1,6 +1,18 @@
 {
- "latest": "0.9.0",
+ "latest": "0.9.1",
  "releases": [
+  {
+   "version": "0.9.1",
+   "date": "2026-10-04",
+   "title": "Moderator tools, Projects and a Platform dashboard",
+   "notes": [
+    "The Platform is now a dashboard with Home, Posts, Projects, Rules and (for moderators) a Moderator tab",
+    "Moderators can warn, edit, hide, remove posts and ban people for a set time or forever, with a reason. Every action is logged",
+    "New Projects tab: show what you made with up to 4 images. Projects stay up until you delete them",
+    "New Daily post on Home, set by moderators, plus community Rules",
+    "Warnings show on your Home with an I understand button"
+   ]
+  },
   {
    "version": "0.9.0",
    "date": "2026-10-04",

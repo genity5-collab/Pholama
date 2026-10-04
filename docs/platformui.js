@@ -1,6 +1,6 @@
 // Pholama Platform screen. Posts, names and bios come from other people, so every piece of text is set with
 // textContent. Nothing from the network is ever put into innerHTML.
-import { makePlatform, REACTIONS, timeLeft, friendly, MAX_POST, MAX_BIO, MAX_NAME } from './platform.js';
+import { makePlatform, REACTIONS, timeLeft, friendly, banText, MAX_POST, MAX_BIO, MAX_NAME, MAX_PROJ_IMAGES } from './platform.js';
 
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 const btn = (label, fn, cls) => { const b = el('button', cls || '', label); b.type = 'button'; b.onclick = fn; return b; };
@@ -34,9 +34,69 @@ export async function mountPlatform(host, ctx) {
     ctx.onProfile && ctx.onProfile(prof && prof.platform_name);
     body.textContent = '';
     if (!prof) return body.append(setupCard());
-    if (prof.banned) return body.append(el('p', 'dmut', 'This account can no longer post on the Platform.'));
-    body.append(profileCard(), await recentCard(), communityBar(), composer(), (feedBox = el('div', 'platfeed')));
-    await paintFeed();
+    const ban = banText(prof); if (ban) { const c = el('section', 'dcard'); c.append(el('h3', null, 'You cannot post right now'), el('p', 'dmut', ban)); body.append(c); }
+    const tabs = el('div', 'platnav'); tabs.setAttribute('role', 'tablist');
+    const pane = el('div', 'platpane');
+    const defs = [['home', 'Home', paintHome], ['posts', 'Posts', paintPosts], ['projects', 'Projects', paintProjects], ['rules', 'Rules', paintRules]];
+    if (mod) defs.push(['mod', 'Moderator', paintMod]);
+    const show = async id => { for (const b of tabs.children) { const on = b.dataset.id === id; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } pane.textContent = ''; say(''); const d = defs.find(x => x[0] === id); try { await d[2](pane); } catch (e) { pane.append(el('p', 'dmut', friendly(e))); } };
+    for (const [id, label] of defs) { const b = btn(label, () => show(id), 'elf'); b.dataset.id = id; b.setAttribute('role', 'tab'); tabs.append(b); }
+    body.append(tabs, pane); go = show; await show(tab0);
+  }
+  let go = null, tab0 = 'home';
+
+  async function paintHome(pane) {
+    const grid = el('div', 'dgrid');
+    const d = await P.daily().catch(() => null);
+    const dc = el('section', 'dcard'); dc.append(el('h3', null, 'Daily post'));
+    if (d) dc.append(el('b', null, d.title), el('p', 'plbody', d.body), el('small', 'dmut', d.day)); else dc.append(el('p', 'dmut', 'No daily post yet today. Moderators post one each day.'));
+    grid.append(dc);
+    const w = await P.warnings().catch(() => []); const fresh = w.filter(x => !x.seen);
+    if (w.length) { const wc = el('section', 'dcard plwarn'); wc.append(el('h3', null, fresh.length ? 'You have a warning' : 'Past warnings')); for (const x of w.slice(0, 3)) wc.append(el('p', 'plbody', x.reason)); if (fresh.length) wc.append(btn('I understand', async () => { try { await P.markWarningsSeen(); await go('home'); } catch (e) { say(friendly(e)); } }, 'p')); grid.append(wc); }
+    const quick = el('section', 'dcard'); quick.append(el('h3', null, 'Quick links'));
+    const row = el('div', 'dact'); row.append(btn('Write a post', () => go('posts'), 'p'), btn('Show a project', () => go('projects')), btn('Read the rules', () => go('rules'))); quick.append(row); grid.append(quick);
+    pane.append(grid, profileCard(), await recentCard());
+  }
+
+  async function paintPosts(pane) { pane.append(communityBar(), composer(), (feedBox = el('div', 'platfeed'))); await paintFeed(); }
+
+  async function paintRules(pane) {
+    const c = el('section', 'dcard'); c.append(el('h3', null, 'Community rules'));
+    const rules = await P.rules().catch(() => []); if (!rules.length) c.append(el('p', 'dmut', 'Rules are not set up yet.'));
+    const ol = el('ol', 'dbul'); for (const r of rules) { const li = el('li'); li.append(el('b', null, r.title + '. '), document.createTextNode(r.body)); ol.append(li); } c.append(ol);
+    c.append(el('p', 'dmut', 'Posts disappear after 3 hours. Moderators can warn, edit, hide and remove posts, and ban people who break the rules.')); pane.append(c);
+  }
+
+  async function paintProjects(pane) {
+    const form = el('section', 'dcard'); form.append(el('h3', null, 'Advertise your project'), el('p', 'dmut', 'Show what you made. Add up to ' + MAX_PROJ_IMAGES + ' images (PNG, JPG or WebP, under 256 KB each). Projects stay up until you delete them.'));
+    const t = el('input'); t.maxLength = 60; t.placeholder = 'Project title'; t.setAttribute('aria-label', 'Project title');
+    const b = el('textarea'); b.maxLength = 400; b.rows = 3; b.placeholder = 'What is it? Why is it cool?'; b.setAttribute('aria-label', 'Project description');
+    const f = el('input'); f.type = 'file'; f.multiple = true; f.accept = 'image/png,image/jpeg,image/webp'; f.setAttribute('aria-label', 'Project images');
+    const err = el('div', 'err-t'); const add = btn('Publish project', async () => { err.textContent = ''; add.disabled = true; try { await P.addProject({ title: t.value, blurb: b.value, files: f.files }); await go('projects'); } catch (e) { err.textContent = friendly(e); } add.disabled = false; }, 'p');
+    form.append(t, b, f, add, err); pane.append(form);
+    const list = await P.projects(); const grid = el('div', 'plproj'); pane.append(grid);
+    if (!list.length) grid.append(el('p', 'dmut', 'No projects yet. Be the first to show one.'));
+    for (const p of list) {
+      const c = el('article', 'dcard plpost' + (p.hidden ? ' plhid' : '')); c.append(el('h3', null, p.title), el('small', 'dmut', 'by ' + p.author));
+      if (p.images.length) { const g = el('div', 'plimgs'); for (const u of p.images) { if (!/^https:\/\//.test(u)) continue; const i = document.createElement('img'); i.alt = p.title + ' screenshot'; i.loading = 'lazy'; i.referrerPolicy = 'no-referrer'; i.src = u; g.append(i); } c.append(g); }
+      c.append(el('p', 'plbody', p.blurb)); if (p.hidden) c.append(el('small', 'dmut', 'Hidden by moderation.'));
+      const acts = el('div', 'plrow');
+      if (p.user_id === Account.user().id) acts.append(btn('Delete', async () => { if (!confirm('Delete this project?')) return; try { await P.deleteProject(p.id); await go('projects'); } catch (e) { say(friendly(e)); } }));
+      if (mod) acts.append(btn(p.hidden ? 'Show' : 'Hide', async () => { try { await P.modProject(p.id, !p.hidden); await go('projects'); } catch (e) { say(friendly(e)); } }));
+      c.append(acts); grid.append(c);
+    }
+  }
+
+  async function paintMod(pane) {
+    const c = el('section', 'dcard'); c.append(el('h3', null, 'Moderator console'), el('p', 'dmut', 'Type help to see every command. Each one is checked by the database, so only moderators can use it.'));
+    const inp = el('input'); inp.placeholder = 'ban Zed 24 spamming'; inp.setAttribute('aria-label', 'Moderator command'); inp.maxLength = 700; inp.autocomplete = 'off'; inp.spellcheck = false;
+    const out = el('pre', 'cmdcode'); out.textContent = 'Ready.';
+    const run = btn('Run', async () => { run.disabled = true; try { out.textContent = String(await P.modCmd(inp.value)); inp.value = ''; await logBox(); } catch (e) { out.textContent = friendly(e); } run.disabled = false; }, 'p');
+    inp.onkeydown = e => { if (e.key === 'Enter') run.click(); };
+    c.append(inp, run, out); pane.append(c);
+    const lg = el('section', 'dcard'); lg.append(el('h3', null, 'Recent moderator actions')); const box = el('div'); lg.append(box); pane.append(lg);
+    async function logBox() { const l = await P.modLog().catch(() => []); box.textContent = ''; if (!l.length) box.append(el('p', 'dmut', 'Nothing yet.')); for (const x of l) box.append(el('div', 'dmut', new Date(x.created_at).toLocaleString() + '  ' + x.action + (x.detail ? ': ' + x.detail : ''))); }
+    await logBox();
   }
   let feedBox = null;
 
@@ -98,7 +158,7 @@ export async function mountPlatform(host, ctx) {
     const c = el('article', 'dcard plpost'); if (p.hidden) c.classList.add('plhid');
     const top = el('div', 'plrow'); top.append(avatar(p.avatar, p.author)); const who = el('div'); who.append(el('b', null, p.author), el('small', 'dmut', '  ' + timeLeft(p.expires_at))); top.append(who); c.append(top);
     c.append(el('p', 'plbody', p.body));
-    if (p.hidden) c.append(el('small', 'dmut', 'Hidden by moderation. Only you and moderators can see this.'));
+    if (p.hidden) c.append(el('small', 'dmut', 'Hidden by moderation. Only you and moderators can see this.')); if (p.edited_by_mod) c.append(el('small', 'dmut', ' Edited by a moderator.'));
     const rx = el('div', 'plrx');
     for (const [kind, label] of REACTIONS) {
       const r = p.reactions[kind]; const b = btn(label + (r.n ? ' ' + r.n : ''), async () => { try { await P.react(p.id, kind, !r.mine); await paintFeed(); } catch (e) { say(friendly(e)); } }, 'elf' + (r.mine ? ' on' : ''));
@@ -110,7 +170,13 @@ export async function mountPlatform(host, ctx) {
     if (p.user_id !== Account.user().id) acts.append(btn('Report', async () => { try { await P.report(p.id, 'other'); say('Thanks. A moderator will look. Three reports hide a post.'); } catch (e) { say(/duplicate|unique/i.test(String(e.message)) ? 'You already reported this post.' : friendly(e)); } }));
     if (mod) {
       acts.append(btn(p.hidden ? 'Unhide' : 'Hide', async () => { try { await P.modHide(p.id, !p.hidden); await paintFeed(); } catch (e) { say(friendly(e)); } }));
-      if (p.user_id !== Account.user().id) acts.append(btn('Ban user', async () => { if (!confirm('Ban ' + p.author + ' and delete their posts?')) return; try { await P.modBan(p.user_id, true); await paintFeed(); } catch (e) { say(friendly(e)); } }));
+      acts.append(btn('Edit', async () => { const t = prompt('Edit this post (it will be marked as edited by a moderator):', p.body); if (t == null) return; try { await P.modEdit(p.id, t); await paintFeed(); } catch (e) { say(friendly(e)); } }));
+      acts.append(btn('Remove', async () => { if (!confirm('Permanently remove this post?')) return; try { await P.modRemove(p.id); await paintFeed(); } catch (e) { say(friendly(e)); } }));
+      if (p.user_id !== Account.user().id) {
+        acts.append(btn('Warn', async () => { const r = prompt('Warning for ' + p.author + ':'); if (!r) return; try { await P.modWarn(p.user_id, r); say('Warning sent.'); } catch (e) { say(friendly(e)); } }));
+        acts.append(btn('Ban', async () => { const r = prompt('Reason for banning ' + p.author + ':'); if (r == null) return; const h = prompt('Hours (leave empty for permanent):', '24'); try { await P.modBan(p.user_id, true, r, h ? parseInt(h, 10) || null : null); await paintFeed(); } catch (e) { say(friendly(e)); } }));
+        acts.append(btn('Copy user id', async () => { try { await navigator.clipboard.writeText(p.user_id); say('User id copied.'); } catch { say('User id: ' + p.user_id); } }));
+      }
     }
     c.append(acts); return c;
   }

@@ -43,6 +43,31 @@ The website is now **Pholama Platform**. The AI lives in the PC app, and the sit
 
 **Setup for whoever runs Supabase (once):** turn on the GitHub provider, then run [`supabase/github_bonus.sql`](supabase/github_bonus.sql) and [`supabase/platform.sql`](supabase/platform.sql) in the SQL Editor. GitHub callback URL: `https://<project>.supabase.co/auth/v1/callback`. Add the site and `http://localhost:11435/` to Supabase redirect URLs. To make someone a moderator: `insert into public.pholama_moderators (user_id) values ('<their user id>');`
 
+
+### Moderator guide
+
+**1. Run the SQL once, in this order** (Supabase > SQL Editor > New query > paste > Run): `supabase/github_bonus.sql`, then `supabase/platform.sql`, then `supabase/platform2.sql`.
+
+**2. Find your user id.** Log in to the site once and pick a Platform name. Then in the SQL Editor run `select user_id, platform_name from public.pholama_profiles;` (or open Supabase > Authentication > Users and copy the UID column).
+
+**3. Make someone a moderator:** `insert into public.pholama_moderators (user_id) values ('PASTE-THE-ID-HERE');` Remove one with `delete from public.pholama_moderators where user_id = 'PASTE-THE-ID-HERE';` Log out and in again to see the **Moderator** tab.
+
+**4. Moderate.** On any post you get Hide, Edit, Remove, Warn, Ban and Copy user id. The **Moderator** tab has a command line, and the same commands work in the SQL editor as `select public.pholama_mod_cmd('...');`
+
+| Command | What it does |
+|---|---|
+| `whois <name or id>` | Shows the user id, warnings and ban |
+| `warn <name> <reason>` | Sends a warning they see on Home |
+| `ban <name> <hours or perm> <reason>` | Bans for a set time, or forever |
+| `unban <name>` | Lifts a ban |
+| `takedown <post id>` / `restore <post id>` | Hides or brings back a post |
+| `delete <post id>` | Removes a post for good |
+| `edit <post id> <new text>` | Edits a post (marked as edited by a moderator) |
+| `project hide <id>` / `project show <id>` | Hides or shows a project |
+| `daily <title> \| <text>` | Sets today's daily post |
+
+Moderators cannot ban themselves or other moderators. Every action is saved in the audit log, which only moderators can read. The database checks that you are a moderator on every command, so a changed web page cannot give anyone these powers.
+
 ### Memory limits
 
 Pholama can remember facts about you ("remember that I like short answers"). To keep things light:
