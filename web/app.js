@@ -719,8 +719,11 @@ function render() {
         unmarkReady(key); await refreshSelect(); render();
       });
       r.actions.appendChild(del); del.style.display = ready ? '' : 'none';
+  const useTxt = () => readerOn() ? 'In use (tap to turn off)' : 'Use for pictures', useCol = () => readerOn() ? 'var(--ok,#2a9d4b)' : 'var(--mut)';
+  const use = mini(useTxt(), () => { localStorage.setItem(READER_ON, readerOn() ? '0' : '1'); use.textContent = useTxt(); use.style.color = useCol(); });
+  use.style.color = useCol(); use.style.display = ready ? '' : 'none'; r.actions.insertBefore(use, r.actions.firstChild);
 
-      const idle = (label, isReady) => { r.loader.set(isReady ? 1 : 0); r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = false; r.btn.onclick = start; del.style.display = isReady ? '' : 'none'; };
+      const idle = (label, isReady) => { r.loader.set(isReady ? 1 : 0); r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = false; r.btn.onclick = start; del.style.display = isReady ? '' : 'none'; use.style.display = isReady ? '' : 'none'; };
       const start = async () => {
         if (needLogin('download')) return;
         r.btn.disabled = true;
@@ -770,6 +773,8 @@ function paintDuoBar() {
 }
 
 // ---- the picture reader shows up in the library like any other model ----
+const READER_ON = 'pholama.reader.on';   // the switch: pictures can be attached while this is '1'
+const readerOn = () => localStorage.getItem(READER_ON) === '1';
 const READER_FLAG = 'pholama.reader.ready';   // its own key: the chat-model list filters unknown ids out
 function paintReaderRow() {
   const h = document.createElement('h4'); h.textContent = 'Picture reader (lets any chat model see pictures)'; h.style.cssText = 'margin:12px 0 2px;font-size:13px;color:var(--mut)'; listEl.appendChild(h);
@@ -781,7 +786,7 @@ function paintReaderRow() {
   const del = mini('Delete', async () => {
     if (!confirm('Delete the picture reader from this browser?')) return;
     try { for (const k of await caches.keys()) if (/transformers/i.test(k)) await caches.delete(k); } catch {}
-    localStorage.removeItem(READER_FLAG); render();
+    localStorage.removeItem(READER_FLAG); localStorage.removeItem(READER_ON); render();
   });
   r.actions.appendChild(del); del.style.display = ready ? '' : 'none';
   const idle = (label, isReady) => { r.loader.set(isReady ? 1 : 0); r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = false; r.btn.onclick = start; del.style.display = isReady ? '' : 'none'; };
@@ -789,7 +794,7 @@ function paintReaderRow() {
     r.btn.disabled = true; r.bar.style.display = '';
     try {
       await loadReader(p => r.setProgress(p.pct / 100));
-      localStorage.setItem(READER_FLAG, '1');
+      localStorage.setItem(READER_FLAG, '1'); localStorage.setItem(READER_ON, '1'); use.textContent = useTxt(); use.style.color = useCol();
       idle('Ready', true);
     } catch (e) { idle('Retry', false); r.sub.textContent = 'Error: ' + e.message; }
   };
@@ -895,7 +900,7 @@ $('#close').onclick = () => { dlg.close(); refreshSelect(); };
 $('#tBrowser').onclick = () => { tab = 'browser'; render(); };
 $('#tLocal').onclick = () => { tab = 'local'; render(); };
 $('#send').onclick = send;
-initAttach({ model: () => { const v = sel.value, all = [...((catalog && catalog.browser) || []), ...((catalog && catalog.cpu) || []), ...((catalog && catalog.local) || [])]; return all.find(m => v.endsWith(m.id) || v === 'web:' + m.id || v === 'cpu:' + m.id) || { name: 'this model' }; }, note: m => alert(m) });
+initAttach({ model: () => { const v = sel.value, all = [...((catalog && catalog.browser) || []), ...((catalog && catalog.cpu) || []), ...((catalog && catalog.local) || [])]; const found = all.find(m => v.endsWith(m.id) || v === 'web:' + m.id || v === 'cpu:' + m.id) || { name: 'this model' }; return readerOn() ? { ...found, accepts: [...(found.accepts || []), 'image'] } : found; }, note: m => alert(m) });
 
 // New session: stop any running reply, save current chat, clear, show welcome screen again.
 function newSession() {

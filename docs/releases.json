@@ -1,6 +1,16 @@
 {
- "latest": "0.8.0",
+ "latest": "0.8.1",
  "releases": [
+  {
+   "version": "0.8.1",
+   "date": "2026-10-04",
+   "title": "Picture reader can be switched on",
+   "notes": [
+    "The Picture reader now has a \"Use for pictures\" switch in Models. Before, you could download it but pictures were still refused",
+    "Downloading the reader turns it on. You can switch it off any time",
+    "The message shown when a picture is refused now says exactly what to do"
+   ]
+  },
   {
    "version": "0.8.0",
    "date": "2026-10-04",

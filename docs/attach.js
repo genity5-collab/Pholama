@@ -36,7 +36,7 @@ export function checkFiles(files, model) {
   for (const f of list.slice(0, MAX_FILES)) {
     const k = kindOf(f);
     if (k === 'unsupported') { problems.push(`${f.name}: this file type is not supported. Text, code and images (PNG, JPG, WebP, GIF) work.`); continue; }
-    if (k === 'image' && !can.image) { problems.push(`${f.name}: ${model && model.name ? model.name : 'this model'} cannot read images. Pick an image model.`); continue; }
+    if (k === 'image' && !can.image) { problems.push(`${f.name}: ${model && model.name ? model.name : 'this model'} cannot read images by itself. Open Models, download the Picture reader, and tap "Use for pictures".`); continue; }
     if (k === 'image' && f.size > MAX_IMAGE_BYTES) { problems.push(`${f.name}: image is over ${MAX_IMAGE_BYTES / 1048576} MB.`); continue; }
     out.push({ file: f, kind: k });
   }
