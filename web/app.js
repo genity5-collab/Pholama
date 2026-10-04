@@ -16,6 +16,7 @@ import { loadReader, readerLoaded } from './reader.js';
 import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
 import { READER } from './attach.js';
 import { buildKeysPanel, friendlyModelName } from './keys.js';
+import { buildChatGptCard } from './chatgpt.js';
 import { initAttach, hasAttachments, attachedNames, clearAttachments, prepare } from './attachui.js';
 
 const $ = s => document.querySelector(s);
@@ -765,7 +766,7 @@ function render() {
   $('#tBrowser').classList.toggle('on', tab === 'browser'); $('#tLocal').classList.toggle('on', tab === 'local');
   listEl.innerHTML = '';
   paintDuoBar();
-  if (server && !remoteBase()) buildKeysPanel({ api, parent: listEl, onChange: () => { refreshSelect(); } });
+  if (server && !remoteBase()) { buildKeysPanel({ api, parent: listEl, onChange: () => { refreshSelect(); } }); buildChatGptCard({ api, parent: listEl }); }
   if (tab === 'browser') {
     const ram = deviceRam(), gpu = hasGPU;
     $('#hw').textContent = gpu

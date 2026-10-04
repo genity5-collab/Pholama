@@ -27,6 +27,9 @@ Download these two and you can chat, do maths and **send pictures**:
 How it works: the reader looks at your picture, then the brain answers using what the reader saw. Everything runs on your phone. Nothing is uploaded.
 Full guide: [Send files and pictures](docs-md/FILES.md).
 
+## Connect ChatGPT
+ChatGPT can ask your PC for Pholama news, a web search, your installed models and your credits left (read-only, off until you turn it on). Full guide: [Connect ChatGPT](docs-md/CHATGPT.md).
+
 
 
 ### Pholama Platform (the website)

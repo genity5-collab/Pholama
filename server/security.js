@@ -31,6 +31,7 @@ const LOOPBACK = new Set(['127.0.0.1', '::1', '::ffff:127.0.0.1']);
 function isLoopback(req) {
   const a = req.socket && req.socket.remoteAddress;
   if (!LOOPBACK.has(a)) return false;
+  if (Object.keys(req.headers || {}).some(k => /^tailscale-/i.test(k))) return false;   // Tailscale Serve/Funnel add their own headers: that is a tunnel, not the PC
   // A reverse proxy / tunnel on this PC makes every request look local. Treat forwarded requests as remote.
   const h = req.headers;
   return !(h['x-forwarded-for'] || h['x-real-ip'] || h['forwarded'] || h['cf-connecting-ip'] || h['x-forwarded-host']);
@@ -49,6 +50,20 @@ function checkKey(key) {
   for (const k of st.keys) { const kh = Buffer.from(k.hash, 'hex'); if (kh.length === h.length && crypto.timingSafeEqual(kh, h)) hit = k; }   // no early exit
   if (hit && Date.now() - hit.lastUsed > 60000) { hit.lastUsed = Date.now(); save(st); }
   return hit;
+}
+
+// Same checks as authorize(), but the "this request comes from the PC itself" shortcut is NEVER used.
+// For anything reachable through a tunnel (ChatGPT/MCP): a tunnel runs on the PC, so every outside request can look like it came from the PC,
+// and we cannot rely on which headers a tunnel adds. So a key is always required here, even from 127.0.0.1.
+function authorizeKeyOnly(req) {
+  const a = addr(req);
+  if (blocked(a)) return { ok: false, status: 429, error: 'Too many wrong keys. Try again in a few minutes.' };
+  if (!keyCount()) return { ok: false, status: 401, error: 'unauthorized', hint: 'Create a key first: on the PC, open Settings > Connect ChatGPT.' };
+  const given = getKey(req);
+  if (!given) return { ok: false, status: 401, error: 'unauthorized' };
+  const k = checkKey(given);
+  if (!k) { fail(a); return { ok: false, status: 401, error: 'unauthorized' }; }
+  return { ok: true, who: 'key:' + k.id };
 }
 
 // Decide what to do with a request. Returns {ok, status, error, who}.
@@ -79,4 +94,4 @@ function corsHeaders(req) {
 // Browsers from other websites must not be able to drive the local server. Block cross-site browser calls that are not allowed.
 function originBlocked(req) { const o = req.headers.origin; return !!o && !corsOrigin(req); }
 
-module.exports = { createKey, listKeys, revokeKey, keyCount, authorize, isLoopback, corsHeaders, originBlocked, _sha: sha, _reset: () => fails.clear() };
+module.exports = { authorizeKeyOnly, createKey, listKeys, revokeKey, keyCount, authorize, isLoopback, corsHeaders, originBlocked, _sha: sha, _reset: () => fails.clear() };

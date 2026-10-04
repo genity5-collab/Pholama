@@ -12,7 +12,7 @@ const sec = require('./security');
 
 const PORT = +process.env.PORT || 11435;
 const HOST = process.env.HOST || '127.0.0.1'; // set HOST=0.0.0.0 to chat from your phone on same WiFi
-const providers = require('./providers'), maxcloud = require('./maxcloud');
+const providers = require('./providers'), maxcloud = require('./maxcloud'), mcp = require('./mcp');
 const OLLAMA = process.env.OLLAMA_URL || 'http://127.0.0.1:11434';
 const LLAMA_PORT = 11436;
 const { fitToContext, chooseContext } = require('./fit');
@@ -268,6 +268,8 @@ async function uninstallLlama() { stopInstall(); await stopLlama(); try { fs.rmS
 
 // ---------- http helpers ----------
 const json = (res, code, obj) => { res.writeHead(code, { 'Content-Type': 'application/json', ...(res.cors || {}) }); res.end(JSON.stringify(obj)); };
+// Raw body with a hard size limit (used by /mcp, which is reachable from outside). Rejects as soon as it goes over, and stops reading.
+const rawBody = (req, max) => new Promise((ok, no) => { let d = '', n = 0, dead = false; req.on('data', c => { if (dead) return; n += c.length; if (n > max) { dead = true; req.destroy(); no(new Error('too large')); return; } d += c; }); req.on('end', () => { if (!dead) ok(d); }); req.on('error', e => { if (!dead) no(e); }); });
 const body = (req) => new Promise(r => { let d = ''; req.on('data', c => d += c); req.on('end', () => { try { r(JSON.parse(d || '{}')); } catch { r({}); } }); });
 const MIME = { '.html': 'text/html', '.js': 'text/javascript', '.css': 'text/css', '.json': 'application/json', '.svg': 'image/svg+xml', '.png': 'image/png', '.webmanifest': 'application/manifest+json' };
 
@@ -701,6 +703,16 @@ async function listModels() {   // Ollama-compatible model list (ours + Ollama's
   return list;
 }
 
+// The only things an outside MCP client (ChatGPT) can reach. Fixed list, read-only, no caller-chosen tool names.
+const mcpDeps = {
+  version: () => '',
+  async news(limit) { const { tools } = await agent.buildTools({ platform: true }); return agent.runTool(tools, 'platform_updates', { limit }, { sources: agent.sources.makeCollector(4) }); },
+  async search(query) { const { tools } = await agent.buildTools({ search: true }); return agent.runTool(tools, 'web_search', { query }, { sources: agent.sources.makeCollector(8) }); },
+  async models() { const l = await listModels(); return l.length ? l.map(m => { const c = CATALOG.find(x => 'gguf:' + x.id === m.name); return (m.label || m.name.replace(/^(gguf|ollama):/, '')) + (c && c.toolTier ? ' (tools: ' + c.toolTier + ')' : ''); }).join('\n') : 'No models installed yet.'; },
+  async credits() { const c = agent.credits(); return c.left + ' credits left today (of ' + c.daily + ').'; },
+};
+mcpDeps.version = VERSION_FOR_MCP;
+function VERSION_FOR_MCP() { try { return require('../package.json').version; } catch { return '0'; } }
 const server = http.createServer(async (req, res) => {
   const u = new URL(req.url, 'http://x'), p = u.pathname;
   res.cors = sec.corsHeaders(req);
@@ -708,6 +720,20 @@ const server = http.createServer(async (req, res) => {
   if (req.method === 'OPTIONS') { res.writeHead(204, res.cors); return res.end(); }
   if (sec.originBlocked(req)) return json(res, 403, { error: 'This website is not allowed to use this Pholama host.' });   // other sites can never drive your PC
   try {
+    if (p === '/mcp') {
+      if (!mcp.isOn()) return json(res, 404, { error: 'The ChatGPT connection is switched off. Turn it on in Pholama on the PC: Settings > Connect ChatGPT.' });
+      const a = sec.authorizeKeyOnly(req); if (!a.ok) return json(res, a.status, { error: a.error, hint: a.hint });   // a key is ALWAYS needed here, even from this PC: a tunnel makes outside requests look local
+      if (req.method !== 'POST') { res.writeHead(405, { Allow: 'POST', 'Content-Type': 'application/json' }); return res.end(JSON.stringify({ error: 'Use POST.' })); }
+      let raw = ''; try { raw = await rawBody(req, mcp.MAX_BODY); } catch { return json(res, 413, { error: 'Too large' }); }
+      const r = await mcp.handleBody(raw, { ...mcpDeps, version: VERSION_FOR_MCP() });
+      if (r.body === null) { res.writeHead(r.status, res.cors); return res.end(); }
+      return json(res, r.status, r.body);
+    }
+    if (p === '/api/mcp-server') {   // on/off switch: this PC only (the /api/ rule below already blocks remote keys from it)
+      const a = sec.authorize(req); if (!a.ok || a.who !== 'local') return json(res, 403, { error: 'This can only be done on the PC itself.' });
+      if (req.method === 'GET') return json(res, 200, { on: mcp.isOn(), tools: mcp.TOOLS.map(t => ({ name: t.name, description: t.description })) });
+      if (req.method === 'POST') { const b = await body(req); return json(res, 200, { on: mcp.setOn(b.on === true) }); }
+    }
     if (p === '/api/auth') return json(res, 200, { required: !sec.isLoopback(req), local: sec.isLoopback(req), keys: sec.isLoopback(req) ? sec.keyCount() : undefined });   // public: lets the page know if it needs a key
     if (p.startsWith('/api/') || p.startsWith('/v1/')) {
       const a = sec.authorize(req);
