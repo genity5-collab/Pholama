@@ -192,6 +192,8 @@ The website (`docs/`, used on phones) and the PC app (`web/`) must always show t
 5. Run `npm test`. It fails if the website or the PC app is out of date, so a release cannot go out with an old list.
 6. Phone models (the in-browser list) live in `docs/models.json` under `browser` and `cpu`. Update those by hand when a browser model is added.
 
+The PC updater reads `package.json` from the default branch and downloads that branch's archive; a GitHub Release or tag by itself does not publish an update to the app.
+
 ## Add your own tools for the AI to run (PC only)
 
 The AI can only use tools on the **PC version**, with a model labelled **Runs tools**. All tools are free. Out of the box it already has 19.
@@ -247,12 +249,13 @@ Write a tiny MCP server in any language that answers `tools/list` and `tools/cal
 
 ## Updates without reinstalling (PC only)
 
-The PC app checks GitHub a few seconds after it starts and then every 6 hours. If there is a new version it downloads it quietly, and shows **Update ready** at the top. Close Pholama and start it again to use it. The web part (the screens) changes the next time you reload the page.
+The PC app checks GitHub every 5 minutes while it is open and every 5 hours while it is closed (when the PC is on and you are signed in). If a new version is found, it installs quietly and relaunches the PC server once its old port has been released. An already-open app tab reloads when the replacement version is ready. **Check now** checks and installs immediately even if automatic updates are switched off.
 
 - **Your models, accounts, keys, credits and settings are never touched.** They live in `~/.pholama`, outside the program folder.
 - A copy of the old version is kept in `~/.pholama/previous-version` in case you want to go back.
-- Turn it off in **Tools > Updates**, or press **Check now** to look right away.
-- Prefer the command line? `pholama update` does the same thing.
+- Turn automatic updates off in **Tools > Updates**; **Check now** is still a one-time install action.
+- If upgrading from an older build that reports a connection error while restarting, close Pholama, run `pholama update` in a terminal, then open it again. The command replaces program files but does not restart the running server.
+- Prefer the command line? `pholama update` checks and downloads the current default-branch version.
 - Nothing updates if GitHub cannot be reached. Your current version keeps working.
 
 ## For developers

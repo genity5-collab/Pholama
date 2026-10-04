@@ -39,6 +39,11 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   // wiring
   const R = p => fs.readFileSync(path.join(__dirname, '..', p), 'utf8'), st = R('web/studio.js'), srv = R('server/server.js'), css = R('web/style.css');
   ok('Studio loads the effects module', /from '\.\/studiofx\.js'/.test(st));
+  ok('Studio has a direct script creation control', /id="stNewScript"/.test(st) && /el\.stNewScript\.onclick/.test(st));
+  ok('new files are labelled for review in tabs', /S\.newFiles\.add\(f\.name\)/.test(st) && /'  NEW'/.test(st));
+  ok('new JavaScript files are attached to the live preview when possible', /<script src="' \+ src \+ '"><\/script>/.test(st));
+  ok('companion position is saved and restored', /pholama_studio_companion_pos/.test(st) && /placeCompanion\(companionPos\.x, companionPos\.y, true\)/.test(st));
+  ok('companion has selectable reactions', /data-reaction="👋 Wave"/.test(st) && /data-reaction="💃 Dance"/.test(st));
   ok('Studio starts the strip on toolStart and ends it on the finished tool line', /j\.toolStart\) \{ fxOpen\+\+; fx\.working/.test(st) && /fxOpen > 0\) \{ fxOpen--; fx\.idle\(\)/.test(st));
   ok('the strip is always cleared when a run ends (error, Stop, done)', /finally \{ while \(fxOpen > 0\) \{ fxOpen--; fx\.idle\(\); \}/.test(st));
   ok('the LAST change of a run still flashes (flag stays on through the final refresh)', /fxShow = true; try \{ await refreshFromServer\(\); \} finally \{ fxShow = false; \}/.test(st));

@@ -8,7 +8,7 @@ export function friendlyModelName(value, providers) {   // "byok:groq-llama" -> 
 
 export function buildKeysPanel({ api, parent, onChange }) {
   const box = document.createElement('div'); box.className = 'keysbox'; box.style.cssText = 'margin:8px 0;padding:10px 12px;border:1px solid var(--line,#ddd);border-radius:12px';
-  const head = document.createElement('b'); head.textContent = 'Your own AI keys (ChatGPT, Gemini, Groq...)';
+  const head = document.createElement('b'); head.textContent = 'Your own AI keys (ChatGPT, Gemini, Alibaba Qwen, Groq...)';
   const info = document.createElement('div'); info.className = 'sys'; info.style.cssText = 'text-align:left;margin:6px 0';
   info.textContent = 'Use an AI from your own account. The key stays on this PC, is never shown again, and is only sent to the company it belongs to. You pay that company directly. They work in Chat and in Studio.';
   const listBox = document.createElement('div');

@@ -1542,22 +1542,26 @@ async function paintUpdate() {
 }
 // Ask this PC's server to start a fresh copy of itself, wait for it to come back, then reload the page so the new version is what you see.
 async function restartPholama(btn, version) {
+  if (!version) { try { const u = await (await fetch('/api/update', { cache: 'no-store' })).json(); version = u.latest || null; } catch {} }
   hideBanner(); const scene = openInstalling(version); let sceneOpen = true;
   const fail = m => { if (sceneOpen) { sceneOpen = false; scene.fail(m); } };
   if (btn) { btn.disabled = true; btn.textContent = 'Restarting...'; }
   await new Promise(r => setTimeout(r, 700)); scene.step(1);
   try { const r = await fetch('/api/restart', { method: 'POST' }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed'); }
-  catch (e) { if (btn) { btn.disabled = false; btn.textContent = 'Restart now'; } fail('Could not restart from here'); alert('Could not restart from here (' + e.message + '). Close Pholama and open it again.'); return; }
+  catch (e) { if (!/NetworkError|Failed to fetch|fetch failed|networkerror/i.test(String(e.message || e))) { if (btn) { btn.disabled = false; btn.textContent = 'Restart now'; } fail('Could not restart from here'); alert('Could not restart from here (' + e.message + '). Try again.'); return; } }
   scene.step(2); await new Promise(r => setTimeout(r, 2500));
-  for (let i = 0; i < 40; i++) { try { const r = await fetch('/api/update', { cache: 'no-store' }); if (r.ok) { scene.done(); await new Promise(r => setTimeout(r, 900)); location.reload(); return; } } catch {} await new Promise(r => setTimeout(r, 700)); }
+  for (let i = 0; i < 60; i++) { try { const r = await fetch('/api/version', { cache: 'no-store' }); if (r.ok) { const v = await r.json(); if (!version || v.version === version) { scene.done(); await new Promise(r => setTimeout(r, 900)); location.reload(); return; } } } catch {} await new Promise(r => setTimeout(r, 700)); }
   if (btn) { btn.disabled = false; btn.textContent = 'Restart now'; } fail('Pholama did not come back'); alert('Pholama did not come back on its own. Open it again from your Desktop icon.');
 }
 window.restartPholama = restartPholama;
 $('#updRestart').onclick = e => restartPholama(e.currentTarget, null);
-$('#updCheck').onclick = async () => { $('#updMsg').textContent = 'Checking...'; try { await fetch('/api/update/check', { method: 'POST' }); } catch {} paintUpdate(); };
+$('#updCheck').onclick = async () => { $('#updCheck').disabled = true; $('#updMsg').textContent = 'Checking and installing if an update is available...'; try { await fetch('/api/update/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ install: true }) }); } catch {} finally { $('#updCheck').disabled = false; } paintUpdate(); };
 $('#updAuto').onchange = async e => { try { await fetch('/api/update/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: e.target.checked }) }); } catch {} paintUpdate(); };
 $('#updPill').onclick = () => { $('#opt').click(); };
-paintUpdate(); setInterval(paintUpdate, 10 * 60 * 1000);
+paintUpdate(); setInterval(paintUpdate, 5 * 60 * 1000);
+// An automatic update restarts the server in the background; once the replacement reports
+// a different version, refresh this already-open tab so it cannot keep serving stale Studio code.
+{ let loadedServerVersion = ''; const watchServerVersion = async () => { if (!server) return; try { const r = await fetch('/api/version', { cache: 'no-store' }); if (!r.ok) return; const v = await r.json(); if (!loadedServerVersion) loadedServerVersion = v.version; else if (v.version && v.version !== loadedServerVersion) location.reload(); } catch {} }; watchServerVersion(); setInterval(watchServerVersion, 5000); }
 setTimeout(async () => { try { const v = await (await fetch(server ? '/api/version' : 'releases.json', { cache: 'no-cache' })).json(); const cur = server ? v.version : v.latest; await checkCelebrate(cur, async () => (await (await fetch('releases.json', { cache: 'no-cache' })).json()).releases || []); } catch {} }, 1800);
 
 

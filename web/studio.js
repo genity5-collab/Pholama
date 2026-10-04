@@ -50,7 +50,7 @@ export function mergeIncoming(local, server, dirtyNames) {
 
 export function createStudio(env) {
   const { api, $, ghHeaders, getModel, mount } = env;
-  const S = { project: null, files: [], current: null, dirty: new Set(), log: [], activity: [], busy: false, stopper: null, timers: {}, companion: false };
+  const S = { project: null, files: [], current: null, dirty: new Set(), newFiles: new Set(), log: [], activity: [], busy: false, stopper: null, timers: {}, companion: false };
   const el = {};
 
   mount.innerHTML = `
@@ -61,12 +61,12 @@ export function createStudio(env) {
     <button id="stPublish" class="p" title="Put this project on GitHub">Publish</button>
   </div>
   <div id="stActivityPanel" class="st-activity" hidden><div class="st-panelhead"><b>Activity</b><span class="sp"></span><button id="stActivityRefresh">Refresh</button></div><div id="stActivityList" class="st-activitylist">Loading...</div></div>
-  <div id="stSettingsPanel" class="st-settings" hidden><div class="st-panelhead"><b>Studio settings</b><span class="sp"></span><button id="stSettingsClose">Close</button></div><label class="st-setting"><input id="stCompanion" type="checkbox"><span><b>Pholama companion</b><small>A tiny local llama follows your cursor. Click it to pet it. It never reads the page or sends anything.</small></span></label><div class="sys">The companion is off by default and can be turned off at any time.</div></div>
+  <div id="stSettingsPanel" class="st-settings" hidden><div class="st-panelhead"><b>Studio settings</b><span class="sp"></span><button id="stSettingsClose">Close</button></div><label class="st-setting"><input id="stCompanion" type="checkbox"><span><b>Pholama companion</b><small>Turn it on, drag it anywhere, then click for reactions. It never reads the page or sends anything.</small></span></label><div class="sys">The companion is off by default and can be turned off at any time.</div></div>
   <div class="st-main">
     <div class="st-left">
       <div class="st-tabs" id="stTabs"></div>
       <textarea id="stCode" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Code editor"></textarea>
-      <div class="st-foot"><span id="stStat">Saved</span><button id="stAddFile">+ File</button><button id="stRm">Remove file</button></div>
+      <div class="st-foot"><span id="stStat">Saved</span><button id="stAddFile">+ File</button><button id="stNewScript">+ Script</button><button id="stRm">Remove file</button></div>
     </div>
     <div class="st-right">
       <div class="st-prevhead"><b>Preview</b><span class="sp"></span><button id="stReload" title="Reload preview">Reload</button></div>
@@ -79,7 +79,7 @@ export function createStudio(env) {
     <div id="stAiLog" class="st-ailog"></div>
     <div class="st-aibox"><textarea id="stAsk" rows="2" placeholder="Ask the AI to build, fix or explain anything..."></textarea><button id="stDiagnose" title="Check the project and explain the next fix">Diagnose</button><button id="stSend" class="p">Send</button></div>
   </div>`;
-  for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stActivity', 'stSettings', 'stActivityPanel', 'stActivityRefresh', 'stActivityList', 'stSettingsPanel', 'stSettingsClose', 'stCompanion', 'stPublish', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stDiagnose', 'stSend']) el[id] = mount.querySelector('#' + id);
+  for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stActivity', 'stSettings', 'stActivityPanel', 'stActivityRefresh', 'stActivityList', 'stSettingsPanel', 'stSettingsClose', 'stCompanion', 'stPublish', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stNewScript', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stDiagnose', 'stSend']) el[id] = mount.querySelector('#' + id);
   const fx = createFx({ host: el.stCode.parentElement, code: el.stCode, tabs: el.stTabs, frame: el.stFrame });   // the 'AI is editing' animation
   const activityTitle = e => e.kind === 'file' ? ((e.status === 'working' ? 'Working on ' : e.status === 'failed' ? 'Failed: ' : 'Changed ') + (e.path || 'a file')) : e.kind === 'command' ? (e.status === 'ok' ? 'Command finished' : e.status === 'proposed' ? 'Command waiting for approval' : 'Command ' + (e.status || 'updated')) : (e.text || e.status || e.kind || 'Activity');
   const paintActivity = () => { const box = el.stActivityList; if (!box) return; box.textContent = ''; if (!S.activity.length) { box.textContent = 'No Studio activity yet.'; return; } for (const e of S.activity.slice(0, 80)) { const d = document.createElement('details'); d.className = 'st-activityrow ' + (e.status === 'failed' || e.status === 'error' ? 'bad' : e.status === 'working' || e.status === 'proposed' ? 'wait' : 'good'); const s = document.createElement('summary'); const time = e.t ? new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''; s.textContent = (e.status || 'event') + ' · ' + activityTitle(e) + (time ? ' · ' + time : ''); d.appendChild(s); const body = document.createElement('div'); body.className = 'st-activitybody'; const bits = []; if (e.project) bits.push('Project: ' + e.project); if (e.added != null || e.removed != null) bits.push('Lines: +' + (e.added || 0) + ' / -' + (e.removed || 0)); if (e.error) bits.push('Error: ' + e.error); if (e.cmd) bits.push(e.cmd); body.textContent = bits.join('\n') || 'No additional details.'; d.appendChild(body); box.appendChild(d); } };
@@ -91,12 +91,29 @@ export function createStudio(env) {
   el.stSettingsClose.onclick = () => { el.stSettingsPanel.hidden = true; };
   const companionKey = 'pholama_studio_companion';
   const companionOn = () => { try { return localStorage.getItem(companionKey) === 'on'; } catch { return false; } };
-  let petCount = 0, companionEl = null, companionTarget = { x: window.innerWidth - 80, y: window.innerHeight - 130 }, companionPos = { x: companionTarget.x, y: companionTarget.y };
-  const makeCompanion = () => { if (companionEl || !S.companion) return; companionEl = document.createElement('button'); companionEl.className = 'st-companion'; companionEl.type = 'button'; companionEl.title = 'Pet Pholama'; companionEl.innerHTML = '<img src="icon.svg" alt="Pholama companion"><span>pet</span>'; companionEl.onclick = () => { petCount++; companionEl.classList.remove('pet'); void companionEl.offsetWidth; companionEl.classList.add('pet'); companionEl.title = 'Pholama liked that (' + petCount + ')'; }; document.body.appendChild(companionEl); };
+  let companionEl = null, companionBtn = null, companionActions = null, companionBubble = null, suppressCompanionClick = false, dragCompanion = null, bubbleTimer = 0;
+  const readCompanionPos = () => { try { const p = JSON.parse(localStorage.getItem('pholama_studio_companion_pos') || 'null'); if (p && Number.isFinite(p.x) && Number.isFinite(p.y)) return p; } catch {} return { x: window.innerWidth - 76, y: window.innerHeight - 110 }; };
+  let companionPos = readCompanionPos();
+  const placeCompanion = (x, y, save = false) => { companionPos = { x: Math.max(4, Math.min(window.innerWidth - 64, x)), y: Math.max(4, Math.min(window.innerHeight - 64, y)) }; if (companionEl) { companionEl.style.left = companionPos.x + 'px'; companionEl.style.top = companionPos.y + 'px'; companionEl.dataset.side = companionPos.x < window.innerWidth / 2 ? 'left' : 'right'; companionEl.dataset.vertical = companionPos.y < 150 ? 'top' : 'bottom'; } if (save) try { localStorage.setItem('pholama_studio_companion_pos', JSON.stringify(companionPos)); } catch {} };
+  const companionSay = text => { if (!companionBubble) return; companionBubble.textContent = text; companionBubble.hidden = false; clearTimeout(bubbleTimer); bubbleTimer = setTimeout(() => { if (companionBubble) companionBubble.hidden = true; }, 1800); };
+  const makeCompanion = () => {
+    if (companionEl || !S.companion) return;
+    companionEl = document.createElement('div'); companionEl.className = 'st-companion-wrap';
+    companionEl.innerHTML = '<button class="st-companion" type="button" title="Drag to place Pholama; click for reactions" aria-label="Pholama companion" aria-expanded="false"><img src="icon.svg" alt=""><span>drag me</span></button><div class="st-companion-actions" hidden aria-label="Pholama reactions"><button type="button" data-reaction="👋 Wave">👋 Wave</button><button type="button" data-reaction="✨ Yay!">✨ Yay</button><button type="button" data-reaction="💚 Love">💚 Love</button><button type="button" data-reaction="💃 Dance">💃 Dance</button><button type="button" data-reaction="😴 Nap">😴 Nap</button><button type="button" data-reaction="🤔 Thinking...">🤔 Think</button></div><div class="st-companion-bubble" hidden></div>';
+    companionBtn = companionEl.querySelector('.st-companion'); companionActions = companionEl.querySelector('.st-companion-actions'); companionBubble = companionEl.querySelector('.st-companion-bubble');
+    companionBtn.addEventListener('pointerdown', e => { if (e.button !== 0) return; dragCompanion = { id: e.pointerId, x: e.clientX, y: e.clientY, left: companionPos.x, top: companionPos.y, moved: false }; try { companionBtn.setPointerCapture(e.pointerId); } catch {} });
+    companionBtn.addEventListener('pointermove', e => { if (!dragCompanion || dragCompanion.id !== e.pointerId) return; const dx = e.clientX - dragCompanion.x, dy = e.clientY - dragCompanion.y; if (Math.abs(dx) + Math.abs(dy) > 5) dragCompanion.moved = true; if (dragCompanion.moved) placeCompanion(dragCompanion.left + dx, dragCompanion.top + dy); });
+    companionBtn.addEventListener('pointerup', e => { if (!dragCompanion || dragCompanion.id !== e.pointerId) return; if (dragCompanion.moved) { placeCompanion(companionPos.x, companionPos.y, true); suppressCompanionClick = true; setTimeout(() => { suppressCompanionClick = false; }, 150); } dragCompanion = null; });
+    companionBtn.onclick = () => { if (suppressCompanionClick) { suppressCompanionClick = false; return; } companionActions.hidden = !companionActions.hidden; companionBtn.setAttribute('aria-expanded', String(!companionActions.hidden)); if (!companionActions.hidden) companionSay('Choose a reaction'); };
+    companionActions.addEventListener('click', e => { const b = e.target.closest('[data-reaction]'); if (!b) return; companionEl.classList.remove('react'); void companionEl.offsetWidth; companionEl.classList.add('react'); companionSay(b.dataset.reaction); companionActions.hidden = true; companionBtn.setAttribute('aria-expanded', 'false'); });
+    document.addEventListener('pointerdown', e => { if (companionEl && !companionEl.contains(e.target) && companionActions && !companionActions.hidden) { companionActions.hidden = true; companionBtn.setAttribute('aria-expanded', 'false'); } });
+    document.body.appendChild(companionEl); placeCompanion(companionPos.x, companionPos.y);
+  };
   const removeCompanion = () => { if (companionEl) { companionEl.remove(); companionEl = null; } };
-  const companionFrame = () => { if (companionEl) companionEl.style.display = S.companion && document.body.classList.contains('studio-on') ? '' : 'none'; if (companionEl && S.companion && document.body.classList.contains('studio-on')) { companionPos.x += (companionTarget.x - companionPos.x) * .12; companionPos.y += (companionTarget.y - companionPos.y) * .12; companionEl.style.transform = `translate3d(${companionPos.x}px,${companionPos.y}px,0)`; } requestAnimationFrame(companionFrame); };
-  document.addEventListener('pointermove', e => { companionTarget.x = Math.min(window.innerWidth - 68, Math.max(8, e.clientX + 18)); companionTarget.y = Math.min(window.innerHeight - 76, Math.max(8, e.clientY + 18)); }, { passive: true });
-  S.companion = companionOn(); el.stCompanion.checked = S.companion; el.stCompanion.onchange = () => { S.companion = el.stCompanion.checked; try { localStorage.setItem(companionKey, S.companion ? 'on' : 'off'); } catch {} if (S.companion) makeCompanion(); else removeCompanion(); };
+  const companionFrame = () => { if (companionEl) companionEl.style.display = S.companion && document.body.classList.contains('studio-on') ? '' : 'none'; };
+  if (window.MutationObserver) new MutationObserver(companionFrame).observe(document.body, { attributes: true, attributeFilter: ['class'] });
+  window.addEventListener('resize', () => placeCompanion(companionPos.x, companionPos.y));
+  S.companion = companionOn(); el.stCompanion.checked = S.companion; el.stCompanion.onchange = () => { S.companion = el.stCompanion.checked; try { localStorage.setItem(companionKey, S.companion ? 'on' : 'off'); } catch {} if (S.companion) makeCompanion(); else removeCompanion(); companionFrame(); };
   if (S.companion) makeCompanion(); companionFrame();
   let fxOpen = 0, fxShow = false;   // fxShow stays true through the last refresh after a run, so the final change still flashes
 
@@ -118,19 +135,19 @@ export function createStudio(env) {
     el.stProj.value = want; await openProject(want);
   }
   async function openProject(name) {
-    S.project = name; S.dirty.clear(); S.current = null;
+    S.project = name; S.dirty.clear(); S.newFiles.clear(); S.current = null;
     const j = await jget('api/studio/projects/' + encodeURIComponent(name)); S.files = j.files;
     S.current = (S.files.find(f => f.name === 'index.html') || S.files[0] || {}).name || null; paintAll(); try { localStorage.setItem('pholama_studio_proj', name); } catch {}
   }
   function paintAll() { paintTabs(); paintEditor(); renderPreview(true); }
   function paintTabs() {
     el.stTabs.textContent = '';
-    for (const f of S.files) { const b = document.createElement('button'); b.className = 'st-tab' + (f.name === S.current ? ' on' : ''); b.textContent = f.name + (S.dirty.has(f.name) ? ' \u2022' : ''); b.onclick = () => { S.current = f.name; paintTabs(); paintEditor(); }; el.stTabs.appendChild(b); }
+    for (const f of S.files) { const b = document.createElement('button'); b.className = 'st-tab' + (f.name === S.current ? ' on' : '') + (S.newFiles.has(f.name) ? ' fresh' : ''); b.textContent = f.name + (S.dirty.has(f.name) ? ' \u2022' : '') + (S.newFiles.has(f.name) ? '  NEW' : ''); if (S.newFiles.has(f.name)) b.title = 'New file — click to open and review'; b.onclick = () => { S.current = f.name; S.newFiles.delete(f.name); paintTabs(); paintEditor(); }; el.stTabs.appendChild(b); }
   }
   function paintEditor() {
     const f = S.files.find(x => x.name === S.current);
     el.stCode.disabled = !f; el.stCode.value = f ? f.content : ''; el.stCode.placeholder = S.project ? 'Pick or add a file.' : 'Make a project first with "New".';
-    el.stRm.disabled = !f; el.stAddFile.disabled = !S.project;
+    el.stRm.disabled = !f; el.stAddFile.disabled = !S.project || S.busy; el.stNewScript.disabled = !S.project || S.busy;
   }
 
   // ---- preview (debounced; identical content never reloads) ----
@@ -158,11 +175,14 @@ export function createStudio(env) {
     try {
       const j = await jget('api/studio/projects/' + encodeURIComponent(S.project));
       const typing = document.activeElement === el.stCode, keep = S.current, pos = typing ? [el.stCode.selectionStart, el.stCode.selectionEnd] : null;
+      const oldNames = new Set(S.files.map(f => f.name)), added = j.files.filter(f => !oldNames.has(f.name));
+      for (const f of added) S.newFiles.add(f.name);
       const m = mergeIncoming(S.files, j.files, S.dirty); S.files = m.files;
       if (!S.files.some(f => f.name === S.current)) S.current = (S.files.find(f => f.name === 'index.html') || S.files[0] || {}).name || null;
       paintTabs(); fx.restoreTabs(); const f = S.files.find(x => x.name === S.current);
       if (f && el.stCode.value !== f.content && !S.dirty.has(f.name)) { const before = el.stCode.value, fresh = keep === S.current && !typing; el.stCode.value = f.content; if (fresh && (S.busy || fxShow)) { fx.landed(before, f.content); fx.pulseTab(f.name); } if (pos && keep === S.current) el.stCode.setSelectionRange(Math.min(pos[0], f.content.length), Math.min(pos[1], f.content.length)); }
       renderPreview(false); if (S.busy || fxShow) fx.pulsePreview();
+      if (added.length) say('New files added: ' + added.map(f => f.name).join(', ') + '. Click a NEW tab to review it.', 'act');
       if (m.conflicts.length) say('The AI also changed ' + m.conflicts.join(', ') + ' but you have unsaved edits there, so your version was kept.', 'warn');
     } catch (e) { say('Could not refresh: ' + e.message, 'err'); }
   }
@@ -174,6 +194,25 @@ export function createStudio(env) {
   el.stNew.onclick = async () => { const n = (prompt('Name of the new project (letters, numbers, dashes):') || '').trim(); if (!n) return; try { const r = await jsend('api/studio/projects', 'POST', { name: n }); await loadProjects(r.name); } catch (e) { say(e.message, 'err'); } };
   el.stDel.onclick = async () => { if (!S.project || !confirm('Delete the project "' + S.project + '" and all its files from this PC? This cannot be undone.')) return; try { await jsend('api/studio/projects/' + encodeURIComponent(S.project), 'DELETE'); S.project = null; await loadProjects(); } catch (e) { say(e.message, 'err'); } };
   el.stAddFile.onclick = async () => { const n = (prompt('File name (for example page2.html, extra.js):') || '').trim(); if (!n || !S.project) return; try { await jsend('api/studio/projects/' + encodeURIComponent(S.project) + '/file', 'PUT', { file: n, content: '' }); await refreshFromServer(); S.current = n.replace(/^\/+/, ''); paintTabs(); paintEditor(); } catch (e) { say(e.message, 'err'); } };
+  el.stNewScript.onclick = async () => {
+    if (!S.project) return;
+    save.flush();
+    let name = (prompt('Name for your JavaScript script (for example scripts/score.js):') || '').trim().replace(/\\/g, '/');
+    if (!name) return; if (!/\.m?js$/i.test(name)) name += '.js';
+    if (S.files.some(f => f.name === name)) { say('That file already exists. Pick a different name so nothing is overwritten.', 'warn'); return; }
+    const apiPath = 'api/studio/projects/' + encodeURIComponent(S.project) + '/file';
+    try {
+      await jsend(apiPath, 'PUT', { file: name, content: '// Your JavaScript file. Add your code below.\n\n' });
+      const page = S.files.find(f => f.name === 'index.html'); let linked = false;
+      if (page && !page.content.includes(name) && /<\\/body\\s*>/i.test(page.content)) {
+        const src = name.replace(/&/g, '&amp;').replace(/"/g, '&quot;');
+        const content = page.content.replace(/<\\/body\\s*>/i, '<script src="' + src + '"></script>\n</body>');
+        await jsend(apiPath, 'PUT', { file: page.name, content }); linked = true;
+      }
+      await refreshFromServer(); S.current = name; S.newFiles.add(name); paintTabs(); paintEditor(); renderPreview(true);
+      say('Created and opened ' + name + (linked ? ' and linked it into the Preview.' : '. Add a script tag to index.html to run it in Preview.'), 'act');
+    } catch (e) { say(e.message, 'err'); }
+  };
   el.stRm.onclick = async () => { const n = S.current; if (!n || !confirm('Remove ' + n + '?')) return; try { await jsend('api/studio/projects/' + encodeURIComponent(S.project) + '/file', 'DELETE', { file: n }); S.dirty.delete(n); await refreshFromServer(); } catch (e) { say(e.message, 'err'); } };
   el.stReload.onclick = () => { S.log.length = 0; el.stCon.textContent = ''; renderPreview(true); };
   el.stClear.onclick = () => { S.log.length = 0; el.stCon.textContent = ''; };
@@ -188,7 +227,7 @@ export function createStudio(env) {
     const previewErrors = S.log.filter(x => x.kind === 'error' || x.kind === 'warn').slice(-8).map(x => x.kind.toUpperCase() + ': ' + x.text).join('\n');
     const modelText = previewErrors ? text + '\n\n[Preview diagnostics from the running app]\n' + previewErrors + '\n[/Preview diagnostics]' : text;
     if (model === 'cloud:pholama' && !S.maxWarned) { S.maxWarned = true; say('Agent Max in Studio costs more: about 23 credits a message, plus up to 8 Max messages from your daily and monthly allowance. If Max runs out, your own model on this PC takes over for free.', 'warn'); }
-    S.busy = true; el.stSend.textContent = 'Stop'; say(text, 'me'); hist.push({ role: 'user', content: modelText }); if (hist.length > 8) hist.splice(0, hist.length - 8);
+    S.busy = true; el.stAddFile.disabled = true; el.stNewScript.disabled = true; el.stSend.textContent = 'Stop'; say(text, 'me'); hist.push({ role: 'user', content: modelText }); if (hist.length > 8) hist.splice(0, hist.length - 8);
     const ac = new AbortController(); S.stopper = () => ac.abort(); let reply = '', node = null, srcCard = null, thinkNode = null;
     try {
       const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: hist, agent: true, stream: true, studio: { project: S.project }, switches: { search: true, tools: true } }) });
@@ -212,7 +251,7 @@ export function createStudio(env) {
       const kept = reply.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/<\/?think>/g, '').trim();
       if (kept) hist.push({ role: 'assistant', content: kept.slice(0, 1200) }); else hist.pop();
     } catch (e) { if (e.name !== 'AbortError') say(e.message || 'Something went wrong.', 'err'); else say('Stopped.', 'warn'); }
-    finally { while (fxOpen > 0) { fxOpen--; fx.idle(); } S.busy = false; S.stopper = null; el.stSend.textContent = 'Send'; fxShow = true; try { await refreshFromServer(); } finally { fxShow = false; } }
+    finally { while (fxOpen > 0) { fxOpen--; fx.idle(); } S.busy = false; S.stopper = null; el.stSend.textContent = 'Send'; el.stAddFile.disabled = !S.project; el.stNewScript.disabled = !S.project; fxShow = true; try { await refreshFromServer(); } finally { fxShow = false; } }
   }
   const toolLine = t => { const a = t.args || {}; const f = a.file ? ' ' + a.file : ''; return (t.name || 'tool').replace(/^studio_/, '').replace(/_/g, ' ') + f + (t.result ? ': ' + String(t.result).split('\n')[0].slice(0, 100) : ''); };
   el.stDiagnose.onclick = () => { if (!S.busy) ask('Diagnose the current project, inspect the preview problems, and tell me the most useful next fix.'); };

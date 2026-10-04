@@ -21,7 +21,7 @@ async function run(name, thinkingOn) {
       rs.end(JSON.stringify({ models: [] })); }); });
   await new Promise(r => fake.listen(0, r)); const fport = fake.address().port;
   const port = 20000 + Math.floor(Math.random() * 9000), home = fs.mkdtempSync(path.join(os.tmpdir(), 'ph-e2e-'));
-  const srv = spawn(process.execPath, [path.join(__dirname, '..', 'server', 'server.js')], { env: { ...process.env, PORT: String(port), OLLAMA_URL: 'http://127.0.0.1:' + fport, HOME: home, USERPROFILE: home, PHOLAMA_NO_OPEN: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
+  const srv = spawn(process.execPath, [path.join(__dirname, '..', 'server', 'server.js')], { env: { ...process.env, PORT: String(port), OLLAMA_URL: 'http://127.0.0.1:' + fport, HOME: home, USERPROFILE: home, PHOLAMA_NO_OPEN: '1', PHOLAMA_NO_SCHEDULE: '1', PHOLAMA_NO_AUTOUPDATE: '1' }, stdio: ['ignore', 'pipe', 'pipe'] });
   let logs = ''; srv.stdout.on('data', d => logs += d); srv.stderr.on('data', d => logs += d);
   for (let i = 0; i < 60; i++) { try { const r = await fetch(`http://127.0.0.1:${port}/api/hardware`); if (r.ok) break; } catch {} await new Promise(r => setTimeout(r, 250)); }
   let shown = '', tools = [], err = null, steps = [];

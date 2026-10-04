@@ -1,4 +1,4 @@
-// Bring your own AI: use your own account at ChatGPT (OpenAI), Gemini, Groq, OpenRouter, Mistral, DeepSeek, or any OpenAI-style address.
+// Bring your own AI: use your own account at ChatGPT (OpenAI), Gemini, Alibaba Qwen, Groq, OpenRouter, Mistral, DeepSeek, or any OpenAI-style address.
 // Your key is stored ONLY on this PC (file mode 600) and is never sent to any page: the list shows just the last 4 characters.
 // Every provider here speaks the same "OpenAI chat" format, so one streaming function serves them all. Zero dependencies.
 const fs = require('fs'), os = require('os'), path = require('path');
@@ -15,6 +15,9 @@ const KNOWN = {
   openrouter: { name: 'OpenRouter',        base: 'https://openrouter.ai/api/v1',                              model: 'openai/gpt-5-mini',         tools: true,  note: 'openrouter.ai/keys (many models, some free)' },
   mistral:    { name: 'Mistral',           base: 'https://api.mistral.ai/v1',                                 model: 'mistral-small-latest',      tools: true,  note: 'console.mistral.ai/api-keys' },
   deepseek:   { name: 'DeepSeek',          base: 'https://api.deepseek.com/v1',                               model: 'deepseek-chat',             tools: true,  note: 'platform.deepseek.com/api_keys' },
+  alibaba:    { name: 'Alibaba Qwen (International)', base: 'https://dashscope-intl.aliyuncs.com/compatible-mode/v1', model: 'qwen3.8-max', tools: true, note: 'bailian.console.aliyun.com (choose Custom for workspace-specific URLs)' },
+  alibabaus:  { name: 'Alibaba Qwen (US)', base: 'https://dashscope-us.aliyuncs.com/compatible-mode/v1', model: 'qwen3.8-max', tools: true, note: 'bailian.console.aliyun.com (choose Custom for workspace-specific URLs)' },
+  alibabacn:  { name: 'Alibaba Qwen (China)', base: 'https://dashscope.aliyuncs.com/compatible-mode/v1', model: 'qwen3.8-max', tools: true, note: 'bailian.console.aliyun.com (choose Custom for workspace-specific URLs)' },
   together:   { name: 'Together AI',       base: 'https://api.together.xyz/v1',                               model: 'meta-llama/Llama-3.3-70B-Instruct-Turbo', tools: true, note: 'api.together.ai/settings/api-keys' },
   xai:        { name: 'Grok (xAI)',        base: 'https://api.x.ai/v1',                                       model: 'grok-4',                   tools: true,  note: 'console.x.ai' },
   custom:     { name: 'Custom address',    base: '',                                                          model: '',                          tools: false, note: 'any OpenAI-style address, for example LM Studio or a company server' },

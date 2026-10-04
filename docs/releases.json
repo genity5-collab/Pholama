@@ -1,6 +1,18 @@
 {
- "latest": "0.9.19",
+ "latest": "0.9.20",
  "releases": [
+  {
+   "version": "0.9.20",
+   "date": "2026-10-04",
+   "title": "Updates work in the background; Studio and model integrations grow",
+   "notes": [
+    "Check now installs an available update immediately. The server restarts only after its old listener exits, and an interrupted browser connection now waits for the replacement version instead of reporting a false failure.",
+    "Automatic checks run every five minutes while Pholama is open and every five hours while it is closed (when the PC is on and the user is signed in). The app tab reloads itself after a server update; existing installs set up the background task on launch.",
+    "Studio now provides a personal + Script action, marks new AI-created files for review, and links a new JavaScript file into the preview when possible. Local-model guided builds use more reliable multi-file HTML/CSS/JavaScript output and check for missing project files.",
+    "The optional Studio companion is draggable, remembers its place, and has wave, yay, love, dance, nap and thinking reactions.",
+    "Added Alibaba Cloud Model Studio/Qwen with International, US and China endpoints. Added native Ollama passthrough for chat, generate, models, embeddings and local model management (pull, create, copy and delete)."
+   ]
+  },
   {
    "version": "0.9.19",
    "date": "2026-10-04",

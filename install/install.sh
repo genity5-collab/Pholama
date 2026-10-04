@@ -37,6 +37,7 @@ chmod +x "$DIR/start.sh" "$DIR/server/server.js"
 mkdir -p "$HOME/.local/bin"
 printf '#!/usr/bin/env bash\nexec "%s" "%s/server/cli.js" "$@"\n' "$NODE" "$DIR" > "$HOME/.local/bin/pholama"; chmod +x "$HOME/.local/bin/pholama"
 cp "$HOME/.local/bin/pholama" "$HOME/.local/bin/phollama" 2>/dev/null || true
+if "$NODE" "$DIR/server/cli.js" schedule-updates >/dev/null 2>&1; then say "Background update task installed (checks every 5 hours while Pholama is closed)."; else say "Could not install the background update task. You can retry later with: pholama schedule-updates"; fi
 case ":$PATH:" in *":$HOME/.local/bin:"*) ;; *) say "Add this to your shell profile so the pholama command works everywhere:  export PATH=\"\$HOME/.local/bin:\$PATH\"";; esac
 # App icon so it is easy to find: Linux gets a launcher entry, Mac gets a double-clickable .command on the Desktop
 ICON="$DIR/web/icon-512.png"
