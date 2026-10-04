@@ -1,6 +1,15 @@
 {
- "latest": "0.9.12",
+ "latest": "0.9.13",
  "releases": [
+  {
+   "version": "0.9.13",
+   "date": "2026-10-04",
+   "title": "New Pholama mascot and refreshed icons",
+   "notes": [
+    "Replaced the old logo across the PC app and public site with a white profile llama wearing sunglasses on a dark tile",
+    "Updated the shared source SVG used by the browser icons and site branding"
+   ]
+  },
   {
    "version": "0.9.12",
    "date": "2026-10-04",
