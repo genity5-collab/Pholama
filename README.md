@@ -192,6 +192,8 @@ The website (`docs/`, used on phones) and the PC app (`web/`) must always show t
 5. Run `npm test`. It fails if the website or the PC app is out of date, so a release cannot go out with an old list.
 6. Phone models (the in-browser list) live in `docs/models.json` under `browser` and `cpu`. Update those by hand when a browser model is added.
 
+The PC updater reads `package.json` from the default branch and downloads that branch's archive; a GitHub Release or tag by itself does not publish an update to the app.
+
 ## Add your own tools for the AI to run (PC only)
 
 The AI can only use tools on the **PC version**, with a model labelled **Runs tools**. All tools are free. Out of the box it already has 19.
@@ -252,7 +254,8 @@ The PC app checks GitHub every 5 minutes while it is open and every 5 hours whil
 - **Your models, accounts, keys, credits and settings are never touched.** They live in `~/.pholama`, outside the program folder.
 - A copy of the old version is kept in `~/.pholama/previous-version` in case you want to go back.
 - Turn automatic updates off in **Tools > Updates**; **Check now** is still a one-time install action.
-- Prefer the command line? `pholama update` does the same thing.
+- If upgrading from an older build that reports a connection error while restarting, close Pholama, run `pholama update` in a terminal, then open it again. The command replaces program files but does not restart the running server.
+- Prefer the command line? `pholama update` checks and downloads the current default-branch version.
 - Nothing updates if GitHub cannot be reached. Your current version keeps working.
 
 ## For developers
