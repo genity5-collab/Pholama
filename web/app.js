@@ -1575,7 +1575,7 @@ $('#updRestart').onclick = e => restartPholama(e.currentTarget, null);
 $('#updCheck').onclick = async () => { $('#updCheck').disabled = true; $('#updMsg').textContent = 'Checking and installing if an update is available...'; try { await fetch('/api/update/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ install: true }) }); } catch {} finally { $('#updCheck').disabled = false; } paintUpdate(); };
 $('#updAuto').onchange = async e => { try { await fetch('/api/update/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: e.target.checked }) }); } catch {} paintUpdate(); };
 $('#updPill').onclick = () => { $('#opt').click(); };
-paintUpdate(); setInterval(paintUpdate, 5 * 60 * 1000);
+paintUpdate(); setInterval(paintUpdate, 60 * 1000);   // ask the server every minute
 // An automatic update restarts the server in the background; once the replacement reports
 // a different version, refresh this already-open tab so it cannot keep serving stale Studio code.
 { let loadedServerVersion = '', updatePlaying = false; const watchServerVersion = async () => { if (!server) return; try { const r = await fetch('/api/version', { cache: 'no-store' }); if (!r.ok) return; const v = await r.json(); if (!loadedServerVersion) loadedServerVersion = v.version; else if (v.version && v.version !== loadedServerVersion && !updatePlaying) { updatePlaying = true; playAutoUpdate(v.version); } } catch {} }; watchServerVersion(); setInterval(watchServerVersion, 5000); }

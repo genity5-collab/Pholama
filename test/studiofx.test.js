@@ -48,7 +48,7 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   ok('the strip is always cleared when a run ends (error, Stop, done)', /finally \{ while \(fxOpen > 0\) \{ fxOpen--; fx\.idle\(\); \}/.test(st));
   ok('the LAST change of a run still flashes (flag stays on through the final refresh)', /fxShow = true; try \{ await refreshFromServer\(\); \} finally \{ fxShow = false; \}/.test(st));
   ok('a tab pulse survives the tab bar being repainted', /paintTabs\(\); fx\.restoreTabs\(\)/.test(st));
-  ok('the server announces a tool BEFORE running it (all 4 places)', (srv.match(/line\(\{ toolStart:/g) || []).length === 4, (srv.match(/line\(\{ toolStart:/g) || []).length);
+  ok('the server announces a tool BEFORE running it (all 5 places, including improving a real project)', (srv.match(/line\(\{ toolStart:/g) || []).length === 5, (srv.match(/line\(\{ toolStart:/g) || []).length);
   ok('an older server without toolStart just shows no strip (no crash)', /else if \(j\.toolStart\)/.test(st) && /else if \(j\.tool\)/.test(st));
   ok('the overlay never blocks the mouse', /\.stfx\{[^}]*pointer-events:none/.test(css) && /\.stfx-strip\{[^}]*pointer-events:none/.test(css));
   ok('motion is switched off for people who asked for less', /prefers-reduced-motion:reduce\)\{[^}]*\.stfx-scan/.test(css));

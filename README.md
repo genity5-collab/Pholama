@@ -249,7 +249,7 @@ Write a tiny MCP server in any language that answers `tools/list` and `tools/cal
 
 ## Updates without reinstalling (PC only)
 
-The PC app checks GitHub every 5 minutes while it is open and every 5 hours while it is closed (when the PC is on and you are signed in). If a new version is found, it installs quietly and relaunches the PC server once its old port has been released. An already-open app tab reloads when the replacement version is ready. **Check now** checks and installs immediately even if automatic updates are switched off.
+The PC app checks GitHub every minute while it is open and every 5 hours while it is closed (when the PC is on and you are signed in). If a new version is found, it installs quietly and relaunches the PC server once its old port has been released. An already-open app tab reloads when the replacement version is ready. **Check now** checks and installs immediately even if automatic updates are switched off.
 
 - **Your models, accounts, keys, credits and settings are never touched.** They live in `~/.pholama`, outside the program folder.
 - A copy of the old version is kept in `~/.pholama/previous-version` in case you want to go back.

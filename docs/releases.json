@@ -1,6 +1,18 @@
 {
- "latest": "0.9.24",
+ "latest": "0.9.25",
  "releases": [
+  {
+   "version": "0.9.25",
+   "date": "2026-10-04",
+   "title": "Studio can improve your real project, tools can research an API, updates check every minute",
+   "notes": [
+    "Fixed: in Studio, 'improve it' or 'ok start' on a project that already has files now really changes them. Before, the AI talked, or copied an example from its own prompt and made a file called 'bro'",
+    "Pholama shows the AI your real files, asks for the complete updated version, and refuses answers that lose code, leave 'rest of the code' placeholders, or break the page. If the result has more problems than before, your files are put back exactly",
+    "The AI can only change files it was shown, and never a file outside your project",
+    "New in Tools: 'What can this key do?'. Type a service name and the AI reads its API docs and suggests tools you can tick. Only the service name is searched. Your key is never searched and the AI never sees it",
+    "Updates are now checked every minute (it was every 5 minutes, on both the server and the page)"
+   ]
+  },
   {
    "version": "0.9.24",
    "date": "2026-10-04",

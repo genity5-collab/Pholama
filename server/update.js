@@ -150,7 +150,7 @@ async function backgroundCheck({ installNow = false } = {}) {
   checkTask = tracked;
   return tracked;
 }
-// Checks shortly after start, then every five minutes. Never throws, never blocks the app.
+// Checks shortly after start, then every minute (server.js passes 1/60 hour). Never throws, never blocks the app.
 function startBackground(hours = 6) {
   if (timer || process.env.PHOLAMA_NO_AUTOUPDATE === '1') return;
   setTimeout(() => backgroundCheck().catch(() => {}), 20000).unref();

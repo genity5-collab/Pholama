@@ -4,6 +4,7 @@
 // Serves the web UI and an Ollama-compatible API on http://localhost:11435
 const http = require('http'), fs = require('fs'), os = require('os'), path = require('path');
 const https = require('https'), { spawn, execSync } = require('child_process');
+const improve = require('./improve');
 const agent = require('./agent');
 const pricing = require('./pricing');
 const ram = require('./ram');
@@ -593,6 +594,59 @@ async function chat(req, res, b) {
         } else log('step', 'The model did not give usable files, using the normal way.');
       }
     }
+    // Improve a project that already has real files. Small models cannot do this with loose tool calls (they talk, or copy an example), so Pholama
+    // shows the model the real files, asks for the complete updated files, refuses answers that lost code or broke the page, and keeps an undo.
+    if (inStudio && stu && b.studio && b.studio.project && !guidedDone && b.guided !== false) {
+      let ip = null;
+      try {
+        const us = (b.messages || []).filter(m => m.role === 'user').map(m => String(m.content || '')), cur = origUserText, before = us.slice(0, -1).reverse();
+        const prevReq = before.find(t => improve.wantsImprove(t, '', [{ name: 'x.html', size: 999 }]) && t.length < 500) || before[0] || '';
+        const all = stu.snapshot(b.studio.project);
+        if (improve.wantsImprove(cur, prevReq, all.map(f => ({ name: f.name, size: f.size })))) ip = { ask: improve.askOf(cur, prevReq), all, picked: improve.pickFiles(all) };
+      } catch {}
+      if (ip && ip.picked.length) {
+        log('step', 'Improving your project: showing the AI your real files and asking for the complete updated version.'); line({ toolStart: { name: 'studio_write', args: { project: b.studio.project } } });
+        const backup = ip.all.map(f => ({ name: f.name, content: f.content })), allowed = new Set(ip.picked.map(f => f.name));
+        let got = ''; try { await streamTurn(model, [{ role: 'system', content: 'You improve existing web projects. Keep everything that works. Return complete files only, in FILE blocks.' }, { role: 'user', content: improve.prompt(ip.ask, ip.picked) }], { ...opts, temperature: 0.3, num_predict: 6000 }, t => { got += t; }, ac.signal); } catch (e) { log('error', 'Improve request failed (' + e.message + ').'); }
+        const changed = [], refused = [];
+        for (const f of agent.parseFileBlocks(got, b.studio.project)) {
+          const old = ip.picked.find(x => x.name === f.file), isNew = !old && /\.(css|js|html?)$/i.test(f.file) && !ip.all.some(x => x.name === f.file);
+          if (!old && !isNew) continue;   // the model may only change files it was shown, or add a new css/js/html file
+          const text = agent.tidyFile(f.file, f.content);
+          const why = old ? improve.sanity(old.content, text, f.file) : '';
+          if (why) { refused.push(f.file + ': ' + why); log('error', 'Kept your ' + f.file + ' unchanged because ' + why + '.'); continue; }
+          if (old && text.trim() === old.content.trim()) { log('step', f.file + ' came back unchanged.'); continue; }
+          let res; try { res = agent.loggedStudio('write', b.studio.project, f.file, text); } catch (e) { res = 'Tool error: ' + e.message; }
+          const okw = !/^Tool error/.test(String(res));
+          log(okw ? 'result' : 'error', okw ? 'Updated ' + f.file + ' (' + Buffer.byteLength(text) + ' bytes)' : String(res).slice(0, 200));
+          line({ tool: { name: 'studio_write', args: { project: b.studio.project, file: f.file }, result: okw ? 'Saved ' + f.file : String(res).slice(0, 200) } });
+          if (okw) changed.push(f.file); else refused.push(f.file + ': ' + String(res).replace(/^Tool error:\s*/, '').slice(0, 120));
+        }
+        if (changed.length) {
+          // the result must not be worse than what was there: more problems, or ids the script needs that the page lost, means undo
+          const now = stu.snapshot(b.studio.project), byName = Object.fromEntries(now.map(f => [f.name, f.content]));
+          let issuesNow = 0, issuesWas = 0; try { issuesNow = stu.check(b.studio.project).filter(x => x !== 'No problems found.').length; } catch {}
+          const miss = improve.missingIds(byName), missWas = improve.missingIds(Object.fromEntries(backup.map(f => [f.name, f.content])));
+          issuesWas = missWas.length; issuesNow += miss.length;
+          if (miss.length > missWas.length || (issuesNow > 0 && issuesNow > issuesWas + 1)) {
+            for (const f of backup) { try { stu.writeFile(b.studio.project, f.name, f.content); } catch {} }
+            for (const f of now) { if (!backup.some(x => x.name === f.name)) { try { stu.deleteFile(b.studio.project, f.name); } catch {} } }
+            log('step', 'The new version had more problems than before (' + (miss.length ? 'the page is missing ' + miss.slice(0, 3).join(', ') : issuesNow + ' problems') + '), so I put your files back exactly as they were.');
+            line({ studio: { changed: true, project: b.studio.project } });
+            const txt = "I tried to improve the project, but the result had more problems than what you had, so I put everything back exactly as it was. Nothing was lost.\n\nTry a smaller step (for example: \"make the buttons rounded and blue\") or use a larger model for a bigger redesign.";
+            line({ model, message: { role: 'assistant', content: txt }, done: false }); generated += got + txt; guidedDone = true;
+          } else {
+            line({ studio: { changed: true, project: b.studio.project } });
+            const txt = 'Done. I updated ' + changed.join(', ') + ' in "' + b.studio.project + '" and kept the rest of your code.' + (refused.length ? '\n\nI left these alone to protect your code: ' + refused.slice(0, 3).join('; ') + '.' : '') + ' Press Run to see it.';
+            line({ model, message: { role: 'assistant', content: txt }, done: false }); generated += got + txt; guidedDone = true;
+          }
+        } else if (refused.length) {
+          line({ tool: { name: 'studio_write', args: { project: b.studio.project }, result: 'Kept your files unchanged' } });
+          const txt = 'I did not change anything, to protect your code. ' + refused.slice(0, 3).join('; ') + '.\n\nTry a smaller step, or a larger model.';
+          line({ model, message: { role: 'assistant', content: txt }, done: false }); generated += got + txt; guidedDone = true;
+        } else { log('step', 'The model did not return usable files, using the normal way.'); line({ tool: { name: 'studio_write', args: { project: b.studio.project }, result: 'No changes made' } }); }
+      }
+    }
     let lazyTried = false;   // one firm retry per message when the AI refuses normal work as 'too complex'
     const seenCalls = {}; let badCalls = 0; const failedTry = {}; let retrying = false;   // retrying: a repair round whose words must not be shown twice
     const MAX_ROUNDS = inStudio ? 14 : 5;   // building an app takes many tool steps
@@ -871,6 +925,36 @@ const server = http.createServer(async (req, res) => {
           return json(res, 422, { error: 'The AI did not write a usable tool. Add the service address under "Notes", or try again.' });
         } catch (e) { return json(res, 500, { error: 'The AI could not write it: ' + String(e.message).slice(0, 120) }); }
       }
+      if (p === '/api/mytools/research' && req.method === 'POST') {   // "What can this key do?" The web is searched for the SERVICE NAME only. The key is saved first, never searched, never shown to the AI.
+        const research = require('./research');
+        const b = await body(req), model = String(b.model || ''), service = research.cleanService(b.service);
+        if (!service) return json(res, 400, { error: 'Type the name of the service (for example Supabase, Notion or Discord).' });
+        if (!model) return json(res, 400, { error: 'Pick a model at the top first.' });
+        const secretName = String(b.secretName || '').replace(/[^A-Za-z0-9_]/g, '').toUpperCase().slice(0, 40) || 'MY_API_KEY', keyValue = String(b.apiKey || '').trim();
+        try {
+          if (keyValue) { if (keyValue.length < 4 || /\s/.test(keyValue)) return json(res, 400, { error: 'That API key does not look right. Paste only the key.' }); agent.usertools.setSecret(secretName, keyValue); }
+          else if (!agent.usertools.secretNames().includes(secretName) && b.needsKey !== false) return json(res, 400, { error: 'Paste the API key, or tick "no key needed".' });
+          const haveKey = agent.usertools.secretNames().includes(secretName);
+          const values = Object.values(agent.usertools.secretValues ? agent.usertools.secretValues() : {}).filter(Boolean);
+          // 1) find the documentation (the search text is the service name only)
+          const notes = []; const read = [];
+          try {
+            const page = await agent.fetchText('https://html.duckduckgo.com/html/?q=' + encodeURIComponent(research.queryFor(service)), 12000);
+            for (const link of research.docLinks(page.text, service).slice(0, 3)) {
+              try { await agent.usertools.checkUrl(link); const pg = await agent.fetchText(link, 8000); const d = research.digest(pg.text, 2200); if (d.length > 200) { notes.push('From ' + new URL(link).hostname + ': ' + d); read.push(link); } } catch {}
+            }
+          } catch {}
+          const brief = 'Service: ' + service + '\n' + (haveKey ? 'The API key is already saved as a secret named ' + secretName + '. Use it as {{secret.' + secretName + '}}.' : 'This service needs no key. Do not use any secret.')
+            + '\n\n' + (notes.length ? 'Notes from the service\'s documentation (use the real addresses you see here):\n' + notes.join('\n\n').slice(0, 7000) : 'No documentation could be read. Only suggest tools whose public API address you are certain of.');
+          let list = [];
+          for (let tries = 0; tries < 2 && !list.length; tries++) {
+            let text = ''; await streamTurnBase(model, [{ role: 'system', content: research.PROMPT }, { role: 'user', content: brief }], { num_predict: 1400, temperature: 0.2 }, t => { text += t; }, AbortSignal.timeout(120000), { in: 0, out: 0, got: false });
+            list = research.suggestions(research.parseList(text), { secretName: haveKey ? secretName : '', secretValues: values, check: agent.usertools.problem, existing: agent.usertools.list().map(x => x.name) });
+          }
+          if (!list.length) return json(res, 422, { error: 'I could not find a safe, usable set of tools for ' + service + '. Try the exact service name, or use "Create with AI" and paste its API address.' });
+          return json(res, 200, { service, suggestions: list, secret: haveKey ? secretName : '', read, usedDocs: read.length > 0 });
+        } catch (e) { return json(res, 500, { error: 'The research failed: ' + String(e.message).slice(0, 120) }); }
+      }
       if (p === '/api/mytools/save' && req.method === 'POST') { const b = await body(req); try { const n = agent.usertools.save({ ...b, by: 'user' }); return json(res, 200, { ok: true, name: n, tools: agent.usertools.list() }); } catch (e) { return json(res, 400, { error: e.message }); } }
       if (p === '/api/mytools/delete' && req.method === 'POST') { const b = await body(req); try { agent.usertools.remove(b.name); return json(res, 200, { ok: true, tools: agent.usertools.list() }); } catch (e) { return json(res, 400, { error: e.message }); } }
       if (p === '/api/mytools/switch' && req.method === 'POST') { const b = await body(req); try { agent.usertools.setOn(b.name, b.on === true); return json(res, 200, { ok: true, tools: agent.usertools.list() }); } catch (e) { return json(res, 400, { error: e.message }); } }
@@ -1028,7 +1112,7 @@ try { require('./update').setRestartHandler(() => { if (process.env.PHOLAMA_TEST
 server.listen(PORT, HOST, () => {
   const h = hardware();
   console.log(`\n  Pholama running\n  Chat UI:  http://localhost:${PORT}\n  RAM: ${h.ramGB} GB${h.gpu ? '  GPU: ' + h.gpu + (h.vramGB ? ' (' + h.vramGB + ' GB)' : '') : ''}\n  Models folder: ${MODELS_DIR}\n`);
-  try { require('./update').startBackground(5 / 60); } catch {}
+  try { require('./update').startBackground(+process.env.PHOLAMA_UPDATE_EVERY_MIN > 0 ? +process.env.PHOLAMA_UPDATE_EVERY_MIN / 60 : 1 / 60); } catch {}   // every 1 minute (a small static file, not the rate-limited API)
   if (process.env.PHOLAMA_NO_SCHEDULE !== '1' && process.env.PHOLAMA_NO_AUTOUPDATE !== '1') setTimeout(() => { try { require('./update-scheduler').ensure(); } catch (e) { console.log('  Could not set up closed-app updates: ' + String(e.message || e).slice(0, 140) + '. You can retry with pholama schedule-updates.'); } }, 1500).unref();
   if (HOST !== '127.0.0.1') console.log('  Reachable on your network. Open http://<this-PC-IP>:' + PORT + ' on your phone.\n');
 });

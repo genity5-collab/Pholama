@@ -97,7 +97,21 @@ export async function paintMyTools(root, api, opts = {}) {
   const noKeyRow = mk('label', 'sw'), noKey = mk('input'); noKey.type = 'checkbox'; const nks = mk('span', null, 'No key needed'); nks.append(mk('small', null, 'For open services that do not need one.')); noKeyRow.append(noKey, nks);
   const go = mk('button', 'p', 'Create with AI'), msg = mk('small'); go.type = 'button';
   const review = mk('div'); 
-  ai.append(service, want, docs, keyName, key, noKeyRow, go, msg, review);
+  const find = mk('button', null, 'What can this key do?'); find.type = 'button'; find.title = 'The AI reads the service\u2019s API docs and suggests tools. Only the service name is searched, never your key.';
+  const row2 = mk('div', 'cmdrow'); row2.append(go, find);
+  ai.append(service, want, docs, keyName, key, noKeyRow, row2, msg, review);
+  find.onclick = async () => {
+    msg.textContent = ''; review.textContent = '';
+    const model = opts.model ? opts.model() : ''; if (!model) { msg.textContent = 'Pick a model at the top first.'; return; }
+    if (!service.value.trim()) { msg.textContent = 'Type the service name first (like Notion or Supabase).'; return; }
+    find.disabled = go.disabled = true; find.textContent = 'Reading the docs...';
+    try {
+      const j = await post(api, 'api/mytools/research', { model, service: service.value, secretName: keyName.value || (service.value || 'MY').replace(/[^A-Za-z0-9]/g, '').toUpperCase() + '_KEY', apiKey: noKey.checked ? '' : key.value, needsKey: !noKey.checked });
+      key.value = '';   // saved on this PC now; do not keep it on the page
+      review.append(researchReview(j, api, again, msg));
+    } catch (e) { msg.textContent = 'Could not research it: ' + e.message; }
+    find.disabled = go.disabled = false; find.textContent = 'What can this key do?';
+  };
   go.onclick = async () => {
     msg.textContent = ''; review.textContent = '';
     const model = opts.model ? opts.model() : ''; if (!model) { msg.textContent = 'Pick a model at the top first.'; return; }
@@ -130,6 +144,26 @@ export async function paintMyTools(root, api, opts = {}) {
   const ss = mk('button', null, 'Save key'), sm = mk('small', null, (d.secrets.length ? 'Saved: ' + d.secrets.join(', ') + '. ' : 'None saved yet. ') + 'Values are never shown again. Save an empty value to delete one.'); ss.type = 'button';
   sf.append(sn, sv, ss, sm);
   ss.onclick = async () => { try { await post(api, 'api/mytools/secret', { name: sn.value, value: sv.value }); sv.value = ''; again(); } catch (e) { sm.textContent = 'Could not save: ' + e.message; } };
+}
+
+// Tools the AI found for a service. Reading tools start ticked, tools that change data start unticked. Nothing is saved until the person presses Add.
+function researchReview(j, api, again, msg) {
+  const box = mk('div', 'tl-review'); const list = j.suggestions || [];
+  box.append(mk('b', null, 'Tools for ' + j.service), mk('small', null, j.usedDocs ? 'Based on the service\u2019s own documentation. Check them, untick any you do not want.' : 'The docs could not be read, so these come from what the AI already knows. Check the addresses before adding.'));
+  const rows = list.map(t => {
+    const r = mk('label', 'sw'), cb = mk('input'); cb.type = 'checkbox'; cb.checked = !t.writes; cb.setAttribute('aria-label', 'Add ' + (t.title || t.name));
+    const tx = mk('span', null, (t.title || t.name) + '  ' + t.method); tx.append(mk('small', null, t.what), mk('small', 'tl-id', t.url), mk('small', null, t.writes ? 'Changes data, so it asks you every time.' : 'Reads only. It runs by itself.'));
+    r.append(cb, tx); box.append(r); return { t, cb };
+  });
+  const row = mk('div', 'cmdrow'), add = mk('button', 'p', 'Add ticked tools'), no = mk('button', null, 'Discard'); add.type = no.type = 'button'; row.append(add, no); box.append(row);
+  no.onclick = () => box.remove();
+  add.onclick = async () => {
+    const pick = rows.filter(x => x.cb.checked).map(x => x.t); if (!pick.length) { msg.textContent = 'Tick at least one tool.'; return; }
+    add.disabled = true; let done = 0, failed = [];
+    for (const t of pick) { try { await post(api, 'api/mytools/save', { name: t.name, title: t.title, what: t.what, method: t.method, url: t.url, headers: t.headers, body: t.body, params: t.params, by: 'ai' }); done++; } catch (e) { failed.push(t.name + ': ' + e.message); } }
+    if (failed.length) { add.disabled = false; msg.textContent = 'Added ' + done + '. Could not add: ' + failed.slice(0, 2).join('; '); if (done) again(); } else again();
+  };
+  return box;
 }
 
 // The AI's draft, shown for review. Nothing is saved as a tool until the person presses Save.
