@@ -2,6 +2,10 @@
 // textContent. Nothing from the network is ever put into innerHTML.
 import { TICKET_CATEGORIES, MAX_TICKET_SUBJECT, MAX_TICKET_BODY, ticketProblem, ticketStatusText, rewardText, makePlatform, REACTIONS, timeLeft, friendly, banText, MAX_POST, MAX_BIO, MAX_NAME, MAX_PROJ_IMAGES, MAX_REPLY } from './platform.js';
 import { openBig, whenText } from './bigchat.js';
+import { attachPicker, mediaView, lazyMedia, installMediaStyles } from './mediaui.js';
+import { isVideoPath } from './social.js';
+import { mountFriends } from './friendsui.js';
+import { mountBell, createCalls, mountSocialSettings } from './callui.js';
 
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 const btn = (label, fn, cls) => { const b = el('button', cls || '', label); b.type = 'button'; b.onclick = fn; return b; };
@@ -14,7 +18,7 @@ function avatar(url, name) {
 }
 
 export async function mountPlatform(host, ctx) {
-  const { Account } = ctx; host.textContent = '';
+  const { Account } = ctx; host.textContent = ''; installMediaStyles();
   const root = el('div', 'platwrap'); host.append(root);
   const head = el('div', 'plathead'); head.append(el('h2', null, 'Pholama Platform'), el('p', 'dmut', 'Share tips with other people. Every post disappears after 3 hours.'));
   root.append(head);
@@ -26,6 +30,8 @@ export async function mountPlatform(host, ctx) {
   const P = makePlatform(Account, ctx.cfg);
   P.sweep();                                   // removes posts older than 3 hours
   let prof = null, community = 'general', mod = false;
+  // A stored file as something to look at: kind 'post'/'build' are public, 'ticket' is private (signed address).
+  const showFile = (kind, path, alt) => path ? lazyMedia(() => P.mediaSrc(kind, path), { video: isVideoPath(path), alt }) : null;
   const body = el('div'); root.append(body);
   const msg = el('div', 'err-t'); root.append(msg);
   const say = t => { msg.textContent = t || ''; };
@@ -39,13 +45,34 @@ export async function mountPlatform(host, ctx) {
     const ban = banText(prof); if (ban) { const c = el('section', 'dcard'); c.append(el('h3', null, 'You cannot post right now'), el('p', 'dmut', ban)); body.append(c); }
     const tabs = el('div', 'platnav'); tabs.setAttribute('role', 'tablist');
     const pane = el('div', 'platpane');
-    const defs = [['home', 'Home', paintHome], ['posts', 'Posts', paintPosts], ['projects', 'Projects', paintProjects], ['rules', 'Rules', paintRules], ['support', 'Support', paintSupport]];
+    const defs = [['home', 'Home', paintHome], ['posts', 'Posts', paintPosts], ['projects', 'Projects', paintProjects], ['friends', 'Friends', paintFriends], ['privacy', 'Privacy', paintPrivacy], ['rules', 'Rules', paintRules], ['support', 'Support', paintSupport]];
     if (mod) defs.push(['mod', 'Moderator', paintMod]);
     const show = async id => { for (const b of tabs.children) { const on = b.dataset.id === id; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); } pane.textContent = ''; say(''); const d = defs.find(x => x[0] === id); try { await d[2](pane); } catch (e) { pane.append(el('p', 'dmut', friendly(e))); } };
     for (const [id, label] of defs) { const b = btn(label, () => show(id), 'elf'); b.dataset.id = id; b.setAttribute('role', 'tab'); tabs.append(b); }
-    body.append(tabs, pane); go = show; await show(tab0);
+    body.append(tabs, pane); go = show; startSocial(); await show(tab0);
   }
   let go = null, tab0 = 'home';
+
+  // ----- friends, private chat, calls, notifications -----
+  let calls = null, bellApi = null, friendUnread = 0;
+  function startSocial() {
+    if (calls) return;
+    try {
+      calls = createCalls({ Account, cfg: ctx.cfg, getFriendName: id => id }); calls.watchIncoming();
+      const bellHost = el('div', 'plbell'); head.append(bellHost);
+      bellApi = mountBell(bellHost, { Account, cfg: ctx.cfg, onOpenChat: () => go('friends'), onOpenFriends: () => go('friends') });
+    } catch (e) { /* the social tables may not exist yet; the Friends tab explains it */ }
+  }
+  async function paintFriends(pane) {
+    startSocial();
+    const h = el('div'); pane.append(h);
+    await mountFriends(h, { Account, cfg: ctx.cfg, onUnread: n => { friendUnread = n; }, startCall: f => { if (calls) calls.start(f); } });
+  }
+  async function paintPrivacy(pane) {
+    const c = el('section', 'dcard'); c.append(el('h3', null, 'Friends and privacy'), el('p', 'dmut', 'You choose who can reach you. Everything here is saved to your account.')); pane.append(c);
+    const h = el('div'); c.append(h);
+    await mountSocialSettings(h, { Account, cfg: ctx.cfg });
+  }
 
   async function paintHome(pane) {
     const grid = el('div', 'dgrid');
@@ -76,7 +103,7 @@ export async function mountPlatform(host, ctx) {
     const box = el('div', 'tkt'); const list = el('div'); box.append(list);
     async function paint() {
       const m = await P.ticketMessages(t.id).catch(() => []); list.textContent = '';
-      for (const x of m) { const b = el('div', 'tmsg' + (x.from_mod ? ' tmod' : '')); b.append(el('b', null, x.from_mod ? 'Moderator' : 'Member'), el('span', 'dmut', ' ' + new Date(x.created_at).toLocaleString()), el('p', 'plbody', x.body)); list.append(b); }
+      for (const x of m) { const b = el('div', 'tmsg' + (x.from_mod ? ' tmod' : '')); b.append(el('b', null, x.from_mod ? 'Moderator' : 'Member'), el('span', 'dmut', ' ' + new Date(x.created_at).toLocaleString()), el('p', 'plbody', x.body)); { const f = showFile('ticket', x.media_path, 'Attachment'); if (f) b.append(f); } list.append(b); }
     }
     const ta = el('textarea'); ta.maxLength = MAX_TICKET_BODY; ta.rows = 3; ta.setAttribute('aria-label', isModView ? 'Reply as moderator' : 'Add a note');
     ta.placeholder = isModView ? 'Reply to this member...' : 'Add a note for the moderators...';
@@ -104,11 +131,11 @@ export async function mountPlatform(host, ctx) {
       return h;
     };
     const win = openBig({
-      title: t.subject, subtitle: ticketStatusText(status), header: mkHeader(), maxLen: MAX_TICKET_BODY, every: 4000,
+      title: t.subject, subtitle: ticketStatusText(status), header: mkHeader(), maxLen: MAX_TICKET_BODY, every: 4000, attach: true,
       placeholder: isModView ? 'Reply to this member...' : 'Write a note for the moderators...', emptyText: 'No messages yet.',
       canSend: status !== 'closed' || isModView, closedText: 'This ticket is closed. Open a new one if you still need help.',
-      load: async () => (await P.ticketMessages(t.id)).map(x => ({ id: x.id, who: x.from_mod ? 'Moderator' : (isModView ? 'Member' : 'You'), mine: isModView ? !!x.from_mod : !x.from_mod, badge: x.from_mod ? 'Moderator' : '', when: whenText(x.created_at), text: x.body })),
-      send: async v => { await P.say(t.id, v); after && after(); },
+      load: async () => (await P.ticketMessages(t.id)).map(x => ({ id: x.id, who: x.from_mod ? 'Moderator' : (isModView ? 'Member' : 'You'), mine: isModView ? !!x.from_mod : !x.from_mod, badge: x.from_mod ? 'Moderator' : '', when: whenText(x.created_at), text: x.body, media: x.media_path ? { get: () => P.mediaSrc('ticket', x.media_path), video: isVideoPath(x.media_path) } : null })),
+      send: async (v, f) => { await P.say(t.id, v, f); after && after(); },
       actions: isModView ? [{ label: status === 'closed' ? 'Reopen' : 'Close ticket', run: async api => { await P.closeTicket(t.id, status !== 'closed'); after && after(); api.close(); } }] : [],
       onClose: () => after && after(),
     });
@@ -118,13 +145,13 @@ export async function mountPlatform(host, ctx) {
   // ----- the big window for one post: the post on top, everyone chats underneath -----
   function openPostBig(p) {
     const head = el('div'); const top = el('div', 'plrow'); top.append(avatar(p.avatar, p.author)); const who = el('div'); who.append(el('b', null, p.author), el('small', 'dmut', '  ' + timeLeft(p.expires_at))); top.append(who);
-    head.append(top, el('p', 'plbody', p.body), el('small', 'dmut', 'Replies disappear with the post.'));
+    head.append(top); if (p.body) head.append(el('p', 'plbody', p.body)); { const f = showFile('post', p.media_path, 'Picture or video from ' + p.author); if (f) head.append(f); } head.append(el('small', 'dmut', 'Replies disappear with the post.'));
     const open_ = { v: null };
     const win = openBig({
-      title: 'Post by ' + p.author, subtitle: timeLeft(p.expires_at), header: head, maxLen: MAX_REPLY, every: 4000,
+      title: 'Post by ' + p.author, subtitle: timeLeft(p.expires_at), header: head, maxLen: MAX_REPLY, every: 4000, attach: true,
       placeholder: 'Reply to ' + p.author + '. Enter sends.', emptyText: 'No replies yet. Start the chat.',
-      load: async () => (await P.replies(p.id)).filter(r => !r.hidden || r.user_id === Account.user().id || mod).map(r => ({ id: r.id, who: r.user_id === Account.user().id ? 'You' : r.author, mine: r.user_id === Account.user().id, badge: r.user_id === p.user_id ? 'Author' : '', when: whenText(r.created_at), text: r.body })),
-      send: async v => { await P.reply(p.id, v); },
+      load: async () => (await P.replies(p.id)).filter(r => !r.hidden || r.user_id === Account.user().id || mod).map(r => ({ id: r.id, who: r.user_id === Account.user().id ? 'You' : r.author, mine: r.user_id === Account.user().id, badge: r.user_id === p.user_id ? 'Author' : '', when: whenText(r.created_at), text: r.body, media: r.media_path ? { get: () => P.mediaSrc('post', r.media_path), video: isVideoPath(r.media_path) } : null })),
+      send: async (v, f) => { await P.reply(p.id, v, f); },
       actions: [],
     });
     open_.v = win; return win;
@@ -135,8 +162,9 @@ export async function mountPlatform(host, ctx) {
     const subj = el('input'); subj.maxLength = MAX_TICKET_SUBJECT; subj.placeholder = 'Short title'; subj.setAttribute('aria-label', 'Ticket title');
     const cat = el('select'); cat.setAttribute('aria-label', 'Ticket topic'); for (const [v, l] of TICKET_CATEGORIES) { const o = el('option', null, l); o.value = v; cat.append(o); }
     const txt = el('textarea'); txt.maxLength = MAX_TICKET_BODY; txt.rows = 4; txt.placeholder = 'What do you need help with?'; txt.setAttribute('aria-label', 'Ticket message');
-    const go1 = btn('Open ticket', async () => { const bad = ticketProblem(subj.value, txt.value); if (bad) return say(bad); go1.disabled = true; try { await P.openTicket(subj.value.trim(), cat.value, txt.value.trim()); subj.value = ''; txt.value = ''; say('Ticket opened. A moderator will reply here.'); await list(); } catch (e) { say(friendly(e)); } go1.disabled = false; }, 'p');
-    c.append(subj, cat, txt, go1); pane.append(c);
+    let tfile = null; const tpick = attachPicker({ accept: 'both', onChange: f => { tfile = f; }, onError: m => say(m) });
+    const go1 = btn('Open ticket', async () => { const bad = ticketProblem(subj.value, txt.value); if (bad && !(tfile && !txt.value.trim() && !/title/i.test(bad))) return say(bad); go1.disabled = true; try { await P.openTicket(subj.value.trim(), cat.value, txt.value.trim(), tfile); subj.value = ''; txt.value = ''; tpick.clear(); tfile = null; say('Ticket opened. A moderator will reply here.'); await list(); } catch (e) { say(friendly(e)); } go1.disabled = false; }, 'p');
+    c.append(subj, cat, txt, tpick.node, el('small', 'dmut', 'A screenshot or short video helps. Only you and moderators can see it.'), go1); pane.append(c);
     const lc = el('section', 'dcard'); lc.append(el('h3', null, 'Your tickets')); const box = el('div'); lc.append(box); pane.append(lc);
     async function list() {
       const ts = await P.myTickets().catch(() => []); box.textContent = '';
@@ -187,13 +215,16 @@ export async function mountPlatform(host, ctx) {
     const t = el('input'); t.maxLength = 60; t.placeholder = 'Project title'; t.setAttribute('aria-label', 'Project title');
     const b = el('textarea'); b.maxLength = 400; b.rows = 3; b.placeholder = 'What is it? Why is it cool?'; b.setAttribute('aria-label', 'Project description');
     const f = el('input'); f.type = 'file'; f.multiple = true; f.accept = 'image/png,image/jpeg,image/webp'; f.setAttribute('aria-label', 'Project images');
-    const err = el('div', 'err-t'); const add = btn('Publish project', async () => { err.textContent = ''; add.disabled = true; try { await P.addProject({ title: t.value, blurb: b.value, files: f.files }); await go('projects'); } catch (e) { err.textContent = friendly(e); } add.disabled = false; }, 'p');
-    form.append(t, b, f, add, err); pane.append(form);
+    const err = el('div', 'err-t'); let vfile = null;
+    const vpick = attachPicker({ accept: 'both', onChange: f => { if (f && !/^video\//.test(f.type)) { err.textContent = 'The build video must be an MP4 or WebM video. Use the images box for pictures.'; vpick.clear(); vfile = null; return; } vfile = f; }, onError: m => { err.textContent = m; } });
+    const add = btn('Publish project', async () => { err.textContent = ''; add.disabled = true; try { await P.addProject({ title: t.value, blurb: b.value, files: f.files, video: vfile }); await go('projects'); } catch (e) { err.textContent = friendly(e); } add.disabled = false; }, 'p');
+    form.append(t, b, f, el('small', 'dmut', 'Optional: one video of your build (MP4 or WebM, under 25 MB).'), vpick.node, add, err); pane.append(form);
     const list = await P.projects(); const grid = el('div', 'plproj'); pane.append(grid);
     if (!list.length) grid.append(el('p', 'dmut', 'No projects yet. Be the first to show one.'));
     for (const p of list) {
       const c = el('article', 'dcard plpost' + (p.hidden ? ' plhid' : '')); c.append(el('h3', null, p.title), el('small', 'dmut', 'by ' + p.author));
       if (p.images.length) { const g = el('div', 'plimgs'); for (const u of p.images) { if (!/^https:\/\//.test(u)) continue; const i = document.createElement('img'); i.alt = p.title + ' screenshot'; i.loading = 'lazy'; i.referrerPolicy = 'no-referrer'; i.src = u; g.append(i); } c.append(g); }
+      { const v = showFile('build', p.video_path, p.title + ' video'); if (v) c.append(v); }
       c.append(el('p', 'plbody', p.blurb)); if (p.hidden) c.append(el('small', 'dmut', 'Hidden by moderation.'));
       const acts = el('div', 'plrow');
       if (p.user_id === Account.user().id) acts.append(btn('Delete', async () => { if (!confirm('Delete this project?')) return; try { await P.deleteProject(p.id); await go('projects'); } catch (e) { say(friendly(e)); } }));
@@ -258,8 +289,9 @@ export async function mountPlatform(host, ctx) {
     const c = el('section', 'dcard'); const ta = el('textarea'); ta.maxLength = MAX_POST; ta.rows = 3; ta.placeholder = 'Share something with the community'; ta.setAttribute('aria-label', 'New post');
     const count = el('small', 'dmut', '0/' + MAX_POST); ta.oninput = () => { count.textContent = ta.value.length + '/' + MAX_POST; };
     const err = el('div', 'err-t');
-    const go = btn('Post', async () => { err.textContent = ''; go.disabled = true; try { await P.post(community, ta.value); ta.value = ''; count.textContent = '0/' + MAX_POST; await paintFeed(); } catch (e) { err.textContent = friendly(e); } go.disabled = false; }, 'p');
-    c.append(ta, count, go, el('small', 'dmut', ' Posts vanish after 3 hours. No links or secret keys.'), err); return c;
+    let file = null; const pick = attachPicker({ accept: 'both', onChange: f => { file = f; }, onError: m => { err.textContent = m; } });
+    const go = btn('Post', async () => { err.textContent = ''; go.disabled = true; try { await P.post(community, ta.value, file); ta.value = ''; count.textContent = '0/' + MAX_POST; pick.clear(); file = null; await paintFeed(); } catch (e) { err.textContent = friendly(e); } go.disabled = false; }, 'p');
+    c.append(ta, count, pick.node, go, el('small', 'dmut', ' Posts vanish after 3 hours. No links or secret keys. Pictures and videos are fine.'), err); return c;
   }
 
   async function paintFeed() {
@@ -273,7 +305,7 @@ export async function mountPlatform(host, ctx) {
   function postCard(p) {
     const c = el('article', 'dcard plpost'); if (p.hidden) c.classList.add('plhid');
     const top = el('div', 'plrow'); top.append(avatar(p.avatar, p.author)); const who = el('div'); who.append(el('b', null, p.author), el('small', 'dmut', '  ' + timeLeft(p.expires_at))); top.append(who); c.append(top);
-    c.append(el('p', 'plbody', p.body));
+    if (p.body) c.append(el('p', 'plbody', p.body)); { const f = showFile('post', p.media_path, 'Picture or video from ' + p.author); if (f) c.append(f); }
     if (p.hidden) c.append(el('small', 'dmut', 'Hidden by moderation. Only you and moderators can see this.')); if (p.edited_by_mod) c.append(el('small', 'dmut', ' Edited by a moderator.'));
     const rx = el('div', 'plrx');
     for (const [kind, label] of REACTIONS) {

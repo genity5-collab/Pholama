@@ -217,7 +217,7 @@ async function init() {
   try { await Account.finishLogin(); }
   catch (e) { Account.logout(); openSettings('account'); $('#a_msg').textContent = e.message; }
   await afterAuth(); paintAcct();
-  if (![...sel.options].some(o => !o.disabled)) dlg.showModal(), render();
+  if (server && ![...sel.options].some(o => !o.disabled)) dlg.showModal(), render();   // only on the PC: the website has no chat, so a new visitor is never asked to download an AI
 }
 
 async function refreshSelect() {

@@ -118,7 +118,7 @@ begin
   if tg_op = 'INSERT' then new.created_at := now(); new.hidden := false; else new.created_at := old.created_at; new.user_id := old.user_id; if not public.pholama_is_mod() then new.hidden := old.hidden; end if; end if;
   t := lower(new.title || ' ' || new.blurb);
   if t ~ '(gho_|ghp_|github_pat_|sk-[a-z0-9]{10}|phk_[a-z0-9]{6}|eyj[a-z0-9_-]{20})' then raise exception 'That looks like a secret key. Projects are public, so it was blocked.'; end if;
-  if t ~ '(nigger|faggot|kill yourself|kys\b)' then raise exception 'That message breaks the community rules.'; end if;
+  if t ~ '(nigger|faggot|kill yourself|\ykys\y)' then raise exception 'That message breaks the community rules.'; end if;
   -- images must be uploaded by the project owner into their own folder (no outside links, no tracking pixels)
   foreach p in array new.image_paths loop
     if p !~ ('^' || new.user_id::text || '/projects/[0-9a-f-]{8,40}\.(png|jpg|webp)$') then raise exception 'Project images must be uploaded here as PNG, JPG or WebP.'; end if;

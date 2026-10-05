@@ -1,6 +1,23 @@
 {
- "latest": "0.9.34",
+ "latest": "0.9.35",
  "releases": [
+  {
+   "version": "0.9.35",
+   "date": "2026-10-05",
+   "title": "Friends, private chat, calls, notifications, and pictures and videos on the website.",
+   "notes": [
+    "New: Friends on Pholama Platform. Send a friend request by Platform name, accept or decline, remove or block someone. Blocking stops their messages and calls and hides you from them.",
+    "New: private chat with friends, with pictures and videos. Only the two of you can open the files. Links are still not allowed, in messages or anywhere else.",
+    "New: voice calls between friends, with a ringing banner you can accept or decline. Calls may not connect on very strict networks.",
+    "New: a notification bell for friend requests, new messages and missed calls, with a soft sound you can turn off.",
+    "New: a Privacy tab where you switch on or off friend requests, private messages, calls, and notifications.",
+    "New: add a picture or video to a post, a reply, a support ticket or a build (pictures up to 5 MB, videos up to 25 MB; PNG, JPG, WebP, GIF, MP4, WebM). Ticket files can be seen only by you and the moderators.",
+    "Fixed: new visitors on the website no longer get the 'download an AI' box. It only opens in the PC app now.",
+    "Fixed: the 'kys' word filter never matched in posts and replies, and private details (who has calls off, who is friends with whom) could be looked up by any member. Both are closed.",
+    "Fixed: support tickets did not block links or secret keys. They do now.",
+    "Owner setup: run supabase/social.sql, supabase/media.sql and supabase/post_replies.sql once in the Supabase SQL editor. Until then the new tabs say they are not set up yet."
+   ]
+  },
   {
    "version": "0.9.34",
    "date": "2026-10-05",

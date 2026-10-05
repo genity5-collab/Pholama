@@ -1,3 +1,4 @@
+import { mediaProblem, mediaPathFor, bucketFor } from './social.js';
 // Pholama Platform: profile, communities, posts (3 hour life), reactions, reports, recent local AIs.
 // This file only TALKS to Supabase. The database rules in supabase/platform.sql are what actually enforce
 // the limits, so a changed page cannot keep a post alive, skip a filter or ban-dodge.
@@ -80,7 +81,16 @@ export const rewardText = n => (+n > 0 ? '+' + Math.floor(+n) + ' integration cr
 export function makePlatform(Account, cfg) {
   const base = () => cfg().SUPABASE_URL;
   const me = () => { const u = Account.user(); return u ? u.id : ''; };
+  const rid = () => (globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : (Date.now().toString(16) + '0000000000000000'));
+  // Upload one picture or video the person chose. The name is made here, never taken from the file.
+  async function upload(kind, file) {
+    const e = mediaProblem(file); if (e) throw new Error(e);
+    const path = mediaPathFor(me(), kind, file.type, rid()); if (!path) throw new Error('That file cannot be used here.');
+    await Account.storageTo(bucketFor(kind), path, file); return path;
+  }
   return {
+    // Address to show a stored file: public ones directly, private ones (tickets) through a short-lived signed address.
+    mediaSrc: async (kind, path) => { if (!path) return ''; return bucketFor(kind) === 'pholama-media' ? base().replace(/\/+$/, '') + '/storage/v1/object/public/pholama-media/' + path : await Account.signedUrl('pholama-private', path); },
     async sweep() { try { await Account.rest('rpc/pholama_sweep', { method: 'POST', body: '{}' }); } catch {} },
     async profile(uid = me()) { if (!uid) return null; const r = await Account.rest('pholama_profiles?select=*&user_id=eq.' + encodeURIComponent(uid) + '&limit=1'); return r && r[0] || null; },
     async saveProfile({ name, bio }) {
@@ -98,7 +108,7 @@ export function makePlatform(Account, cfg) {
     },
     communities: async () => (await Account.rest('pholama_communities?select=*&order=title.asc')) || [],
     async feed(community) {
-      const posts = (await Account.rest('pholama_posts?select=id,user_id,community,body,created_at,expires_at,hidden,edited_by_mod&community=eq.' + encodeURIComponent(community) + '&order=created_at.desc&limit=50')) || [];
+      const posts = (await Account.rest('pholama_posts?select=id,user_id,community,body,media_path,created_at,expires_at,hidden,edited_by_mod&community=eq.' + encodeURIComponent(community) + '&order=created_at.desc&limit=50')) || [];
       const live = posts.filter(p => isLive(p) || p.user_id === me());
       if (!live.length) return [];
       const ids = live.map(p => p.id).join(','), uids = [...new Set(live.map(p => p.user_id))].join(',');
@@ -109,9 +119,11 @@ export function makePlatform(Account, cfg) {
       const who = new Map((pr || []).map(p => [p.user_id, p]));
       return live.map(p => ({ ...p, author: (who.get(p.user_id) || {}).platform_name || 'Someone', avatar: publicAvatarUrl(base(), (who.get(p.user_id) || {}).avatar_path), reactions: tally((rx || []).filter(r => r.post_id === p.id), me()) }));
     },
-    async post(community, body) {
-      const bad = postProblem(body); if (bad) throw new Error(bad);
-      await Account.rest('pholama_posts', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: me(), community, body: String(body).trim() }) });
+    async post(community, body, file) {
+      const hasFile = !!file, text = String(body || '').trim();
+      if (!hasFile || text) { const bad = postProblem(body); if (bad && !(hasFile && !text)) throw new Error(bad); }
+      const media = hasFile ? await upload('post', file) : null;
+      await Account.rest('pholama_posts', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: me(), community, body: text, media_path: media }) });
     },
     deletePost: id => Account.rest('pholama_posts?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }),
     async react(postId, kind, on) {
@@ -124,23 +136,25 @@ export function makePlatform(Account, cfg) {
     modHide: (id, hidden) => Account.rest('rpc/pholama_mod_hide', { method: 'POST', body: JSON.stringify({ p_post: id, p_hidden: !!hidden }) }),
     modBan: (uid, banned, reason = null, hours = null) => Account.rest('rpc/pholama_mod_ban', { method: 'POST', body: JSON.stringify({ p_user: uid, p_banned: !!banned, p_reason: reason, p_hours: hours }) }),
     // --- support tickets: anyone opens and reads their own; only moderators reply (the database enforces it) ---
-    openTicket: (subject, category, body) => Account.rest('rpc/pholama_ticket_open', { method: 'POST', body: JSON.stringify({ p_subject: subject, p_category: category, p_body: body }) }),
+    async openTicket(subject, category, body, file) { const media = file ? await upload('ticket', file) : null; return Account.rest('rpc/pholama_ticket_open', { method: 'POST', body: JSON.stringify({ p_subject: subject, p_category: category, p_body: body || '', p_media: media }) }); },
     async myTickets() { return (await Account.rest('pholama_tickets?select=*&user_id=eq.' + encodeURIComponent(me()) + '&order=updated_at.desc&limit=30')) || []; },
     async allTickets(status) { return (await Account.rest('pholama_tickets?select=*&' + (status ? 'status=eq.' + status + '&' : 'status=neq.closed&') + 'order=updated_at.desc&limit=50')) || []; },
-    async ticketMessages(id) { return (await Account.rest('pholama_ticket_messages?select=id,from_mod,body,created_at&ticket_id=eq.' + encodeURIComponent(id) + '&order=id.asc')) || []; },
-    say: (id, body) => Account.rest('rpc/pholama_ticket_say', { method: 'POST', body: JSON.stringify({ p_ticket: id, p_body: body }) }),
+    async ticketMessages(id) { return (await Account.rest('pholama_ticket_messages?select=id,from_mod,body,media_path,created_at&ticket_id=eq.' + encodeURIComponent(id) + '&order=id.asc')) || []; },
+    async say(id, body, file) { const media = file ? await upload('ticket', file) : null; return Account.rest('rpc/pholama_ticket_say', { method: 'POST', body: JSON.stringify({ p_ticket: id, p_body: body || '', p_media: media }) }); },
     closeTicket: (id, closed = true) => Account.rest('rpc/pholama_ticket_close', { method: 'POST', body: JSON.stringify({ p_ticket: id, p_closed: !!closed }) }),
     // --- replies under a post (the big post window). Needs supabase/post_replies.sql. ---
     async replies(postId) {
-      const rows = (await Account.rest('pholama_post_replies?select=id,user_id,body,created_at,hidden&post_id=eq.' + encodeURIComponent(postId) + '&order=id.asc&limit=200')) || [];
+      const rows = (await Account.rest('pholama_post_replies?select=id,user_id,body,media_path,created_at,hidden&post_id=eq.' + encodeURIComponent(postId) + '&order=id.asc&limit=200')) || [];
       const uids = [...new Set(rows.map(r => r.user_id))];
       const pr = uids.length ? await Account.rest('pholama_profiles?select=user_id,platform_name&user_id=in.(' + uids.join(',') + ')').catch(() => []) : [];
       const who = new Map((pr || []).map(p => [p.user_id, p.platform_name]));
       return rows.map(r => ({ ...r, author: who.get(r.user_id) || 'Someone' }));
     },
-    async reply(postId, body) {
-      const bad = replyProblem(body); if (bad) throw new Error(bad);
-      await Account.rest('pholama_post_replies', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ post_id: postId, user_id: me(), body: String(body).trim() }) });
+    async reply(postId, body, file) {
+      const text = String(body || '').trim();
+      if (text || !file) { const bad = replyProblem(body); if (bad) throw new Error(bad); }
+      const media = file ? await upload('post', file) : null;
+      await Account.rest('pholama_post_replies', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ post_id: postId, user_id: me(), body: text, media_path: media }) });
     },
     deleteReply: id => Account.rest('pholama_post_replies?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }),
     // Report rewards + moderator gifts: how many are waiting, and collect them (the database makes sure it only happens once).
@@ -157,11 +171,12 @@ export function makePlatform(Account, cfg) {
       const who = new Map((pr || []).map(p => [p.user_id, p]));
       return list.map(p => ({ ...p, author: (who.get(p.user_id) || {}).platform_name || 'Someone', images: (p.image_paths || []).map(x => publicAvatarUrl(base(), x)) }));
     },
-    async addProject({ title, blurb, files }) {
+    async addProject({ title, blurb, files, video }) {
       const bad = projectProblem(title, blurb); if (bad) throw new Error(bad);
       const fl = Array.from(files || []).slice(0, MAX_PROJ_IMAGES), paths = [];
       for (const f of fl) { const e = avatarProblem(f); if (e) throw new Error(e); const path = projectImagePath(me(), f.type, (globalThis.crypto && crypto.randomUUID ? crypto.randomUUID() : String(Date.now()) + '0000')); await Account.storage(path, f); paths.push(path); }
-      await Account.rest('pholama_projects', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: me(), title: String(title).trim(), blurb: String(blurb).trim(), image_paths: paths }) });
+      let vid = null; if (video) { const e = mediaProblem(video); if (e) throw new Error(e); if (!/^video\//.test(video.type)) throw new Error('The build video must be an MP4 or WebM video.'); vid = await upload('build', video); }
+      await Account.rest('pholama_projects', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ user_id: me(), title: String(title).trim(), blurb: String(blurb).trim(), image_paths: paths, video_path: vid }) });
     },
     deleteProject: id => Account.rest('pholama_projects?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }),
     modCmd: async line => { const bad = modCommandProblem(line); if (bad) throw new Error(bad); return Account.rest('rpc/pholama_mod_cmd', { method: 'POST', body: JSON.stringify({ p_line: String(line).trim() }) }); },

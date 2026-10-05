@@ -112,7 +112,7 @@ begin
   t := lower(new.body);
   if t ~ '(https?://|www\.|discord\.gg|\.(com|net|org|ru|xyz|io)/)' then raise exception 'Links are not allowed in posts.'; end if;
   if t ~ '(gho_|ghp_|github_pat_|sk-[a-z0-9]{10}|phk_[a-z0-9]{6}|eyj[a-z0-9_-]{20})' then raise exception 'That looks like a secret key. Posts are public, so it was blocked.'; end if;
-  if t ~ '(nigger|faggot|kill yourself|kys\b)' then raise exception 'That message breaks the community rules.'; end if;
+  if t ~ '(nigger|faggot|kill yourself|\ykys\y)' then raise exception 'That message breaks the community rules.'; end if;
   select count(*) into recent from public.pholama_posts where user_id = new.user_id and created_at > now() - interval '1 minute';
   if recent >= 3 then raise exception 'Slow down. Try again in a minute.'; end if;
   select count(*) into recent from public.pholama_posts where user_id = new.user_id and created_at > now() - interval '3 hours';

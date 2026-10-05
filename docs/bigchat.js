@@ -13,6 +13,7 @@
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 
 // Pure helpers (tested on their own)
+import { attachPicker, lazyMedia, installMediaStyles } from './mediaui.js';
 export const nearBottom = (scrollTop, clientHeight, scrollHeight, slack = 80) => scrollHeight - (scrollTop + clientHeight) <= slack;
 export const sameMessages = (a, b) => a.length === b.length && a.every((m, i) => m.id === b[i].id && m.text === b[i].text);
 export const cleanDraft = (t, max) => String(t == null ? '' : t).replace(/\r\n/g, '\n').trim().slice(0, max || 1000);
@@ -28,12 +29,17 @@ export function openBig(o) {
   const list = el('div', 'bc-list'); list.setAttribute('role', 'log'); list.setAttribute('aria-live', 'polite');
   const err = el('div', 'err-t bc-err');
   const foot = el('div', 'bc-foot');
-  let ta = null, sendBtn = null;
+  let ta = null, sendBtn = null, picker = null, file = null;
   if (o.canSend === false) foot.append(el('p', 'dmut', o.closedText || 'This conversation is closed.'));
   else {
     ta = el('textarea'); ta.rows = 2; ta.maxLength = o.maxLen || 1000; ta.placeholder = o.placeholder || 'Write a message. Enter sends, Shift+Enter adds a line.'; ta.setAttribute('aria-label', 'Message');
     sendBtn = el('button', 'p', 'Send'); sendBtn.type = 'button';
     foot.append(ta, sendBtn);
+    if (o.attach) {                                              // optional: a picture or video under the message box (opt-in, other windows stay as they were)
+      installMediaStyles();
+      picker = attachPicker({ accept: 'both', onChange: f => { file = f; }, onError: m => { sendErr = m; note(m); } });
+      foot.append(picker.node);
+    }
   }
   dlg.append(top, head, list, err, foot); document.body.append(dlg);
 
@@ -51,14 +57,14 @@ export function openBig(o) {
     for (const m of msgs) {
       const b = el('div', 'bc-msg' + (m.mine ? ' mine' : '') + (m.badge ? ' badge' : ''));
       const h = el('div', 'bc-meta'); h.append(el('b', null, m.who || 'Someone')); if (m.badge) h.append(el('span', 'bc-badge', m.badge)); h.append(el('span', 'dmut', ' ' + (m.when || '')));
-      b.append(h, el('p', 'plbody', m.text)); list.append(b);
+      b.append(h); if (m.text) b.append(el('p', 'plbody', m.text)); if (m.media && m.media.get) b.append(lazyMedia(m.media.get, { video: !!m.media.video, alt: 'Picture or video from ' + (m.who || 'someone') })); list.append(b);
     }
     if (stick) list.scrollTop = list.scrollHeight;
   }
   async function doSend() {
-    if (!ta || sending) return; const v = cleanDraft(ta.value, o.maxLen); if (!v) return;
+    if (!ta || sending) return; const v = cleanDraft(ta.value, o.maxLen); if (!v && !file) return;
     sending = true; sendBtn.disabled = true; sendErr = ''; note('');
-    try { await o.send(v); ta.value = ''; await refresh(true); list.scrollTop = list.scrollHeight; }
+    try { await o.send(v, file); ta.value = ''; if (picker) { picker.clear(); file = null; } await refresh(true); list.scrollTop = list.scrollHeight; }
     catch (e) { sendErr = e && e.message ? e.message : 'Could not send.'; note(sendErr); }
     sending = false; sendBtn.disabled = false; ta.focus();
   }

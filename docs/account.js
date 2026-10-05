@@ -155,6 +155,24 @@ export const Account = {
   },
 
   // Uploads a file into the avatar bucket with the person's own login. The database only lets them write inside their own folder.
+  // Upload a picture or video into a chosen bucket (posts and builds: pholama-media; private messages and tickets: pholama-private).
+  async storageTo(bucket, path, file) {
+    if (!session) throw new Error('Log in first');
+    if (session.expires_at && session.expires_at * 1000 - Date.now() < 30000) await this.refresh();
+    if (!session) throw new Error('Your login expired. Log in again.');
+    if (bucket !== 'pholama-media' && bucket !== 'pholama-private') throw new Error('Wrong place for that file.');
+    const r = await fetch(base() + '/storage/v1/object/' + bucket + '/' + path.split('/').map(encodeURIComponent).join('/'), { method: 'POST', headers: { apikey: C().SUPABASE_ANON_KEY, Authorization: 'Bearer ' + session.access_token, 'Content-Type': file.type, 'Cache-Control': 'max-age=3600' }, body: file });
+    if (!r.ok) { const j = await r.json().catch(() => ({})); throw new Error(niceError(j, 'Could not upload the file (' + r.status + ')')); }
+    return true;
+  },
+  // A short-lived address to open a private file (works only for people allowed to read it).
+  async signedUrl(bucket, path) {
+    if (!session) return '';
+    if (session.expires_at && session.expires_at * 1000 - Date.now() < 30000) await this.refresh().catch(() => {});
+    const r = await fetch(base() + '/storage/v1/object/sign/' + bucket + '/' + path.split('/').map(encodeURIComponent).join('/'), { method: 'POST', headers: { apikey: C().SUPABASE_ANON_KEY, Authorization: 'Bearer ' + session.access_token, 'Content-Type': 'application/json' }, body: JSON.stringify({ expiresIn: 3600 }) });
+    if (!r.ok) return '';
+    const j = await r.json().catch(() => ({})); return j.signedURL ? base() + '/storage/v1' + j.signedURL : '';
+  },
   async storage(path, file) {
     if (!session) throw new Error('Log in first');
     if (session.expires_at && session.expires_at * 1000 - Date.now() < 30000) await this.refresh();
