@@ -1,6 +1,18 @@
 {
- "latest": "0.9.32",
+ "latest": "0.9.33",
  "releases": [
+  {
+   "version": "0.9.33",
+   "date": "2026-10-05",
+   "title": "New Pholama logo and an opening animation.",
+   "notes": [
+    "New llama-with-sunglasses logo everywhere: the app icon, your Desktop and Start Menu shortcut, the browser tab, and the phone home-screen icon.",
+    "A short logo animation plays when you open Pholama or the website: dots gather, the llama rises, the sunglasses drop on, and the name fades in. Click or press Escape to skip it.",
+    "The same llama now plays on the update screen while Pholama installs a new version, and the progress ring still shows how far along it is.",
+    "After an update restart you get a shorter version. People who turn on Reduce motion see the finished logo with no movement.",
+    "On Windows the Desktop icon can keep the old picture for a little while until Windows refreshes its icon cache. Signing out and in, or restarting Explorer, fixes it."
+   ]
+  },
   {
    "version": "0.9.32",
    "date": "2026-10-05",

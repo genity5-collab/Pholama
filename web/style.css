@@ -490,3 +490,6 @@ header{border-bottom:1px solid var(--line);backdrop-filter:blur(18px);background
 @keyframes lv-in{from{opacity:0;translate:0 4px}}
 @keyframes lv-pulse{50%{opacity:.35;scale:.8}}
 @media (prefers-reduced-motion:reduce){.st-live,.st-live .lv-dot{animation:none}}
+/* Logo animation: the update scene shows the llama above the progress ring */
+.upds-logo{width:92px;margin:0 auto 10px;color:var(--fg)}.upds-logo .pi svg{width:92px}
+.upds-ring{transform:scale(.72);transform-origin:center top;margin-bottom:-28px}

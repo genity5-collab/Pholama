@@ -10,6 +10,7 @@ import { splitBlocks, LANGS, cleanLang, extFor, safeFileName, diffLines, diffSta
 import { collapse, groupByDay, dayTitle, applyFilter, summarise, summaryText, info as logInfo, detailRows, fmtTime, FILTERS } from './editlog.js';
 import { canSave, usedText } from './memlimit.js';
 import { loadReader, readerLoaded } from './reader.js';
+import { playSplash } from './logointro.js';
 import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
 import { READER } from './attach.js';
 import { initAttach, hasAttachments, attachedNames, clearAttachments, prepare } from './attachui.js';
@@ -167,6 +168,10 @@ const saved = () => {   // only models this site still offers (older visits may 
 };
 const markReady = id => { const s = new Set(saved()); s.add(id); localStorage.setItem('pholama.ready', JSON.stringify([...s])); };
 
+// The Pholama logo animation plays as soon as the app or the site opens. It sits on top of startup, never delays it, and can be skipped.
+// After an update reload it is the short version (the update scene already showed the logo). sessionStorage marks a reload inside the same tab.
+{ let fast = false; try { fast = !!sessionStorage.getItem('pholama_splashed'); sessionStorage.setItem('pholama_splashed', '1'); } catch {}
+  try { if (!/[?&]nosplash\b/.test(location.search)) playSplash({ fast }); } catch {} }
 async function init() {
   hasGPU = await probeGPU();
   catalog = await (await fetch('models.json')).json();

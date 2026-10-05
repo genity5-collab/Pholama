@@ -1,5 +1,6 @@
 // Pholama update animations: (1) a banner when an update is ready, (2) a full-screen "installing" scene while the app restarts,
 // (3) a "What's new" celebration the first time you open a new version. The logic is plain and tested (test/updatefx.test.js).
+import { mountLogo } from './logointro.js';
 const KEY_SEEN = 'pholama_seen_version', KEY_PENDING = 'pholama_updating_to';
 
 // "0.9.14" > "0.9.9"? Compare as numbers, not text.
@@ -46,8 +47,9 @@ export function openInstalling(version) {
   try { localStorage.setItem(KEY_PENDING, version || ''); } catch {}
   let o = document.getElementById('updScene'); if (o) o.remove();
   o = el('div', 'upds'); o.id = 'updScene'; o.setAttribute('role', 'alertdialog'); o.setAttribute('aria-label', 'Updating Pholama');
-  o.innerHTML = `<div class="upds-glow"></div><div class="upds-card"><div class="upds-ring"><svg viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" cx="60" cy="60" r="52" pathLength="100"/></svg><span class="upds-pct">0%</span></div><h3>Updating Pholama${version ? ' to ' + esc(version) : ''}</h3><div class="upds-step">Getting ready</div><ol class="upds-list">${STEPS.map(s => `<li data-id="${s.id}"><i></i>${esc(s.text)}</li>`).join('')}</ol><small>Please keep this window open. It only takes a moment.</small></div><div class="upds-dust"></div>`;
+  o.innerHTML = `<div class="upds-glow"></div><div class="upds-card"><div class="upds-logo" aria-hidden="true"></div><div class="upds-ring"><svg viewBox="0 0 120 120"><circle class="bg" cx="60" cy="60" r="52"/><circle class="fg" cx="60" cy="60" r="52" pathLength="100"/></svg><span class="upds-pct">0%</span></div><h3>Updating Pholama${version ? ' to ' + esc(version) : ''}</h3><div class="upds-step">Getting ready</div><ol class="upds-list">${STEPS.map(s => `<li data-id="${s.id}"><i></i>${esc(s.text)}</li>`).join('')}</ol><small>Please keep this window open. It only takes a moment.</small></div><div class="upds-dust"></div>`;
   document.body.appendChild(o);
+  let logo = null; try { logo = mountLogo(o.querySelector('.upds-logo')); } catch {}   // the llama animation plays (and repeats) while the update runs
   if (!reduced()) { const d = o.querySelector('.upds-dust'); for (let i = 0; i < 18; i++) { const p = el('i'); p.style.cssText = `left:${(i * 37) % 100}%;animation-delay:${(i % 9) * 0.35}s;animation-duration:${4 + (i % 5)}s;--s:${0.5 + (i % 4) * 0.25}`; d.appendChild(p); } }
   const api = {
     step(i) {
@@ -55,9 +57,9 @@ export function openInstalling(version) {
       const pct = progress(i); o.querySelector('.fg').style.strokeDashoffset = String(100 - pct); o.querySelector('.upds-pct').textContent = pct + '%';
       o.querySelector('.upds-step').textContent = STEPS[Math.min(i, STEPS.length - 1)].text + '...';
     },
-    done() { api.step(STEPS.length); o.querySelector('.upds-step').textContent = 'All set'; o.classList.add('ok'); },
-    fail(msg) { o.classList.add('bad'); o.querySelector('.upds-step').textContent = msg || 'Something went wrong'; setTimeout(() => o.remove(), 4200); },
-    close() { o.classList.add('out'); setTimeout(() => o.remove(), 500); },
+    done() { api.step(STEPS.length); if (logo) logo.stop(); o.querySelector('.upds-step').textContent = 'All set'; o.classList.add('ok'); },
+    fail(msg) { if (logo) logo.stop(); o.classList.add('bad'); o.querySelector('.upds-step').textContent = msg || 'Something went wrong'; setTimeout(() => o.remove(), 4200); },
+    close() { if (logo) logo.stop(); o.classList.add('out'); setTimeout(() => o.remove(), 500); },
   };
   api.step(0); return api;
 }
