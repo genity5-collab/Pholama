@@ -4,6 +4,7 @@
 import { sourcesCard } from './sources.js';
 import { createFx, toolStatus } from './studiofx.js';
 import * as CL from './companionlife.js';
+import { createLiveCard } from './studiolive.js';
 
 export const PREVIEW_DELAY = 300, SAVE_DELAY = 600, MAX_CONSOLE = 200, MAX_LINE = 400;
 
@@ -96,6 +97,7 @@ export function createStudio(env) {
     <div class="st-aibox"><textarea id="stAsk" rows="2" placeholder="Ask the AI to build, fix or explain anything..."></textarea><button id="stDiagnose" title="Check the project and explain the next fix">Diagnose</button><button id="stSend" class="p">Send</button></div>
   </div>`;
   for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stActivity', 'stSettings', 'stActivityPanel', 'stActivityRefresh', 'stActivityList', 'stSettingsPanel', 'stSettingsClose', 'stCompanion', 'stPublish', 'stFind', 'stFindCount', 'stFindResults', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stNewScript', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stDiagnose', 'stSend']) el[id] = mount.querySelector('#' + id);
+  const live = createLiveCard(el.stAiLog);   // the Live Activity card: what the AI thinks and which files it touches, right in the chat
   const fx = createFx({ host: el.stCode.parentElement, code: el.stCode, tabs: el.stTabs, frame: el.stFrame });   // the 'AI is editing' animation
   const activityTitle = e => e.kind === 'file' ? ((e.status === 'working' ? 'Working on ' : e.status === 'failed' ? 'Failed: ' : 'Changed ') + (e.path || 'a file')) : e.kind === 'command' ? (e.status === 'ok' ? 'Command finished' : e.status === 'proposed' ? 'Command waiting for approval' : 'Command ' + (e.status || 'updated')) : (e.text || e.status || e.kind || 'Activity');
   const paintActivity = () => { const box = el.stActivityList; if (!box) return; box.textContent = ''; if (!S.activity.length) { box.textContent = 'No Studio activity yet.'; return; } for (const e of S.activity.slice(0, 80)) { const d = document.createElement('details'); d.className = 'st-activityrow ' + (e.status === 'failed' || e.status === 'error' ? 'bad' : e.status === 'working' || e.status === 'proposed' ? 'wait' : 'good'); const s = document.createElement('summary'); const time = e.t ? new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''; s.textContent = (e.status || 'event') + ' · ' + activityTitle(e) + (time ? ' · ' + time : ''); d.appendChild(s); const body = document.createElement('div'); body.className = 'st-activitybody'; const bits = []; if (e.project) bits.push('Project: ' + e.project); if (e.added != null || e.removed != null) bits.push('Lines: +' + (e.added || 0) + ' / -' + (e.removed || 0)); if (e.error) bits.push('Error: ' + e.error); if (e.cmd) bits.push(e.cmd); body.textContent = bits.join('\n') || 'No additional details.'; d.appendChild(body); box.appendChild(d); } };
@@ -288,6 +290,7 @@ export function createStudio(env) {
     if (model === 'cloud:pholama' && !S.maxWarned) { S.maxWarned = true; say('Credits in Studio: chat 1, a medium task 3, a big task 4. Agent Max costs the same, and also uses up to 8 Max messages from your daily and monthly allowance. If Max runs out, your own model on this PC takes over for free.', 'warn'); }
     S.busy = true; el.stAddFile.disabled = true; el.stNewScript.disabled = true; el.stSend.textContent = 'Stop'; say(text, 'me'); hist.push({ role: 'user', content: modelText }); if (hist.length > 8) hist.splice(0, hist.length - 8);
     const ac = new AbortController(); S.stopper = () => ac.abort(); let reply = '', node = null, srcCard = null, thinkNode = null;
+    live.begin(); const openTools = [];
     try {
       const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: hist, agent: true, stream: true, studio: { project: S.project }, switches: { search: true, tools: true } }) });
       const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
@@ -296,10 +299,10 @@ export function createStudio(env) {
         while ((i = buf.indexOf('\n')) >= 0) {
           const l = buf.slice(0, i).trim(); buf = buf.slice(i + 1); if (!l) continue; let j; try { j = JSON.parse(l); } catch { continue; }
           if (j.error) throw new Error(j.error);
-          if (j.log && j.log.kind === 'thought') { if (!thinkNode) thinkNode = say(j.log.text, 'think'); else thinkNode.textContent = j.log.text; }   // live: one line that updates while the model thinks
+          if (j.log && j.log.kind === 'thought') { if (!thinkNode) thinkNode = say(j.log.text, 'think'); else thinkNode.textContent = j.log.text; live.thought(j.log.text); }   // live: one line that updates while the model thinks
           else if (j.log && (j.log.kind === 'action' || j.log.kind === 'error')) { thinkNode = null; say(j.log.text, j.log.kind === 'error' ? 'err' : 'act'); }
-          else if (j.toolStart) { fxOpen++; fx.working(toolStatus(j.toolStart)); }   // the AI just started a tool: light up the editor and name the file
-          else if (j.tool) { thinkNode = null; say(toolLine(j.tool), 'tool'); if (fxOpen > 0) { fxOpen--; fx.idle(); } loadActivity(); }   // it finished: the strip fades, the changed lines flash when they arrive
+          else if (j.toolStart) { fxOpen++; const ts = toolStatus(j.toolStart); openTools.push(ts); live.start(ts); fx.working(ts); }   // the AI just started a tool: light up the editor and name the file
+          else if (j.tool) { thinkNode = null; live.finish(openTools.shift() || toolStatus(j.tool)); say(toolLine(j.tool), 'tool'); if (fxOpen > 0) { fxOpen--; fx.idle(); } loadActivity(); }   // it finished: the strip fades, the changed lines flash when they arrive
           else if (j.sources) { if (!srcCard) { srcCard = sourcesCard([]); el.stAiLog.appendChild(srcCard.el); } srcCard.update(j.sources); el.stAiLog.scrollTop = 1e9; }
           else if (j.maxUsage) { if (env.onMaxUsage) { try { env.onMaxUsage(j.maxUsage); } catch {} } }   // Agent Max day / month numbers: the counters must move in Studio too
           else if (j.studio) refreshSoon();
@@ -311,7 +314,7 @@ export function createStudio(env) {
       const kept = reply.replace(/<think>[\s\S]*?(<\/think>|$)/g, '').replace(/<\/?think>/g, '').trim();
       if (kept) hist.push({ role: 'assistant', content: kept.slice(0, 1200) }); else hist.pop();
     } catch (e) { if (e.name !== 'AbortError') say(e.message || 'Something went wrong.', 'err'); else say('Stopped.', 'warn'); }
-    finally { while (fxOpen > 0) { fxOpen--; fx.idle(); } S.busy = false; S.stopper = null; el.stSend.textContent = 'Send'; el.stAddFile.disabled = !S.project; el.stNewScript.disabled = !S.project; fxShow = true; try { await refreshFromServer(); } finally { fxShow = false; } }
+    finally { live.end(); while (fxOpen > 0) { fxOpen--; fx.idle(); } S.busy = false; S.stopper = null; el.stSend.textContent = 'Send'; el.stAddFile.disabled = !S.project; el.stNewScript.disabled = !S.project; fxShow = true; try { await refreshFromServer(); } finally { fxShow = false; } }
   }
   const toolLine = t => { const a = t.args || {}; const f = a.file ? ' ' + a.file : ''; return (t.name || 'tool').replace(/^studio_/, '').replace(/_/g, ' ') + f + (t.result ? ': ' + String(t.result).split('\n')[0].slice(0, 100) : ''); };
   el.stDiagnose.onclick = () => { if (!S.busy) ask('Diagnose the current project, inspect the preview problems, and tell me the most useful next fix.'); };

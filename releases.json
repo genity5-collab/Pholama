@@ -1,6 +1,16 @@
 {
- "latest": "0.9.31",
+ "latest": "0.9.32",
  "releases": [
+  {
+   "version": "0.9.32",
+   "date": "2026-10-05",
+   "title": "Live Activity card: watch the AI think and edit, right in the chat.",
+   "notes": [
+    "New: while the AI works in Studio, a Live Activity card appears in the chat. It shows what the AI is doing right now (Thinking, Reading a file, Editing a file, Testing), the thought it is on, and a list of the files it touches, each ticked off when it is done.",
+    "When the job ends the card stays as a short summary such as Changed 2 files. If the AI only answered a question, the card quietly disappears.",
+    "File names are always shown as plain text, so a strangely named file can never run anything in the page."
+   ]
+  },
   {
    "version": "0.9.31",
    "date": "2026-10-05",
