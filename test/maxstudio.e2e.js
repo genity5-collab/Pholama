@@ -4,7 +4,7 @@ const { spawn } = require('child_process'), fs = require('fs'), os = require('os
 const root = path.join(__dirname, '..'); const wait = ms => new Promise(r => setTimeout(r, ms));
 let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : '  -> ' + String(x).slice(0, 400))); if (!c) bad++; };
 async function main() {
-  const calls = [], seen = []; let mode = 'ok', daily = 0;
+  const calls = [], seen = []; let mode = 'ok', daily = 0, okCalls = 0;
   const cloud = http.createServer((q, s) => { let b = ''; q.on('data', c => b += c); q.on('end', () => {
     calls.push({ auth: q.headers.authorization, body: b }); s.setHeader('Content-Type', 'application/json');
     // the real cloud rule: a PC with a tool-capable local AI gets a daily cap of 1, otherwise 10. Studio must send the TRUE answer, not always true.
@@ -15,7 +15,7 @@ async function main() {
     if (mode === 'login') { s.statusCode = 401; s.end(JSON.stringify({ error: 'Log in', code: 'login' })); return; }
     const sawResult = /Wrote|wrote|saved|OK/i.test(b.split('"role":"user"').slice(-1)[0] || '') && /tool result|Tool result|TOOL RESULT/.test(b);
     const reply = mode === 'loop' ? '<tool>{"name":"studio_write","args":{"project":"mx","file":"loop' + calls.length + '.txt","content":"x' + calls.length + '"}}</tool>' : sawResult ? 'All done, Max built it.' : '<tool>{"name":"studio_write","args":{"project":"mx","file":"hello.html","content":"<h1>From Max</h1>"}}</tool>';
-    s.end(JSON.stringify({ reply })); }); }).listen(0, '127.0.0.1');
+    okCalls++; s.end(JSON.stringify({ reply, day_used: okCalls, day_cap: 10, month_used: 20 + okCalls, month_cap: 30 })); }); }).listen(0, '127.0.0.1');
   await wait(200); const cport = cloud.address().port;
   const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ph-max-')), bin = path.join(home, 'bin'), models = path.join(home, 'm'); fs.mkdirSync(bin, { recursive: true }); fs.mkdirSync(models, { recursive: true });
   const cat = JSON.parse(fs.readFileSync(path.join(root, 'models.pc.json'), 'utf8')); const lm = cat.find(x => x.id === 'llama3.2-3b'); fs.writeFileSync(path.join(models, lm.file), 'x');
@@ -44,6 +44,9 @@ s.end(JSON.stringify({choices:[{message:{content:out}}]}))})}).listen(port,'127.
     ok('the sign-in token was sent to the cloud', calls.length > 0 && calls.every(c => c.auth === 'Bearer tok_ABC123'), JSON.stringify(calls.map(c => c.auth)));
     ok('the token never comes back to the page', !t.includes('tok_ABC123'), t.slice(0, 200));
     ok('the extra Max price is shown (23 total with Studio)', /Agent Max in Studio 20/.test(t) && /Spent 23 credits/.test(t), (t.match(/Spent[^"]*/g) || []).join(' | '));
+    const uevs = t.split('\n').map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(e => e && e.maxUsage && e.maxUsage.day_used != null).map(e => e.maxUsage);
+    ok('Studio tells the page the day and month numbers after each Max call', uevs.length >= 2 && uevs.every(u => u.day_cap === 10 && u.month_cap === 30), JSON.stringify(uevs));
+    ok('and the numbers go UP from one Max call to the next (the counter moves)', uevs.length >= 2 && uevs[uevs.length - 1].day_used > uevs[0].day_used && uevs[uevs.length - 1].month_used > uevs[0].month_used, JSON.stringify(uevs));
     const after = await credits(); if (before != null && after != null) ok('23 credits were taken', before - after >= 23, before + ' -> ' + after);
     // Max is for Studio only
     t = await chat({ model: 'cloud:pholama', agent: true, messages: [{ role: 'user', content: 'hi' }] }); ok('outside Studio it explains, and does not call the cloud', /only works inside Studio/.test(t), t.slice(0, 300));
@@ -70,6 +73,8 @@ s.end(JSON.stringify({choices:[{message:{content:out}}]}))})}).listen(port,'127.
     fs.writeFileSync(path.join(models, lm.file), 'x');   // put the local model back for the fallback checks below
     // a limit falls back to the local model, free
     mode = 'limit'; t = await chat({ model: 'cloud:pholama', agent: true, studio, messages: [{ role: 'user', content: 'hello again' }] });
+    { const hit = t.split('\n').map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(e => e && e.maxUsage && e.maxUsage.hit).map(e => e.maxUsage.hit);
+      ok('at the daily limit the page is told the day counter is full', hit.includes('day'), JSON.stringify(hit)); }
     ok('at the limit it says it is switching to the local model', /daily limit/i.test(t) && /Switching to/.test(t) && /free/i.test(t), t.slice(0, 500));
     ok('and the local model really answered', /Local model answering for free/.test(t), t.slice(0, 500));
     const evs = t.split('\n').map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);

@@ -1,17 +1,5 @@
 {
- "browser": [
-  {
-   "id": "Qwen2.5-0.5B-Instruct-q4f16_1-MLC",
-   "name": "Qwen2.5 0.5B",
-   "size": "~0.9 GB",
-   "tier": 1,
-   "caps": [
-    "chat",
-    "multilingual"
-   ],
-   "note": "The one small assistant on the website. It only chats. Tools, files and bigger models are in the PC app."
-  }
- ],
+ "browser": [],
  "local": [
   {
    "id": "smollm2-135m",
@@ -1821,42 +1809,7 @@
    "added": "2026-10-04"
   }
  ],
- "cpu": [
-  {
-   "id": "HuggingFaceTB/SmolLM2-360M-Instruct",
-   "name": "SmolLM2 360M (CPU)",
-   "size": "~0.4 GB",
-   "tier": 1,
-   "caps": [
-    "chat",
-    "fast"
-   ],
-   "note": "Best first pick without a GPU. Slower than GPU."
-  },
-  {
-   "id": "onnx-community/Qwen2.5-0.5B-Instruct",
-   "name": "Qwen2.5 0.5B (CPU)",
-   "size": "~0.5 GB",
-   "tier": 1,
-   "caps": [
-    "chat",
-    "multilingual"
-   ],
-   "note": "Many languages. Slower than GPU."
-  },
-  {
-   "id": "onnx-community/Qwen2.5-1.5B-Instruct",
-   "name": "Qwen2.5 1.5B (CPU)",
-   "size": "~1.2 GB",
-   "tier": 2,
-   "caps": [
-    "chat",
-    "multilingual",
-    "tools"
-   ],
-   "note": "Smarter but slow. 4 GB+ RAM."
-  }
- ],
+ "cpu": [],
  "tiers": {
   "1": "Any phone",
   "2": "Most phones (4 GB+ RAM)",
@@ -1874,11 +1827,5 @@
   "thinking": "Thinks",
   "reasoning": "Reasoning",
   "tools": "Tool use"
- },
- "pair": {
-  "title": "Recommended: reader + brain",
-  "reader": "SmolVLM 256M (reads pictures, ~190 MB)",
-  "brain": "Qwen2.5 0.5B (chat and maths, ~0.5 GB)",
-  "totalMB": 690
  }
 }

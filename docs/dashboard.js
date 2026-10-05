@@ -28,9 +28,9 @@ const card = (title, body, cls = '') => `<section class="dcard ${cls}"><h3>${esc
 export async function mountDashboard(el, ctx) {
   // ctx: { server (hardware info or null), openChat(prompt?), openModels(), installedCount?, credits? }
   el.innerHTML = '<div class="dload">Loading...</div>';
-  let rel = null, models = [], phone = [];
+  let rel = null, models = [];
   try { rel = await (await fetch('releases.json', { cache: 'no-cache' })).json(); } catch {}
-  try { const j = await (await fetch('models.json', { cache: 'no-cache' })).json(); models = j.local || []; phone = (j.browser || []).slice().sort((a, b) => a.tier - b.tier); } catch {}
+  try { const j = await (await fetch('models.json', { cache: 'no-cache' })).json(); models = j.local || []; } catch {}
   const st = stats(models), latest = rel && rel.releases && rel.releases[0], hw = ctx.server;
   let yourVer = null, updNote = '';
   if (hw) { try { const u = await (await fetch('/api/update')).json(); yourVer = u.current || u.version || null; if (yourVer && rel && compareVersions(yourVer, rel.latest) < 0) updNote = `Update available: you have ${yourVer}, the newest is ${rel.latest}.`; } catch {} }
@@ -38,7 +38,7 @@ export async function mountDashboard(el, ctx) {
   const top = `<div class="dhero"><div><h2>Pholama</h2><p>${hw ? 'Run AI on your own device. Free and private.' : 'Phone version: small models for daily chat and maths.'}</p></div><div class="dver"><span class="dbadge">${latest ? 'v' + esc(latest.version) : ''}</span><small>${latest ? 'Newest version, ' + fmtDay(latest.date) : ''}</small></div></div>` +
     (updNote ? `<div class="dnote">${esc(updNote)}</div>` : '');
 
-  const tiles = !hw ? `<div class="dtiles"><div class="dtile"><b>${phone.length}</b><span>Phone models</span></div><div class="dtile"><b>${st.total}</b><span>Models on PC</span></div><div class="dtile"><b>${st.tools}</b><span>Run tools on PC</span></div><div class="dtile"><b>19</b><span>Tools on PC</span></div></div>` : `<div class="dtiles">
+  const tiles = !hw ? `<div class="dtiles"><div class="dtile"><b>1</b><span>Cloud assistant (Agent Max)</span></div><div class="dtile"><b>${st.total}</b><span>Models on PC</span></div><div class="dtile"><b>${st.tools}</b><span>Run tools on PC</span></div><div class="dtile"><b>19</b><span>Tools on PC</span></div></div>` : `<div class="dtiles">
     <div class="dtile"><b>${st.total}</b><span>PC models</span></div>
     <div class="dtile"><b>${st.tools}</b><span>Run tools</span></div>
     <div class="dtile"><b>${st.families}</b><span>Model makers</span></div>
@@ -46,7 +46,7 @@ export async function mountDashboard(el, ctx) {
 
   const nm = newestModels(models, 6);
   const newest = hw ? card('Newest models', nm.length ? `<ul class="dlist">${nm.map(m => { const t = TIER[m.toolTier] || TIER.none; return `<li><div><b>${esc(m.name)}</b><small>${esc(m.params || '')} · ${m.sizeGB} GB · needs ${m.minRamGB} GB RAM · ${fmtMonth(m.released)}</small></div><span class="dchip ${t[1]}">${t[0]}</span></li>`; }).join('')}</ul><button class="dlink" data-go="models">Browse all ${st.total} models</button>` : '<p class="dmut">No model data yet.</p>')
-    : card('Models for your phone', `<ul class="dlist">${phone.map(m => `<li><div><b>${esc(m.name)}</b><small>${esc(m.size)} · ${esc((m.caps || []).join(', '))}</small></div><span class="dchip">${m.tier === 1 ? 'Any phone' : m.tier === 2 ? '4 GB+' : m.tier === 3 ? '6 GB+' : '8 GB+'}</span></li>`).join('')}</ul><button class="dlink" data-go="models">Download a model</button><p class="dmut" style="margin-top:10px">Need more? The PC app runs ${st.total} models, including ${st.tools} that use tools.</p>`);
+    : card('Phones and the website', `<p class="dmut">Phone support has ended: models no longer install on phones or in the browser.</p><ul class="dlist"><li><div><b>Agent Max</b><small>Cloud assistant. Nothing to download. Works in any browser.</small></div></li><li><div><b>The PC app</b><small>${st.total} models, including ${st.tools} that use tools. Open it from your phone over your network.</small></div></li></ul>`);
 
   const whatsNew = card('What\'s new', latest ? `<div class="dnewhead"><b>${esc(latest.title)}</b><small>v${esc(latest.version)}</small></div><ul class="dbul">${latest.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul>${rel.releases.length > 1 ? `<details><summary>Earlier versions</summary>${rel.releases.slice(1).map(r => `<div class="dold"><b>v${esc(r.version)}</b> <small>${fmtDay(r.date)}</small> · ${esc(r.title)}<ul class="dbul">${r.notes.map(n => `<li>${esc(n)}</li>`).join('')}</ul></div>`).join('')}</details>` : ''}` : '<p class="dmut">Could not load the version history.</p>');
 

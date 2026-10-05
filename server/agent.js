@@ -210,6 +210,7 @@ function systemPrompt(tools, thinking, memories, effort) {
     p += '\n[how to work]\nYou may call ONE tool per turn. To call it, write exactly: <tool_call>{"name": "TOOL_NAME", "arguments": {...}}</tool_call> and stop. You will get the result, then continue. Call another tool if the task needs more steps, and answer in plain words when it is done.\n' +
       'Work in steps: look first, then change, then check. Never guess a file\'s content: list_files and read_file first. After write_file or edit_file, read the file again to check it. Use edit_file for small changes and write_file for new files. Never claim you did something a tool did not confirm.\n' +
       (names.includes('write_file') ? 'Files live in the Pholama workspace folder. Use short relative paths like "notes/todo.txt".\n' : '') +
+      (names.includes('run_code') ? 'To run a program: write_file it first, then run_code with its path (Python .py, C++ .cpp, Rust .rs, Go, Java, JavaScript and more). The user installs the languages themselves. If run_code says a language is not installed, tell the user exactly what it says to install, do not pretend the code ran, and never invent program output. Use check_languages to see what is installed.\n' : '') +
       (names.includes('web_search') ? 'For any factual question (people, places, dates, numbers, news, prices, weather, sports, science), do not answer from memory: use web_search first, then fetch_page if the snippets are not enough. Answer only when a result clearly supports it, say which website it came from, and if nothing reliable turns up say "I could not confirm that" instead of guessing.\n' : '') +
       (names.includes('show_video') ? 'To show a video, web_search for it, then call show_video with a real youtube link from the results. To show a picture, find a real image link then call show_image. Never invent a link or an id.\n' : '') +
       (names.includes('create_plugin') ? 'If the user asks for an ability you do not have (edit their Supabase, post to Discord, call an API), use create_plugin to make a tool for it. Keys always go in headers as {{secret.NAME}}; never write a real key. Tell the user which secret to add in Plugins > My tools.\n' : '') +
@@ -351,6 +352,13 @@ function tidyFile(name, content) {
   return t + '\n';
 }
 
+// Research first: every AI (a tiny local model and Agent Max alike) is shown a short MAP of the real project before it acts: the folders, what each file
+// contains (functions, ids, events, css rules) and the known problems. Max lives in the cloud and cannot look at the files, so without this it guesses.
+function studioResearch(map) {
+  map = String(map || '').trim(); if (!map) return '';
+  return '\n[PROJECT MAP] This is what the project really contains right now (read it before you act):\n' + map + '\n[/PROJECT MAP]\n' +
+    'RESEARCH FIRST: use the map to find the right file and the exact function or id. Do not invent files, ids or functions that are not in the map. If you need more, call studio_outline, studio_search or studio_read_numbered first. When a job has several parts, call studio_todo to save the steps.\n';
+}
 function studioPrompt(project, files) {
   const list = (files || []).slice(0, 40).map(f => `- ${f.name} (${f.size} bytes)`).join('\n') || '(no files yet)';
   return '\n[STUDIO] You are working inside the user\'s Studio project "' + (project || 'none') + '". Files now:\n' + list + '\n' +
@@ -685,7 +693,7 @@ function aboutUserHint(text, memories) {
 // ---- Broken tool calls: never show them, retry them ----
 // A small model often tries to call a tool and gets the format wrong (bad JSON, wrong tag, a code fence around it).
 // parseTool() then returns null, and the raw command used to be shown to the user as if it were the answer.
-  const LOCAL_TOOL_NAMES = 'read_file|write_file|append_file|edit_file|list_files|search_files|delete_file|make_folder|json_tool|text_stats|convert_units|hash_text|random_number|system_info';
+  const LOCAL_TOOL_NAMES = 'read_file|write_file|append_file|edit_file|list_files|search_files|delete_file|make_folder|json_tool|text_stats|convert_units|hash_text|random_number|system_info|run_code|check_languages';
   const ATTEMPT_RE = new RegExp('<\\/?tool(?:_call)?\\b|<(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|' + LOCAL_TOOL_NAMES + '|run_command)\\b|\\[TOOL_CALLS\\]|<\\|python_tag\\|>|^\\s*(?:web_search|fetch_page|platform_[a-z_]+|github_[a-z_]+|' + LOCAL_TOOL_NAMES + ')\\s*\\(|"name"\\s*:\\s*"[a-z_]+"\\s*,\\s*"(?:args|arguments)"\\s*:|^\\s*(?:tool_call|TOOL_CALL)\\s*[:(]', 'im');
   const TOOL_NAME_RE = new RegExp('^(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|' + LOCAL_TOOL_NAMES + '|run_command|studio_[a-z_]+)$', 'i');
 function looksLikeToolAttempt(text) { return ATTEMPT_RE.test(String(text || '')); }
@@ -716,18 +724,18 @@ function toolFailNotice(name, result, attempt) {
 
 // How many characters of a streaming reply are safe to show: everything before the first tool tag, and nothing of a
 // half-written tag at the very end ("<to", "<tool_c"...), because that may turn into a command on the next token.
-const TOOL_HEADS = ['web_search', 'fetch_page', 'calculator', 'current_time', 'remember_thing', 'use_skill', 'create_skill', 'platform_', 'github_', 'read_file', 'write_file', 'append_file', 'edit_file', 'list_files', 'search_files', 'delete_file', 'make_folder', 'run_command', 'studio_', '|python_tag|'];
+const TOOL_HEADS = ['web_search', 'fetch_page', 'calculator', 'current_time', 'remember_thing', 'use_skill', 'create_skill', 'platform_', 'github_', 'read_file', 'write_file', 'append_file', 'edit_file', 'list_files', 'search_files', 'delete_file', 'make_folder', 'run_command', 'run_code', 'check_languages', 'studio_', '|python_tag|'];
 function safeShowLength(acc) {
   const s = String(acc || '');
   const i = s.search(/<\/?tool/i); if (i >= 0) return i;
   const j = s.lastIndexOf('<'); if (j >= 0 && '<tool_call>'.startsWith(s.slice(j).toLowerCase().slice(0, 11)) || (j >= 0 && '</tool_call>'.startsWith(s.slice(j).toLowerCase()))) return j;
   const sp = s.search(/\[TOOL_CALLS\]|<\|python_tag\|>/); if (sp >= 0) return sp;
   const k = s.search(/\{\s*"name"\s*:\s*"[a-z_]+"\s*,\s*"(?:args|arguments)"/i); if (k >= 0) return k;
-  const named = /<(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|read_file|write_file|append_file|edit_file|list_files|search_files|delete_file|make_folder|run_command|studio_[a-z_]+)\b/i.exec(s); if (named) return named.index;   // <web_search {...}>
+  const named = /<(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|read_file|write_file|append_file|edit_file|list_files|search_files|delete_file|make_folder|run_command|run_code|check_languages|studio_[a-z_]+)\b/i.exec(s); if (named) return named.index;   // <web_search {...}>
   for (let tc = s.indexOf('['); tc >= 0; tc = s.indexOf('[', tc + 1)) { const rest = s.slice(tc); if (rest.length > 1 && rest.length <= 12 && '[TOOL_CALLS]'.startsWith(rest)) return tc; }   // "[TOOL_C" still being typed
   // web_search("x") on a line of its own: hold from the start of that line once it looks like NAME( , or while it is still a prefix of a tool name
   const ls = s.lastIndexOf('\n') + 1, line = s.slice(ls).replace(/^\s*(?:`{3}\w*\s*)?/, '');
-  if (line && (/^(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|read_file|write_file|edit_file|list_files|delete_file|run_command)\s*\(/i.test(line) || (line.length >= 4 && line.length <= 20 && /^[a-z_]+$/i.test(line) && TOOL_HEADS.some(h => h.startsWith(line.toLowerCase()) && h.length > line.length)))) return ls;
+  if (line && (/^(?:web_search|fetch_page|calculator|current_time|remember_thing|use_skill|create_skill|platform_[a-z_]+|github_[a-z_]+|read_file|write_file|edit_file|list_files|delete_file|run_command|run_code|check_languages)\s*\(/i.test(line) || (line.length >= 4 && line.length <= 20 && /^[a-z_]+$/i.test(line) && TOOL_HEADS.some(h => h.startsWith(line.toLowerCase()) && h.length > line.length)))) return ls;
   const lt = s.lastIndexOf('<');   // a tag still being typed, such as "<web_s": hold it until we know what it is
   if (lt >= 0 && s.length - lt <= 24 && /^<[a-z_|]*$/i.test(s.slice(lt)) && s.slice(lt).length > 1 && TOOL_HEADS.some(h => h.startsWith(s.slice(lt + 1).toLowerCase()))) return lt;
   return s.length;
@@ -736,4 +744,4 @@ const isToolFail = r => /^Tool error/.test(String(r || ''));
 
 async function approveTool(id) { const p = pendingTools.get(id); if (!p) throw new Error('That request expired or was already answered.'); pendingTools.delete(id); if (!usertools.isUserTool(p.name)) throw new Error('That tool no longer exists.'); return usertools.run(p.name, p.args, { allowOff: p.allowOff === true }); }
 function rejectTool(id) { return pendingTools.delete(id); }
-module.exports = { fetchText, webSearch, factualQuestion, mediaRequest, usertools, media, approveTool, rejectTool, cleanSearchQuery, loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+module.exports = { studioResearch, fetchText, webSearch, factualQuestion, mediaRequest, usertools, media, approveTool, rejectTool, cleanSearchQuery, loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

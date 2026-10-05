@@ -1,6 +1,7 @@
 // Pholama Platform screen. Posts, names and bios come from other people, so every piece of text is set with
 // textContent. Nothing from the network is ever put into innerHTML.
-import { TICKET_CATEGORIES, MAX_TICKET_SUBJECT, MAX_TICKET_BODY, ticketProblem, ticketStatusText, rewardText, makePlatform, REACTIONS, timeLeft, friendly, banText, MAX_POST, MAX_BIO, MAX_NAME, MAX_PROJ_IMAGES } from './platform.js';
+import { TICKET_CATEGORIES, MAX_TICKET_SUBJECT, MAX_TICKET_BODY, ticketProblem, ticketStatusText, rewardText, makePlatform, REACTIONS, timeLeft, friendly, banText, MAX_POST, MAX_BIO, MAX_NAME, MAX_PROJ_IMAGES, MAX_REPLY } from './platform.js';
+import { openBig, whenText } from './bigchat.js';
 
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 const btn = (label, fn, cls) => { const b = el('button', cls || '', label); b.type = 'button'; b.onclick = fn; return b; };
@@ -56,7 +57,7 @@ export async function mountPlatform(host, ctx) {
     if (w.length) { const wc = el('section', 'dcard plwarn'); wc.append(el('h3', null, fresh.length ? 'You have a warning' : 'Past warnings')); for (const x of w.slice(0, 3)) wc.append(el('p', 'plbody', x.reason)); if (fresh.length) wc.append(btn('I understand', async () => { try { await P.markWarningsSeen(); await go('home'); } catch (e) { say(friendly(e)); } }, 'p')); grid.append(wc); }
     const quick = el('section', 'dcard'); quick.append(el('h3', null, 'Quick links'));
     const row = el('div', 'dact'); row.append(btn('Write a post', () => go('posts'), 'p'), btn('Show a project', () => go('projects')), btn('Read the rules', () => go('rules'))); quick.append(row); grid.append(quick);
-    const ai = el('section', 'dcard'); ai.append(el('h3', null, 'Pholama assistant'), el('p', 'dmut', 'The website keeps one small assistant (Qwen2.5 0.5B). It only chats: no tools, no files. For chat with bigger models, tools, web search and Roblox Studio, use the PC app.'));
+    const ai = el('section', 'dcard'); ai.append(el('h3', null, 'Pholama assistant'), el('p', 'dmut', 'Chat on the website is Agent Max, the cloud assistant: nothing to download. For local models, tools, programming languages, web search and Roblox Studio, use the PC app.'));
     const a = el('a', 'btnlink', 'Get the PC app'); a.href = 'https://github.com/genity5-collab/Pholama#on-your-pc-more-power-tools-web-search'; a.target = '_blank'; a.rel = 'noopener'; ai.append(a); grid.append(ai);
     pane.append(grid, profileCard());
   }
@@ -87,6 +88,48 @@ export async function mountPlatform(host, ctx) {
     paint(); return box;
   }
 
+  // ----- the big window for one ticket: the reporter and the moderators chat here, it refreshes by itself -----
+  function openTicketBig(t, isModView, after) {
+    let status = t.status;
+    const mkHeader = () => {
+      const h = el('div'); h.append(el('small', 'dmut', (t.category || '') + ' - ' + ticketStatusText(status) + ' - opened ' + whenText(t.created_at)));
+      if (isModView) {
+        const tools = el('div', 'dact'); const idc = el('code', null, t.user_id); idc.title = 'Member id';
+        const n = el('input'); n.type = 'number'; n.min = 1; n.max = 500; n.placeholder = 'Credits (1-500)'; n.setAttribute('aria-label', 'Credits to give'); n.style.maxWidth = '150px';
+        const act = (label, fn) => btn(label, async () => { try { win.note(''); const r = await fn(); win.note(r); } catch (e) { win.note(friendly(e)); } });
+        tools.append(act('Unban', async () => { await P.modBan(t.user_id, false); return 'Unbanned.'; }), act('Remove newest warning', async () => String(await P.modCmd('unwarn ' + t.user_id))), n,
+          act('Give credits', async () => { const v = Math.floor(+n.value); if (!(v >= 1 && v <= 500)) throw new Error('Give between 1 and 500 credits.'); await P.modCmd('give ' + t.user_id + ' ' + v + ' ticket ' + t.id.slice(0, 8)); n.value = ''; return v + ' credits given.'; }));
+        h.append(el('small', 'dmut', 'Member id: '), idc, tools);
+      }
+      return h;
+    };
+    const win = openBig({
+      title: t.subject, subtitle: ticketStatusText(status), header: mkHeader(), maxLen: MAX_TICKET_BODY, every: 4000,
+      placeholder: isModView ? 'Reply to this member...' : 'Write a note for the moderators...', emptyText: 'No messages yet.',
+      canSend: status !== 'closed' || isModView, closedText: 'This ticket is closed. Open a new one if you still need help.',
+      load: async () => (await P.ticketMessages(t.id)).map(x => ({ id: x.id, who: x.from_mod ? 'Moderator' : (isModView ? 'Member' : 'You'), mine: isModView ? !!x.from_mod : !x.from_mod, badge: x.from_mod ? 'Moderator' : '', when: whenText(x.created_at), text: x.body })),
+      send: async v => { await P.say(t.id, v); after && after(); },
+      actions: isModView ? [{ label: status === 'closed' ? 'Reopen' : 'Close ticket', run: async api => { await P.closeTicket(t.id, status !== 'closed'); after && after(); api.close(); } }] : [],
+      onClose: () => after && after(),
+    });
+    return win;
+  }
+
+  // ----- the big window for one post: the post on top, everyone chats underneath -----
+  function openPostBig(p) {
+    const head = el('div'); const top = el('div', 'plrow'); top.append(avatar(p.avatar, p.author)); const who = el('div'); who.append(el('b', null, p.author), el('small', 'dmut', '  ' + timeLeft(p.expires_at))); top.append(who);
+    head.append(top, el('p', 'plbody', p.body), el('small', 'dmut', 'Replies disappear with the post.'));
+    const open_ = { v: null };
+    const win = openBig({
+      title: 'Post by ' + p.author, subtitle: timeLeft(p.expires_at), header: head, maxLen: MAX_REPLY, every: 4000,
+      placeholder: 'Reply to ' + p.author + '. Enter sends.', emptyText: 'No replies yet. Start the chat.',
+      load: async () => (await P.replies(p.id)).filter(r => !r.hidden || r.user_id === Account.user().id || mod).map(r => ({ id: r.id, who: r.user_id === Account.user().id ? 'You' : r.author, mine: r.user_id === Account.user().id, badge: r.user_id === p.user_id ? 'Author' : '', when: whenText(r.created_at), text: r.body })),
+      send: async v => { await P.reply(p.id, v); },
+      actions: [],
+    });
+    open_.v = win; return win;
+  }
+
   async function paintSupport(pane) {
     const c = el('section', 'dcard'); c.append(el('h3', null, 'Contact support'), el('p', 'dmut', 'Open a ticket and a moderator will answer here. Only moderators can reply. You can have 3 open at once.'));
     const subj = el('input'); subj.maxLength = MAX_TICKET_SUBJECT; subj.placeholder = 'Short title'; subj.setAttribute('aria-label', 'Ticket title');
@@ -100,7 +143,7 @@ export async function mountPlatform(host, ctx) {
       if (!ts.length) return box.append(el('p', 'dmut', 'No tickets yet.'));
       for (const t of ts) {
         const d = el('details', 'tk'); const sm = el('summary'); sm.append(el('b', null, t.subject), el('span', 'dmut', '  ' + ticketStatusText(t.status))); d.append(sm);
-        let built = false; d.ontoggle = () => { if (d.open && !built) { built = true; d.append(thread(t, false, list)); } }; box.append(d);
+        let built = false; d.ontoggle = () => { if (d.open && !built) { built = true; d.append(btn('Open big window', () => openTicketBig(t, false, list), 'p openbig'), thread(t, false, list)); } }; box.append(d);
       }
     }
     await list();
@@ -124,7 +167,7 @@ export async function mountPlatform(host, ctx) {
           const act = (label, fn) => btn(label, async () => { try { say(await fn()); } catch (e) { say(friendly(e)); } });
           tools.append(act('Unban', async () => { await P.modBan(t.user_id, false); return 'Unbanned.'; }), act('Remove newest warning', async () => String(await P.modCmd('unwarn ' + t.user_id)))
             , n, act('Give credits', async () => { const v = Math.floor(+n.value); if (!(v >= 1 && v <= 500)) throw new Error('Give between 1 and 500 credits.'); await P.modCmd('give ' + t.user_id + ' ' + v + ' ticket ' + t.id.slice(0, 8)); n.value = ''; return v + ' credits given.'; }));
-          d.append(el('small', 'dmut', 'Member id: '), id, tools, thread(t, true, list));
+          d.append(btn('Open big window', () => openTicketBig(t, true, list), 'p openbig'), el('small', 'dmut', ' Member id: '), id, tools, thread(t, true, list));
         };
         box.append(d);
       }
@@ -239,6 +282,7 @@ export async function mountPlatform(host, ctx) {
     }
     c.append(rx);
     const acts = el('div', 'plrow');
+    acts.append(btn('Open and chat', () => openPostBig(p), 'p openbig'));
     if (p.user_id === Account.user().id || mod) acts.append(btn('Delete', async () => { if (!confirm('Delete this post?')) return; try { await P.deletePost(p.id); await paintFeed(); } catch (e) { say(friendly(e)); } }));
     if (p.user_id !== Account.user().id) acts.append(btn('Report', async () => { try { await P.report(p.id, 'other'); say('Thanks. A moderator will look. Three reports hide a post.'); } catch (e) { say(/duplicate|unique/i.test(String(e.message)) ? 'You already reported this post.' : friendly(e)); } }));
     if (mod) {

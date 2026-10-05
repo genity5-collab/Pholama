@@ -21,7 +21,7 @@ Plain local chat is always free. **When credits hit 0, only thinking mode switch
 - **Small tool models:** even tool-capable 1B models sometimes skip the tool format, so for them the host also spots obvious requests (math, date, "search for ...", a pasted URL) and runs the tool first.
 - **Agent Max** is the cloud model (see below).
 - Credits are tracked by the host in `~/.pholama/state.json`. This is pacing, not security: anyone with access to your PC can edit it. Change the limit with `PHOLAMA_DAILY_CREDITS`.
-- Tools and credits are PC-host only. The phone-only browser mode is plain chat.
+- Tools and credits are PC-host only. The website is plain chat with Agent Max.
 
 API: `GET /api/credits`, `POST /api/prefs`, `GET/POST/DELETE /api/mcp`, and `POST /api/chat` with `"agent": true`.
 
@@ -46,7 +46,7 @@ Under the model picker you'll see small buttons: **Search**, **Tools**, **MCP**,
 
 Each reply ends with a line like `42 in · 17 out · 59 tokens · 1.3s`. *In* is what was sent to the model (your message, history, instructions). *Out* is what it wrote.
 
-- The number is **exact** when the model reports it (Ollama, llama.cpp, and the phone GPU and CPU models all do).
+- The number is **exact** when the model reports it (Ollama and llama.cpp both do).
 - If a model doesn't, the line starts with `~` and ends with `(estimated)`: about 4 characters per token.
 
 ## The AI doesn't talk about its instructions

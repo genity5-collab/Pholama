@@ -194,7 +194,7 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
 (async () => {
   const r = await a.buildTools({ search: true, tools: true, terminal: true });
   const names = r.tools.map(x => x.name);
-  ok('agent has 21 tools (19 + show_video and show_image)', names.length === 21 && names.includes('show_video') && names.includes('show_image'), names.length);
+  ok('agent has 23 tools (19 + show_video and show_image + run_code and check_languages)', names.length === 23 && names.includes('show_video') && names.includes('show_image') && names.includes('run_code') && names.includes('check_languages'), names.length);
   ok('create_plugin is only offered when Skills is on', !names.includes('create_plugin'));
   { const sk = await a.buildTools({ skills: true }); ok('with Skills on the AI can make tools', sk.tools.some(x => x.name === 'create_plugin')); const off = await a.buildTools({ search: false }); ok('with search off there are no media tools', !off.tools.some(x => x.name === 'show_video')); }
   ok('agent has file tools', ['read_file', 'write_file', 'edit_file', 'list_files'].every(n => names.includes(n)));
@@ -298,9 +298,8 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
   {
     const siteM = JSON.parse(fs.readFileSync(path.join(root, 'docs', 'models.json'), 'utf8')), pcM = JSON.parse(fs.readFileSync(path.join(root, 'web', 'models.json'), 'utf8'));
     const css = fs.readFileSync(path.join(root, 'docs', 'style.css'), 'utf8'), js = fs.readFileSync(path.join(root, 'docs', 'app.js'), 'utf8'), webJs = fs.readFileSync(path.join(root, 'web', 'app.js'), 'utf8');
-    ok('website is a dashboard: the model list has exactly ONE model', siteM.browser.length === 1, String(siteM.browser.length));
-    ok('website: that one model is small and chat only', !(siteM.browser[0].caps || []).includes('tools') && /0\.5B/.test(siteM.browser[0].name));
-    ok('PC app keeps its full model list', pcM.browser.length > 1 && (pcM.local || []).length > 10);
+    ok('phone support ended: no in-browser or phone models in any catalog', siteM.browser.length === 0 && siteM.cpu.length === 0 && pcM.browser.length === 0 && pcM.cpu.length === 0);
+    ok('PC app keeps its full model list', (pcM.local || []).length > 10);
     ok('website: chat, composer, model picker and Chat tab are removed', /body\.site-only #chat,body\.site-only footer,body\.site-only #vChat,body\.site-only #model/.test(css));
     ok('website: Models button is hidden (one model, nothing to pick)', /body\.site-only #mgr/.test(css));
     ok('website: the Models manager cannot be opened', /onclick = \(\) => \{ if \(siteOnly\(\)\) return; render\(\); dlg\.showModal/.test(js));

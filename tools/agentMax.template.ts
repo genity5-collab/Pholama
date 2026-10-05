@@ -142,6 +142,40 @@ async function aiJson(prompt: string): Promise<any> {
   throw new Error('AI failed');
 }
 
+// Studio mode: the PC sends its own instructions (tools, project map, rules). Same models and keys as aiJson, but plain text and more room,
+// because the answer is code and <tool> calls that the PC runs itself. No JSON shape is forced here.
+async function aiText(messages: { role: string; content: string }[]): Promise<string> {
+  const clean = (j: any) => String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim();
+  let last = '';
+  const orKey = Deno.env.get('OPENROUTER_API_KEY');
+  if (orKey) orLoop: for (const model of OR_MODELS) {
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(55000),
+        headers: { Authorization: 'Bearer ' + orKey, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://genity5-collab.github.io/Pholama/', 'X-Title': 'Pholama Agent Max Studio' },
+        body: JSON.stringify({ model, temperature: 0.3, max_tokens: 3500, messages }) });
+      if (r.status === 401 || r.status === 403) { last = 'openrouter key HTTP ' + r.status; break orLoop; }
+      if (!r.ok) { last = model + ' HTTP ' + r.status; continue; }
+      const t = clean(await r.json()); if (t) return t;
+      last = model + ' empty answer';
+    } catch (e) { last = String(e).slice(0, 60); }
+  }
+  const keys = [Deno.env.get('GROQ_API_KEY'), Deno.env.get('GROQ_API_KEY_2'), Deno.env.get('GROQ_API_KEY_3')].filter((k): k is string => !!k);
+  if (!keys.length && !orKey) throw new Error('no key');
+  for (const key of keys) for (const model of GROQ_MODELS) {
+    try {
+      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(45000),
+        headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ model, temperature: 0.3, max_tokens: 3500, messages }) });
+      if (r.status === 401 || r.status === 403 || r.status === 429) { last = 'groq key HTTP ' + r.status; break; }
+      if (!r.ok) { last = 'groq HTTP ' + r.status; continue; }
+      const t = clean(await r.json()); if (t) return t;
+      last = 'groq empty answer';
+    } catch (e) { last = String(e).slice(0, 60); }
+  }
+  console.log('AgentMax Studio: every model failed. Last problem:', last);
+  throw new Error('AI failed');
+}
+
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   const key = Deno.env.get('PHOLAMA_SUPABASE_SERVICE_KEY') || '';
@@ -159,9 +193,12 @@ Deno.serve(async (req) => {
     // 2) read the request
     const body = await req.json().catch(() => ({}));
     const effort = EFFORT[String(body.effort)] ? String(body.effort) : 'normal';
-    const msgs = (Array.isArray(body.messages) ? body.messages : [])
+    const studioMode = body.studio === true;   // Studio: the PC sends its own rules + tools; this function only thinks and writes, the PC does the file work
+    const rawMsgs = Array.isArray(body.messages) ? body.messages : [];
+    const studioSystem = studioMode ? String((rawMsgs.find((m: any) => m && m.role === 'system' && typeof m.content === 'string') || {}).content || '').slice(0, 14000) : '';
+    const msgs = rawMsgs
       .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-      .slice(-12).map((m: any) => ({ role: m.role, content: m.content.slice(0, 2000) }));
+      .slice(-12).map((m: any) => ({ role: m.role, content: m.content.slice(0, studioMode ? 9000 : 2000) }));
     const last = msgs[msgs.length - 1];
     if (!last || last.role !== 'user' || !last.content.trim()) return out({ error: 'Type a message first.', code: 'empty' }, 400);
 
@@ -186,6 +223,12 @@ Deno.serve(async (req) => {
     const used: { name: string; input: any; output: string }[] = [];
     const actions: string[] = []; let thinking = '';
     let scratch = '', reply = '';
+    if (studioMode) {
+      const prompt: { role: string; content: string }[] = [{ role: 'system', content: studioSystem || 'You are Agent Max, helping build a website in Pholama Studio.' }, ...msgs];
+      const text = await aiText(prompt);
+      if (!text) throw new Error('empty');
+      return out({ reply: text.slice(0, 16000), tools: [], actions: [], thinking: '', ...info });
+    }
     const MAX_ROUNDS = ROUNDS[effort];
     for (let round = 1; round <= MAX_ROUNDS && !reply; round++) {
       const mustAnswer = round === MAX_ROUNDS;

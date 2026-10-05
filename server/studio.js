@@ -60,7 +60,7 @@ function writeFile(p, f, content) {
   const full = fileOf(p, f), d = dirOf(p);
   content = String(content == null ? '' : content);
   if (Buffer.byteLength(content) > MAX_FILE) throw new Error('file too big (max ' + (MAX_FILE / 1024) + ' KB). Split it into smaller files.');
-  const files = walk(d), has = files.some(x => x.name === fileName(f));
+  const files = walk(d).filter(x => !/\.(png|jpe?g|gif|webp)$/i.test(x.name)), has = files.some(x => x.name === fileName(f));   // pictures have their own limits
   if (!has && files.length >= MAX_FILES) throw new Error('too many files (max ' + MAX_FILES + ')');
   const total = files.filter(x => x.name !== fileName(f)).reduce((n, x) => n + x.size, 0) + Buffer.byteLength(content);
   if (total > MAX_TOTAL) throw new Error('project too big (max ' + (MAX_TOTAL / 1048576) + ' MB)');
@@ -122,7 +122,8 @@ function readNumbered(p, f) { const l = readFile(p, f).replace(/\r\n/g, '\n').sp
 
 function snapshot(p) {
   const d = dirOf(p); if (!fs.existsSync(d)) throw new Error('no such project');
-  const files = walk(d).sort((a, b) => (a.name === 'index.html' ? -1 : b.name === 'index.html' ? 1 : a.name.localeCompare(b.name)));
+  // Pictures are binary. Reading them as text would corrupt them (and anything that saves a snapshot back, like an undo, would destroy them), so they are left out.
+  const files = walk(d).filter(x => !/\.(png|jpe?g|gif|webp)$/i.test(x.name)).sort((a, b) => (a.name === 'index.html' ? -1 : b.name === 'index.html' ? 1 : a.name.localeCompare(b.name)));
   return files.map(x => ({ name: x.name, size: x.size, content: fs.readFileSync(path.join(d, x.name), 'utf8') }));
 }
 
@@ -139,7 +140,9 @@ function runJs(code, ms = 1500) {
 
 // Quick sanity check of a project so the AI (and user) can see mistakes without a browser.
 function check(p) {
-  const files = snapshot(p), names = new Set(files.map(f => f.name)), issues = [];
+  const files = snapshot(p), issues = [];
+  // Pictures are not in the text snapshot, but a page may link to them: they exist, so they must count as existing files.
+  const names = new Set([...files.map(f => f.name), ...walk(dirOf(p)).map(f => f.name)]);
   const htmlIds = new Map();
   for (const f of files) {
     if (/\.html?$/i.test(f.name)) {
@@ -191,8 +194,13 @@ const TOOLS = {
   studio_diagnose: { desc: 'Diagnose a Studio project and return its file summary, problems and practical next step. args: {"project": string}', run: a => diagnose(a.project) },
   studio_run_js: { desc: 'Run a short piece of plain JavaScript and get its printed output (no page, no network). args: {"code": string}', run: a => { const r = runJs(a.code); return r.ok ? r.output : (r.output ? r.output + '\n' : '') + 'ERROR: ' + r.error; } },
 };
-const tools = () => Object.entries(TOOLS).map(([name, t]) => ({ name, desc: t.desc, kind: 'studio' }));
-const isStudio = n => Object.prototype.hasOwnProperty.call(TOOLS, n);
-const run = (name, args) => { if (!isStudio(name)) throw new Error('unknown studio tool'); return TOOLS[name].run(args && typeof args === 'object' ? args : {}); };
+// The extra tools (map, tree, folders, pictures, verify...) live in studioplus.js. It needs this file, so it is loaded lazily to avoid a loop.
+const plus = () => require('./studioplus');
+// Tools that only LOOK (never change anything): the host does not re-check the project after these.
+const READ_ONLY = new Set(['studio_projects', 'studio_files', 'studio_read', 'studio_read_numbered', 'studio_check', 'studio_diagnose', 'studio_run_js', 'studio_map', 'studio_tree', 'studio_outline', 'studio_search', 'studio_image_info', 'studio_verify']);
+const tools = () => [...Object.entries(TOOLS).map(([name, t]) => ({ name, desc: t.desc, kind: 'studio' })), ...plus().tools()];
+const isStudio = n => Object.prototype.hasOwnProperty.call(TOOLS, n) || plus().isPlus(n);
+const isReadOnly = n => READ_ONLY.has(n);
+const run = (name, args) => { if (!isStudio(name)) throw new Error('unknown studio tool'); const a = args && typeof args === 'object' ? args : {}; return Object.prototype.hasOwnProperty.call(TOOLS, name) ? TOOLS[name].run(a) : plus().run(name, a); };
 
-module.exports = { tools, isStudio, run, listProjects, createProject, deleteProject, readFile, writeFile, deleteFile, patchFile, snapshot, runJs, check, diagnose, projName, fileName, ROOT, LIMITS: { MAX_FILE, MAX_FILES, MAX_TOTAL } };
+module.exports = { tools, isStudio, isReadOnly, run, listProjects, createProject, deleteProject, readFile, writeFile, deleteFile, patchFile, snapshot, runJs, check, diagnose, projName, fileName, ROOT, LIMITS: { MAX_FILE, MAX_FILES, MAX_TOTAL } };

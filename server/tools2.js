@@ -108,7 +108,13 @@ const TOOLS = {
   } },
   system_info: { desc: 'Show this PC\'s basic facts: system, memory, processor count, free disk is not shown. args: {}', run() {
     return `System: ${os.type()} ${os.release()} (${os.arch()}). Memory: ${(os.totalmem() / 1073741824).toFixed(1)} GB total, ${(os.freemem() / 1073741824).toFixed(1)} GB free. Processors: ${os.cpus().length}. Workspace folder: ${ROOT}`;
-  } }
+  } },
+  run_code: { desc: 'Run a program file from the workspace and get its output. Works for Python (.py), JavaScript (.js), TypeScript, C++ (.cpp), C, Rust (.rs), Go, Java, C#, Ruby, PHP, Lua, shell, PowerShell, Kotlin, Swift, Dart, R, Zig. The language must be installed on this PC; if it is not, the answer says what to install. Stops after 20 seconds by default. args: {"path": string (file in the workspace), "language": string (optional, otherwise taken from the file ending), "args": [string] (optional), "stdin": string (optional text to feed the program), "seconds": number (optional, max 120)}', run(a) {
+    if (!a.path) throw new Error('"path" is missing. Write the file first with write_file, then run_code with its path.');
+    const langs = require('./langs'); const r = langs.runFile(String(a.path), { language: a.language, args: a.args, stdin: a.stdin, seconds: a.seconds }, { resolve: safe, cwd: ROOT });
+    return r.text;
+  } },
+  check_languages: { desc: 'List which programming languages are installed on this PC (Python, C++, Rust, Go, Java ...) and how to install the missing ones. args: {}', run() { return require('./langs').statusText(true); } }
 };
 const NAMES = Object.keys(TOOLS);
 const isTool2 = n => Object.prototype.hasOwnProperty.call(TOOLS, n);

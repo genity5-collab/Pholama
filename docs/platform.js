@@ -9,6 +9,8 @@ const KINDS = REACTIONS.map(r => r[0]);
 // ---------- pure helpers (tested without a browser) ----------
 export function cleanPlatformName(n) { return String(n || '').normalize('NFKC').replace(/[\u0000-\u001f\u007f<>]/g, '').replace(/\s+/g, ' ').trim().slice(0, MAX_NAME); }
 export function nameProblem(n) { const c = cleanPlatformName(n); if (c.length < MIN_NAME) return 'Pick a name with at least ' + MIN_NAME + ' characters.'; return ''; }
+export const MAX_REPLY = 300;
+export function replyProblem(t) { const c = String(t || '').trim(); if (!c) return 'Write something first.'; if (c.length > MAX_REPLY) return 'Replies can be up to ' + MAX_REPLY + ' characters.'; return ''; }
 export function postProblem(t) { const c = String(t || '').trim(); if (!c) return 'Write something first.'; if (c.length > MAX_POST) return 'Posts can be up to ' + MAX_POST + ' characters.'; return ''; }
 export function timeLeft(expiresAt, now = Date.now()) {
   const ms = new Date(expiresAt).getTime() - now; if (!(ms > 0)) return 'expired';
@@ -128,6 +130,19 @@ export function makePlatform(Account, cfg) {
     async ticketMessages(id) { return (await Account.rest('pholama_ticket_messages?select=id,from_mod,body,created_at&ticket_id=eq.' + encodeURIComponent(id) + '&order=id.asc')) || []; },
     say: (id, body) => Account.rest('rpc/pholama_ticket_say', { method: 'POST', body: JSON.stringify({ p_ticket: id, p_body: body }) }),
     closeTicket: (id, closed = true) => Account.rest('rpc/pholama_ticket_close', { method: 'POST', body: JSON.stringify({ p_ticket: id, p_closed: !!closed }) }),
+    // --- replies under a post (the big post window). Needs supabase/post_replies.sql. ---
+    async replies(postId) {
+      const rows = (await Account.rest('pholama_post_replies?select=id,user_id,body,created_at,hidden&post_id=eq.' + encodeURIComponent(postId) + '&order=id.asc&limit=200')) || [];
+      const uids = [...new Set(rows.map(r => r.user_id))];
+      const pr = uids.length ? await Account.rest('pholama_profiles?select=user_id,platform_name&user_id=in.(' + uids.join(',') + ')').catch(() => []) : [];
+      const who = new Map((pr || []).map(p => [p.user_id, p.platform_name]));
+      return rows.map(r => ({ ...r, author: who.get(r.user_id) || 'Someone' }));
+    },
+    async reply(postId, body) {
+      const bad = replyProblem(body); if (bad) throw new Error(bad);
+      await Account.rest('pholama_post_replies', { method: 'POST', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ post_id: postId, user_id: me(), body: String(body).trim() }) });
+    },
+    deleteReply: id => Account.rest('pholama_post_replies?id=eq.' + encodeURIComponent(id), { method: 'DELETE' }),
     // Report rewards + moderator gifts: how many are waiting, and collect them (the database makes sure it only happens once).
     waitingCredits: async () => { try { const n = await Account.rest('rpc/pholama_my_rewards', { method: 'POST', body: '{}' }); return +n || 0; } catch { return 0; } },
     claimCredits: async () => { const n = await Account.rest('rpc/pholama_claim_rewards', { method: 'POST', body: '{}' }); return +n || 0; },

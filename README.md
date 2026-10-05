@@ -1,31 +1,32 @@
 # Pholama
 
-Run an AI chat **on your own phone or PC**. Free and private.
+Run AI chat **on your own PC**. Free and private.
 
-> **Phone support has ended.** Phones do not have enough storage for good models, so Pholama is now built for the **PC app**: bigger models, tools, web search and Roblox Studio.
-> The small website still works on a phone for daily chat, maths and reading pictures, and you can still use Pholama there. It just gets no new features.
+> **Phone support has ended.** Models are no longer installed on phones or in the browser. Pholama is built for the **PC app**: bigger models, tools, web search, programming languages and Roblox Studio.
+> On a phone you can still open the website for **Agent Max** (the cloud assistant, nothing to download), the Platform (posts, projects, support tickets), or open your own PC app from the phone over your network.
 
-## On your phone (still works, 3 taps)
+## Get started on your PC
 
-1. **[Tap here to open Pholama](https://genity5-collab.github.io/Pholama/)** (use Chrome)
-2. Tap **Models**, then tap **Download** on a model.
-3. Tap **Close** and start typing.
+1. Get the PC app from the [install guide](docs-md/PC.md).
+2. Open **Models**, download one, close the box and type.
+3. Pick a model tagged **tools** if you want it to use files, web search and programs.
 
-The first download takes a few minutes. After that it works even offline.
+## Run code: Python, C++, Rust and more
 
-**Tip:** in Chrome tap the three dots, then **Add to Home screen**, to use it like an app.
+Your AI can write a program and run it. Pholama does **not** ship compilers: you install the languages you want, and Pholama finds them. If one is missing, the AI tells you exactly what to install.
 
-### The best pair for a phone (about 0.7 GB)
+| Language | Install |
+|---|---|
+| Python | [python.org](https://www.python.org/downloads/) (tick "Add to PATH" on Windows) |
+| C++ / C | MSYS2 or MinGW-w64 (`g++`, `gcc`) on Windows, `xcode-select --install` on Mac, `g++` on Linux |
+| Rust | [rustup.rs](https://rustup.rs/) |
+| Go | [go.dev/dl](https://go.dev/dl/) |
+| Java | a JDK from [adoptium.net](https://adoptium.net/) |
+| JavaScript / TypeScript | [Node.js](https://nodejs.org/), then `npm install -g tsx` for TypeScript |
+| C# | the [.NET SDK](https://dotnet.microsoft.com/download) |
+| Ruby, PHP, Lua, Bash, PowerShell, Kotlin, Swift, Dart, R, Zig | their official installers |
 
-Download these two and you can chat, do maths and **send pictures**:
-
-| | Model | Size | What it does |
-|---|---|---|---|
-| Reader | **SmolVLM 256M** | ~190 MB | Looks at a picture and writes down what is in it |
-| Brain | **Qwen2.5 0.5B** | ~0.5 GB | Chats, helps, does maths, answers about the picture |
-
-How it works: the reader looks at your picture, then the brain answers using what the reader saw. Everything runs on your phone. Nothing is uploaded.
-Full guide: [Send files and pictures](docs-md/FILES.md).
+Open **Settings > Usage > Programming languages** to see what Pholama found on your PC, with a **Check again** button. Programs run only inside the Pholama workspace folder, stop after 20 seconds by default (up to 120), and their output is cut at 8000 characters.
 
 ### Pholama Platform (the website)
 
@@ -87,7 +88,6 @@ With Duo on, a small second AI (the *helper*) writes quick hints, then your chos
 - **What it is not:** it does **not** make answers smarter. On 20 test questions the single 1.5B model got 17 right and the duo got 16. Small helpers can be wrong, so the main AI is told the hints may be wrong.
 - **Safe by design:** the helper must be clearly smaller (at most 60% of the main model). It is never the same model. If memory is low, there is no second model, or the helper fails, Pholama quietly uses one AI and tells you why.
 - **PC app:** the helper runs as its own engine. It is stopped when you close Pholama, when the lag guard fires, and when you turn Duo off.
-- **Website:** the helper runs in the browser (CPU). It needs enough device memory to hold two models.
 
 ### Downloads keep their place
 
@@ -98,14 +98,12 @@ Stop a download any time. **Resume** continues from where it stopped, even after
 
 | What you see | Tap this |
 |---|---|
-| "No usable WebGPU" | Normal on many phones. Pick a model with **(CPU)** in the name. [What is CPU mode?](docs-md/MODELS.md#on-a-phone-without-a-gpu-slower) |
 | Download stops or errors | Tap **Retry** or **Resume**. It continues from the files already saved. Use WiFi. Free up some storage. |
 | Too slow | [Pick a smaller model](docs-md/MODELS.md) |
-| iPhone | Needs iOS 18 or newer, in Safari. Small models only. |
 
-### More for phones
+### More guides
 - [Send files and pictures](docs-md/FILES.md)
-- [Which model should I pick?](docs-md/MODELS.md) (every model, what it is good at, what phone it fits)
+- [Which model should I pick?](docs-md/MODELS.md) (every PC model and what it is good at)
 - [Use your PC's power from your phone](docs-md/PC.md#chat-from-your-phone-over-wifi)
 
 ## On your PC (more power, tools, web search)
@@ -190,7 +188,6 @@ The website (`docs/`, used on phones) and the PC app (`web/`) must always show t
 3. Set the same version in `package.json`.
 4. Run `npm run sync-site`. It copies the full model list and version history into both `docs/` and `web/`.
 5. Run `npm test`. It fails if the website or the PC app is out of date, so a release cannot go out with an old list.
-6. Phone models (the in-browser list) live in `docs/models.json` under `browser` and `cpu`. Update those by hand when a browser model is added.
 
 The PC updater reads `package.json` from the default branch and downloads that branch's archive; a GitHub Release or tag by itself does not publish an update to the app.
 

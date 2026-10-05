@@ -1,6 +1,19 @@
 {
- "latest": "0.9.29",
+ "latest": "0.9.30",
  "releases": [
+  {
+   "version": "0.9.30",
+   "date": "2026-10-05",
+   "title": "Run Python, C++, Rust and more. Big chat windows. Choose what powers Agent Max. Phone models are gone.",
+   "notes": [
+    "New: your AI can now write and run programs. Python, C++, C, Rust, Go, Java, JavaScript, TypeScript, C#, Ruby, PHP, Lua, Bash, PowerShell, Kotlin, Swift, Dart, R and Zig. You install the languages you want; Pholama finds them. If one is missing the AI tells you exactly what to install instead of making up a result. Settings > Usage > Programming languages shows what was found, with a Check again button",
+    "Programs run only inside the Pholama workspace folder, stop after 20 seconds by default (up to 120), and their output is cut at 8000 characters. A file name can never inject a command",
+    "New: big chat windows on the Platform. Open a support ticket or a post in a large window that refreshes by itself. Reporters and moderators chat in tickets, moderators keep Close, Reopen and the member tools inside the window. Posts get a reply chat (run supabase/post_replies.sql once in Supabase to switch replies on)",
+    "New: choose what powers Agent Max in Settings > Usage. The official cloud is the smartest and uses your daily and monthly messages. One of your own local AIs is free and unlimited but only as smart as that model. The chat box label and Studio follow your choice",
+    "Fixed: Agent Max in Studio could not really edit files. The cloud function ignored Studio's instructions, cut messages to 2000 characters and only knew the calculator, clock and site help. It now follows Studio's rules, has room for real code and still counts as one message (refunded on failure)",
+    "Removed: phone and in-browser models. The browser model tab, phone models in the model list, the phone cards on the dashboard and the phone wording in Agent Max's knowledge and the guides are gone. Phones can still use Agent Max, the Platform, or open your own PC app over your network"
+   ]
+  },
   {
    "version": "0.9.29",
    "date": "2026-10-05",

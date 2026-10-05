@@ -172,7 +172,7 @@ async function init() {
   catalog = await (await fetch('models.json')).json();
   try { const r = await api('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json(); } catch {}
   tab = server ? 'local' : 'browser';
-  if (server) { const tb = $('#tBrowser'); if (tb) tb.style.display = 'none'; const tl = $('#tLocal'); if (tl) tl.textContent = 'Models on this PC'; }   // PC build: phone models are never offered
+  if (server) { const tl = $('#tLocal'); if (tl) tl.textContent = 'Models on this PC'; }   // PC build: phone models are never offered
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) navigator.serviceWorker.register('sw.js').catch(() => {});
   await refreshSelect();
   { const L = llamaLoader(84); $('#heroLogo').appendChild(L.el); L.done(); L.el.classList.remove('ok'); L.el.style.color = 'var(--fg)';
@@ -677,7 +677,7 @@ function memorySystem() {
 // ----- model manager -----
 function render() {
   $('#tLocal').style.display = server ? '' : 'none';
-  $('#tBrowser').classList.toggle('on', tab === 'browser'); $('#tLocal').classList.toggle('on', tab === 'local');
+  $('#tLocal').classList.toggle('on', true);   // one tab only: models live on the PC
   listEl.innerHTML = '';
   paintDuoBar();
   if (tab === 'browser') {
@@ -885,7 +885,7 @@ async function ensureEngineWithBar(id, r) {
 
 $('#mgr').onclick = () => { if (siteOnly()) return; render(); dlg.showModal(); };   // model management is PC-only
 $('#close').onclick = () => { dlg.close(); refreshSelect(); };
-$('#tBrowser').onclick = () => { tab = 'browser'; render(); };
+// (the "In this browser" tab is gone: phone and browser models are no longer supported)
 $('#tLocal').onclick = () => { tab = 'local'; render(); };
 $('#send').onclick = send;
 initAttach({ model: () => { const v = sel.value, all = [...((catalog && catalog.browser) || []), ...((catalog && catalog.cpu) || [])]; const found = all.find(m => v === 'web:' + m.id || v === 'cpu:' + m.id || v.endsWith(m.id)) || { name: 'this model' }; return readerOn() ? { ...found, accepts: [...(found.accepts || []), 'image'] } : found; }, note: m => alert(m) });

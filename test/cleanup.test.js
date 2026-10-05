@@ -22,7 +22,7 @@ const app = R('web/app.js');
 ok('website refuses every browser/CPU download', /if \(!server\) throw new Error\(SITE_NO_DL\)/.test(app));
 ok('the refusal runs before the account check', app.indexOf('if (!server) throw new Error(SITE_NO_DL)') < app.indexOf('if (!Account.user()) return;', app.indexOf('async function mustNotDownload')));
 ok('all three download paths go through the guard', (app.match(/await mustNotDownload\(/g) || []).length >= 3);
-ok('the website picker offers no phone models', /for \(const id of \(server \? saved\(\) : \[\]\)\)/.test(app));
+ok('the picker never builds phone or browser models (no cpu:/web: entries, no In this browser tab)', !/new Option\('📱/.test(app) && !/value = 'web:'|\.value = 'cpu:'|new Option\([^)]*'web:'/.test(app) && !/id="tBrowser"/.test(R('web/index.html')) && !/id="tBrowser"/.test(R('docs/index.html')));
 ok('the website Models panel shows the ended notice, not a list', /Model downloads on the website have ended/.test(app));
 ok('the website hero no longer promises browser models', !/run inside your browser/.test(R('docs/index.html')));
 

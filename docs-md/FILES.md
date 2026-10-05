@@ -17,9 +17,9 @@ Not supported: PDFs, Word files, zip files, programs, and SVG. If you pick one, 
 A small chat model cannot see pictures by itself. So Pholama uses two:
 
 1. **Reader: SmolVLM 256M** (~190 MB). It looks at the picture and writes down what it sees, including any text or numbers.
-2. **Brain: Qwen2.5 0.5B** (~0.5 GB), or any chat model you already have. It answers you using what the reader saw.
+2. **Brain:** any chat model you already have on your PC. It answers you using what the reader saw.
 
-Together about **0.7 GB**, so they fit on any phone. The reader downloads the first time you attach a picture, then stays saved.
+The reader is about 190 MB. It downloads the first time you attach a picture, then stays saved.
 
 Example: take a photo of a maths question, attach it and type *Solve it*. The reader reads `17 + 25 = ?`, the brain answers `42`.
 

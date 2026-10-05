@@ -363,7 +363,7 @@ async function chat(req, res, b) {
   // Agent Max as the brain: one cloud call per step, capped per message. Everything else goes to the normal backends.
   const maxBudget = maxcloud.newBudget(), maxToken = String(req.headers['x-pholama-token'] || '').slice(0, 4000);
   let maxLocalTools = null;   // asked once per message, only when Max is used: same answer the chat page gives
-  const streamTurn = async (m, msgs, o, onTok, sig, u) => { if (m !== 'cloud:pholama') return streamTurnBase(m, msgs, o, onTok, sig, u); if (maxLocalTools === null) maxLocalTools = await hasToolAI().catch(() => false); return maxcloud.streamMax(maxToken, msgs, o, onTok, sig, u, maxBudget, maxLocalTools); };
+  const streamTurn = async (m, msgs, o, onTok, sig, u) => { if (m !== 'cloud:pholama') return streamTurnBase(m, msgs, o, onTok, sig, u); if (maxLocalTools === null) maxLocalTools = await hasToolAI().catch(() => false); const uu = u || {}; try { return await maxcloud.streamMax(maxToken, msgs, o, onTok, sig, uu, maxBudget, maxLocalTools); } catch (e) { if (e && e.which) uu.hit = e.which; throw e; } finally { if (uu.max) { try { line({ maxUsage: uu.max }); } catch {} } else if (uu.hit) { try { line({ maxUsage: { hit: uu.hit } }); } catch {} } } };   // tell the page the new day / month numbers, even when this call hit the limit
   try {
     log('step', 'Got your message. Model: ' + model.replace(/^(gguf|ollama|byok|cloud):/, ''));
     if (memUnloaded) { log('step', memUnloaded); memUnloaded = ''; }   // explain why the AI had to load again
@@ -453,7 +453,7 @@ async function chat(req, res, b) {
     }
     let generated = '';   // everything the model wrote this message (all turns), used only for the estimate
     const skillNote = allow.skills ? agent.plugins.skillsPrompt(agent.plugins.listSkills()) : '';
-    const messages = [{ role: 'system', content: mentionHint + skillNote + agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effortUse) + (inStudio && tools.length ? agent.studioPrompt(b.studio.project, (() => { try { return stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })); } catch { return []; } })()) + (() => { try { const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.studioFocus(stu.snapshot(b.studio.project), lu && lu.content, b.studio.project); } catch { return ''; } })() : '') + (() => { if (tools.length) return ''; const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.aboutUserHint(lu && lu.content, b.memory === true && Array.isArray(b.memories) ? b.memories : []); })() }, ...(b.messages || []).filter(m => m.role !== 'system')];
+    const messages = [{ role: 'system', content: mentionHint + skillNote + agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effortUse) + (inStudio && tools.length ? agent.studioPrompt(b.studio.project, (() => { try { return stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })); } catch { return []; } })()) + (() => { try { return agent.studioResearch(require('./studioplus').projectMap(b.studio.project)); } catch { return ''; } })() + (() => { try { const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.studioFocus(stu.snapshot(b.studio.project), lu && lu.content, b.studio.project); } catch { return ''; } })() : '') + (() => { if (tools.length) return ''; const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.aboutUserHint(lu && lu.content, b.memory === true && Array.isArray(b.memories) ? b.memories : []); })() }, ...(b.messages || []).filter(m => m.role !== 'system')];
     // Host-side routing: obvious intents run their tool before the model answers (weak models skip tool calls).
     if (tools.length) {
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
@@ -560,12 +560,13 @@ async function chat(req, res, b) {
         bp = agent.planGuidedBuild(cur, prevBuild, stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })), b.studio.project);
       } catch {}
       if (bp && bp.fresh) {
+        let buildMap = ''; try { const existing = stu.snapshot(b.studio.project); if (existing.length > 0) buildMap = '[PROJECT MAP: what already exists. Keep it working, reuse these names, do not duplicate them]\n' + require('./studioplus').projectMap(b.studio.project, 1600) + '\n[/PROJECT MAP]\n\n'; } catch {}
         log('step', 'Building in Studio: asking the model for complete, linked project files.'); line({ toolStart: { name: 'studio_write', args: { file: bp.file || '' } } });
         let got = '', tries = 0, written = []; const required = new Set(bp.files || [bp.file]);
         while (tries < 3 && required.size && !ac.signal.aborted) {
           tries++; got = '';
           const retry = tries > 1 ? '\n\nMissing files: ' + [...required].join(', ') + '. Reply with complete FILE blocks for these missing files only; do not repeat files already made.' : '';
-          try { await streamTurn(model, [{ role: 'system', content: 'You write complete, small, working projects. Follow the requested filenames exactly and return code only in FILE blocks.' }, { role: 'user', content: bp.prompt + retry }], { ...opts, temperature: 0.25, num_predict: 4096 }, t => { got += t; }, ac.signal); } catch (e) { log('error', 'Build request failed (' + e.message + ').'); break; }
+          try { await streamTurn(model, [{ role: 'system', content: 'You write complete, small, working projects. Follow the requested filenames exactly and return code only in FILE blocks.' }, { role: 'user', content: buildMap + bp.prompt + retry }], { ...opts, temperature: 0.25, num_predict: 4096 }, t => { got += t; }, ac.signal); } catch (e) { log('error', 'Build request failed (' + e.message + ').'); break; }
           for (const f of agent.parseFileBlocks(got, b.studio.project, bp.file)) {
             if (!required.has(f.file)) continue;
             let res; try { res = agent.loggedStudio('write', b.studio.project, f.file, agent.tidyFile(f.file, f.content)); } catch (e) { res = 'Tool error: ' + e.message; }
@@ -720,10 +721,10 @@ async function chat(req, res, b) {
       if (call.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
       log(/^Tool error/.test(result) ? 'error' : 'result', result.slice(0, 300));
       line({ tool: { name: call.name, args: call.args, result: result.slice(0, 400) } }); if (visited.size() !== sentSrc) { sentSrc = visited.size(); line({ sources: visited.list() }); }
-      if (stu && stu.isStudio(call.name) && call.name !== 'studio_read' && call.name !== 'studio_files' && call.name !== 'studio_projects') line({ studio: { changed: true, project: (call.args && call.args.project) || (b.studio && b.studio.project) || null, file: (call.args && call.args.file) || null } });
+      if (stu && stu.isStudio(call.name) && !stu.isReadOnly(call.name)) line({ studio: { changed: true, project: (call.args && call.args.project) || (b.studio && b.studio.project) || null, file: (call.args && call.args.file) || null } });
       if (inStudio && stu && stu.isStudio(call.name)) {
         // Build loop: after any change the host checks the project itself and hands the model the real problems to fix.
-        let issues = []; const changed = !['studio_read', 'studio_files', 'studio_projects', 'studio_check', 'studio_run_js'].includes(call.name);
+        let issues = []; const changed = !stu.isReadOnly(call.name);
         if (changed && !/^Tool error/.test(result)) { try { issues = stu.check((call.args && call.args.project) || b.studio.project).filter(x => x !== 'No problems found.'); } catch {} }
         if (issues.length && round < MAX_ROUNDS - 1) { log('step', 'Auto-check found ' + issues.length + ' problem(s). Asking the model to fix them.'); line({ tool: { name: 'studio_check', args: {}, result: issues.join(' | ').slice(0, 400) } });
           messages.push({ role: 'assistant', content: text }, { role: 'user', content: `[${call.name} returned]\n${result}\n[automatic check found PROBLEMS]\n${issues.join('\n')}\n[end]\nFix every problem now. The element usually belongs in index.html, so call studio_write with file \"index.html\" containing a full page (<!doctype html>, <body> with the needed elements each with its id, and <script src=\"script.js\"></script> at the end). Do NOT rewrite script.js again. Reply with ONLY the tool line. Do not say it is finished until the check is clean.` }); continue; }
@@ -884,6 +885,17 @@ const server = http.createServer(async (req, res) => {
         if (seg[0] === 'projects' && seg[1] && seg[2] === 'file' && req.method === 'DELETE') { const b = await body(req); return json(res, 200, { ok: true, text: stu.deleteFile(seg[1], b.file) }); }
         if (seg[0] === 'projects' && seg[1] && seg[2] === 'check' && req.method === 'GET') return json(res, 200, { issues: stu.check(seg[1]) });
         if (seg[0] === 'run' && req.method === 'POST') { const b = await body(req); return json(res, 200, stu.runJs(b.code)); }
+        // ---- folders, pictures, map, publish check (studioplus.js) ----
+        const sp = require('./studioplus');
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'tree' && req.method === 'GET') { const d = require('path').join(stu.ROOT, stu.projName(seg[1])); return json(res, 200, sp.walkAll(d)); }
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'map' && req.method === 'GET') return json(res, 200, { map: sp.projectMap(seg[1], 4000) });
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'verify' && req.method === 'GET') return json(res, 200, sp.verify(seg[1]));
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'folder' && req.method === 'POST') { const b = await body(req); return json(res, 200, sp.mkdir(seg[1], b.folder)); }
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'folder' && req.method === 'DELETE') { const b = await body(req); return json(res, 200, { ok: true, text: sp.rmdir(seg[1], b.folder) }); }
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'move' && req.method === 'POST') { const b = await body(req); return json(res, 200, { ok: true, text: sp.move(seg[1], b.from, b.to) }); }
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'copy' && req.method === 'POST') { const b = await body(req); return json(res, 200, { ok: true, text: sp.copy(seg[1], b.from, b.to) }); }
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'image' && req.method === 'PUT') { let b = {}; try { b = JSON.parse(await rawBody(req, 1.6 * 1024 * 1024) || '{}'); } catch (e) { return json(res, 413, { error: 'That picture is too big to upload (max 1 MB).' }); } return json(res, 200, sp.saveImage(seg[1], b.file, b.data)); }
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'image' && req.method === 'GET') return json(res, 200, sp.readImage(seg[1], new URL(req.url, 'http://x').searchParams.get('file')));
         return json(res, 404, { error: 'unknown studio route' });
       } catch (e) { return json(res, 400, { error: e.message }); }
     }
@@ -1049,6 +1061,7 @@ const server = http.createServer(async (req, res) => {
       try { return await chat(req, res, cb); } finally { activeReplies--; lastReplyAt = Date.now(); }
     }
     // ---- Ollama / OpenAI style extras so games and sites can use this PC's AI the way they would use Ollama ----
+    if (p === '/api/languages') { const L = require('./langs'); if (u.searchParams.get('fresh') === '1') L.forget(); return json(res, 200, { languages: L.status(u.searchParams.get('fresh') === '1') }); }   // which programming languages are installed on this PC
     if (p === '/api/version') return json(res, 200, { version: require('../package.json').version, name: 'pholama' });
     if (p === '/api/ps') return json(res, 200, { models: served ? [{ name: 'gguf:' + served, model: 'gguf:' + served }] : [] });
     if (p === '/api/show' && req.method === 'POST') {

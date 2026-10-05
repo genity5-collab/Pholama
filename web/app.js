@@ -6,6 +6,7 @@ import { sourcesCard } from './sources.js';
 import { llamaLoader, LLAMA_CSS } from './loader.js';
 import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME, setLocalToolAI } from './cloud.js';
 import { planFallback } from './fallback.js';
+import { BRAIN_KEY, readBrain, saveBrain, resolveBrain, brainChoices, brainWarning } from './maxbrain.js';
 import { splitThinking, thinkLabel, countWords } from './thinking.js';
 import { splitBlocks, LANGS, cleanLang, extFor, safeFileName, diffLines, diffStats, extractScript, editPrompt, runCommand } from './codeblocks.js';
 import { collapse, groupByDay, dayTitle, applyFilter, summarise, summaryText, info as logInfo, detailRows, fmtTime, FILTERS, title as elTitle, mergeLive } from './editlog.js';
@@ -200,7 +201,7 @@ async function init() {
   catalog = await (await fetch('models.json')).json();
   try { const r = await api('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) { server = await r.json(); setLocalToolAI(server.toolAI === true); } } catch { setLocalToolAI(false); }
   tab = server ? 'local' : 'browser';
-  if (server) { const tb = $('#tBrowser'); if (tb) tb.style.display = 'none'; const tl = $('#tLocal'); if (tl) tl.textContent = 'Models on this PC'; }   // PC build: phone models are never offered
+  if (server) { const tl = $('#tLocal'); if (tl) tl.textContent = 'Models on this PC'; }   // PC build: phone models are never offered
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) { navigator.serviceWorker.register('sw.js').then(reg => { if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' }); reg.addEventListener('updatefound', () => { const worker = reg.installing; if (worker) worker.addEventListener('statechange', () => { if (worker.state === 'installed' && navigator.serviceWorker.controller) worker.postMessage({ type: 'SKIP_WAITING' }); }); }); }).catch(() => {}); navigator.serviceWorker.addEventListener('controllerchange', () => { if (!window.__pholamaReloaded) { window.__pholamaReloaded = true; location.reload(); } }); }
   await refreshSelect();
   { const L = llamaLoader(84); $('#heroLogo').appendChild(L.el); L.done(); L.el.classList.remove('ok'); L.el.style.color = 'var(--fg)';
@@ -216,10 +217,7 @@ async function init() {
 
 async function refreshSelect() {
   sel.innerHTML = '';
-  for (const id of (server ? saved() : [])) {   // website: phone/browser models are gone, only the cloud assistant is offered
-    const m = catalog.browser.find(x => x.id === id || x.fallback === id); if (m) sel.add(new Option('📱 ' + m.name, 'web:' + id));
-    const c = (catalog.cpu || []).find(x => 'cpu:' + x.id === id); if (c) sel.add(new Option('📱 ' + c.name, id));
-  }
+  // Phone and in-browser models are gone for good: the dropdown only ever lists PC models, your own keys, and Agent Max.
   if (server) try {
     const t = await (await api('api/tags')).json();
     for (const m of t.models) sel.add(new Option(m.hosted ? '🔑 ' + (m.label || m.name.replace(/^byok:/, '')) : '💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
@@ -518,7 +516,9 @@ async function send() {
   const text = inEl.value.trim(); if (!text && !hasAttachments()) return;
   if (!sel.value) return alert('Open Models and download a model first.');
   if (needLogin('use')) return;
-  const isCloud = sel.value === CLOUD_ID, token = Account.token();
+  const picked = sel.value, brain = picked === CLOUD_ID ? maxBrainNow() : { run: 'cloud' };   // Max can be powered by the official cloud or by a local AI (free, unlimited)
+  const effModel = brain.run === 'local' ? brain.model : picked;
+  const isCloud = effModel === CLOUD_ID, token = Account.token();
   if (isCloud && !token) return needLogin('use');
   inEl.value = ''; inEl.style.height = 'auto'; setBusy(true); stopped = false;
   const files = attachedNames();
@@ -533,9 +533,10 @@ async function send() {
     pendingImages = attach && attach.hasImages ? Math.min(4, (attach.seen || []).length) : 0;
     history.push({ role: 'user', content: shownText }); clearAttachments();
     saveCurrentSession();
-    const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');
+    const local = effModel.startsWith('cpu:') || effModel.startsWith('web:');
     if (local) { const ri = rememberIntent(text); if (ri && memOn) msg.log('result', await saveMemory(ri), 0); }
-    if (!isCloud) await ensureEngine(sel.value);
+    if (!isCloud) await ensureEngine(effModel);
+    if (brain.run === 'local') msg.log('step', brain.note, 0);
     const base = attach && attach.hasImages ? attach.build(history.slice(0, -1)) : history;
     const mem = local ? memorySystem() : null, send_ = mem ? [mem, ...base] : base;
     if (isCloud) {
@@ -580,7 +581,7 @@ async function send() {
       const sec = +((performance.now() - t0) / 1000).toFixed(1);
       msg.usage(wu ? { in: wu.prompt_tokens, out: wu.completion_tokens, estimated: false, seconds: sec } : { in: send_.reduce((a, m) => a + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: sec });
     } else {
-      await pcChat(sel.value, msg, t => { acc += t; msg.text(acc); });
+      await pcChat(effModel, msg, t => { acc += t; msg.text(acc); });
     }
     if (sessionAtStart !== sessionId) return;                // a New session began while this ran: drop the late reply
     const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
@@ -772,7 +773,7 @@ function memorySystem() {
 // ----- model manager -----
 function render() {
   $('#tLocal').style.display = server ? '' : 'none';
-  $('#tBrowser').classList.toggle('on', tab === 'browser'); $('#tLocal').classList.toggle('on', tab === 'local');
+  $('#tLocal').classList.toggle('on', true);   // one tab only: models live on the PC
   listEl.innerHTML = '';
   paintDuoBar();
   if (server && !remoteBase()) { buildKeysPanel({ api, parent: listEl, onChange: () => { refreshSelect(); } }); }
@@ -989,8 +990,9 @@ async function ensureEngineWithBar(id, r) {
 
 $('#mgr').onclick = () => { render(); dlg.showModal(); };
 $('#close').onclick = () => { dlg.close(); refreshSelect(); };
-$('#tBrowser').onclick = () => { tab = 'browser'; render(); };
+// (the "In this browser" tab is gone: phone and browser models are no longer supported)
 $('#tLocal').onclick = () => { tab = 'local'; render(); };
+if ($('#langRefresh')) $('#langRefresh').onclick = () => paintLangs(true);
 $('#send').onclick = send;
 initAttach({ model: () => { const v = sel.value, all = [...((catalog && catalog.browser) || []), ...((catalog && catalog.cpu) || []), ...((catalog && catalog.local) || [])]; const found = all.find(m => v.endsWith(m.id) || v === 'web:' + m.id || v === 'cpu:' + m.id) || { name: 'this model' }; return readerOn() ? { ...found, accepts: [...(found.accepts || []), 'image'] } : found; }, note: m => alert(m) });
 
@@ -1088,8 +1090,39 @@ $('#opt').onclick = () => openSettings('tools');
 $('#acct').onclick = () => openSettings('account');
 $('#cr').onclick = () => openSettings('usage');
 
+// ---- Max brain: the official cloud, or a free local AI on this PC ----
+const onOwnPc = () => !!server && !remoteBase();
+const pcModelInfo = () => [...sel.options].filter(o => !o.disabled && /^(gguf|ollama):/.test(o.value)).map(o => ({ id: o.value, name: o.textContent.replace(/^[^\w]+/, ''), tools: !/no tools/i.test(o.textContent) }));
+function maxBrainNow() {
+  let raw = null; try { raw = localStorage.getItem(BRAIN_KEY); } catch {}
+  return resolveBrain({ brain: raw, isPc: onOwnPc(), installed: pcModelInfo().map(m => m.id) });
+}
+function paintBrain() {
+  const box = $('#brainBox'), pick = $('#brainSel'), note = $('#brainNote'); if (!box || !pick || !note) return;
+  box.style.display = onOwnPc() ? '' : 'none'; if (!onOwnPc()) return;
+  const models = pcModelInfo(), opts = brainChoices(models);
+  let saved = 'cloud'; try { const b = readBrain(localStorage.getItem(BRAIN_KEY)); saved = b.mode === 'local' ? b.model : 'cloud'; } catch {}
+  if (!opts.some(o => o.value === saved)) saved = 'cloud';
+  pick.textContent = ''; for (const o of opts) { const e = new Option(o.label, o.value); e.title = o.help; pick.add(e); }
+  pick.value = saved;
+  const say = () => { const r = maxBrainNow(), w = brainWarning(pick.value, models), h = (opts.find(o => o.value === pick.value) || {}).help || ''; note.textContent = (r.note || h) + (w ? ' ' + w : ''); };
+  pick.onchange = () => { try { localStorage.setItem(BRAIN_KEY, saveBrain(pick.value === 'cloud' ? { mode: 'cloud' } : { mode: 'local', model: pick.value })); } catch {} say(); paintUsage(); paintComposerPill(); };
+  say();
+}
+
 // Tells the user, in Settings, what happens when Max runs out. Only shown on the user's own PC.
+async function paintLangs(fresh) {
+  const box = $('#langBox'), list = $('#langList'); if (!box || !list) return;
+  box.style.display = onOwnPc() ? '' : 'none'; if (!onOwnPc()) return;
+  let langs = []; try { langs = (await (await api('api/languages' + (fresh ? '?fresh=1' : ''))).json()).languages || []; } catch { list.textContent = 'Could not check.'; return; }
+  list.textContent = '';
+  const row = (l) => { const d = document.createElement('div'); d.style.cssText = 'padding:3px 0'; const b = document.createElement('b'); b.textContent = (l.installed ? '✓ ' : '✗ ') + l.name; d.append(b); const s = document.createElement('span'); s.style.opacity = '.75'; s.textContent = l.installed ? '  ' + l.version : '  not installed. ' + l.howToInstall; d.append(s); return d; };
+  for (const l of langs.filter(x => x.installed)) list.append(row(l));
+  const missing = langs.filter(x => !x.installed);
+  if (missing.length) { const det = document.createElement('details'); const sm = document.createElement('summary'); sm.textContent = missing.length + ' more you can install'; det.append(sm); for (const l of missing) det.append(row(l)); list.append(det); }
+}
 function paintFallback() {
+  paintBrain(); paintLangs(false);
   const box = $('#fbBox'), note = $('#fbNote'); if (!box || !note) return;
   const onPc = !!server && !remoteBase();
   box.style.display = onPc ? '' : 'none'; if (!onPc) return;
@@ -1122,7 +1155,16 @@ async function openStudio() {
   try {
     let mod; try { mod = await import('./studio.js'); } catch (e1) { mod = await import('./studio.js?fresh=' + Date.now()); }   // a stale cached copy that will not parse: fetch a fresh one once
     const { createStudio } = mod;
-    studio = createStudio({ api, $, ghHeaders, mount: $('#studio'), getModel: () => (sel.value || '').replace(/^$/, '') });
+    studio = createStudio({ api, $, ghHeaders, mount: $('#studio'), getModel: () => { const v = sel.value || ''; if (v !== CLOUD_ID) return v; const b = maxBrainNow(); return b.run === 'local' ? b.model : v; }, onMaxUsage: u => {
+      // Same store the chat uses, so the usage page and the pill at the chat box show Studio's Max messages too.
+      let cur = {}; try { cur = JSON.parse(localStorage.getItem('pholama.maxUsage') || 'null') || {}; } catch {}
+      if (u && u.hit === 'day' && cur.day_cap != null) cur.day_used = cur.day_cap;          // the cloud said the day is full
+      else if (u && u.hit === 'month' && cur.month_cap != null) cur.month_used = cur.month_cap;
+      else if (u && u.day_used != null) cur = { day_used: u.day_used, day_cap: u.day_cap, month_used: u.month_used, month_cap: u.month_cap };
+      else return;
+      try { localStorage.setItem('pholama.maxUsage', JSON.stringify(cur)); } catch {}
+      try { paintUsage(); } catch {} try { paintComposerPill(); } catch {}
+    } });
     await studio.open();
   } catch (e) { $('#studio').textContent = 'Studio could not load: ' + (e && e.message || e); console.warn(e); }
   finally { studioLoading = false; }
@@ -1195,7 +1237,9 @@ function paintComposerPill() {
   if (!cb) return;
   cb.onclick = () => openSettings('usage');
   const isCloud = sel.value === CLOUD_ID;
-  if (isCloud) {
+  if (isCloud && maxBrainNow().run === 'local') {   // Max is running on a local AI: free, nothing counted
+    cb.textContent = 'Max local, free'; cb.className = 'pill'; cb.title = maxBrainNow().note + ' Tap for settings.'; cb.style.display = '';
+  } else if (isCloud) {
     let uData = null;
     try { uData = JSON.parse(localStorage.getItem('pholama.maxUsage') || 'null'); } catch {}
     const dUsed = uData ? (uData.day_used ?? 0) : 0;

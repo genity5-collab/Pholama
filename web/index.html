@@ -56,7 +56,7 @@
 </footer>
 
 <dialog id="dlg">
-  <div class="tabs"><button id="tBrowser">In this browser</button><button id="tLocal">On this PC</button></div>
+  <div class="tabs"><button id="tLocal">On this PC</button></div>
   <div id="hw" class="sys"></div>
   <div id="list"></div>
   <p style="text-align:right"><button id="close">Close</button></p>
@@ -82,6 +82,18 @@
         <div class="pbar"><i id="u_day_fill"></i></div>
         <div class="pbar-label" style="margin-top:8px"><span>This month</span><span id="u_month_num"></span></div>
         <div class="pbar"><i id="u_month_fill"></i></div>
+      </div>
+      <div id="brainBox" class="fbbox" style="display:none;margin-top:10px">
+        <b>Max brain</b>
+        <div class="sys" style="text-align:left;margin:4px 0">Choose what powers Agent Max.</div>
+        <select id="brainSel" aria-label="Max brain" style="width:100%"></select>
+        <div id="brainNote" class="sys" style="text-align:left;margin-top:6px"></div>
+      </div>
+      <div id="langBox" class="fbbox" style="display:none;margin-top:10px">
+        <b>Programming languages</b>
+        <div class="sys" style="text-align:left;margin:4px 0">Your AI can write and run programs. It uses what you install yourself.</div>
+        <div id="langList" style="text-align:left;font-size:13px"></div>
+        <button id="langRefresh" type="button" style="margin-top:6px">Check again</button>
       </div>
       <div id="fbBox" class="fbbox" style="display:none">
         <b>Backup AI on your PC</b>
@@ -251,7 +263,7 @@
     <div class="card-box sys" style="text-align:left;line-height:1.5">
       <p style="margin:0 0 6px"><b>Data Privacy & Safety Checklist:</b></p>
       <ul style="padding-left:18px;margin:8px 0">
-        <li><b>On-device processing:</b> Local and browser models run on your device. Chats and history stay in this browser.</li>
+        <li><b>On-device processing:</b> Local models run on your PC. Chats and history stay in this browser.</li>
         <li><b>Local Storage:</b> Tokens, remote keys, settings, and sessions are stored in this browser only.</li>
         <li><b>GitHub writes:</b> GitHub write actions always prompt for explicit Allow / Deny.</li>
         <li><b>Remote Connection:</b> API keys are sent directly to your configured PC endpoint.</li>

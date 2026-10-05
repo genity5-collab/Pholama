@@ -5,7 +5,7 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
 // cut out the chain (constants + aiJson) and compile it with types stripped
 const a = src.indexOf('const OR_MODELS'), b = src.indexOf('Deno.serve(');
 ok('the chain is in the built function', a > 0 && b > a);
-const body = src.slice(a, b).replace(/\(k\): k is string/g, '(k)').replace(/\(k: string\)/g, '(k)').replace(/: Promise<any>/g, '').replace(/\(prompt: string\)/g, '(prompt)').replace(/\(j: any\)/g, '(j)').replace(/\(k\): k is string => !!k/g, '(k) => !!k').replace(/\.filter\(\(k\): k is string => !!k\)/g, '.filter(k => !!k)').replace(/const messages = /, 'const messages = ').replace(/ as any/g, '').replace(/: any/g, '');
+const body = require('./_stripTs')(src.slice(a, b));
 function make(env, script) {
   const calls = []; const Deno = { env: { get: k => env[k] } };
   const fetch = async (url, o) => { const h = o.headers.Authorization || ''; const model = JSON.parse(o.body).model; const host = url.includes('openrouter') ? 'OR' : 'GROQ'; const key = h.replace('Bearer ', ''); calls.push(host + ':' + model + ':' + key); const r = script(host, model, key); return { status: r.status, ok: r.status >= 200 && r.status < 300, json: async () => ({ choices: [{ message: { content: r.content || '' } }] }) }; };

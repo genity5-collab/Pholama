@@ -273,6 +273,7 @@ export function createStudio(env) {
           else if (j.toolStart) { fxOpen++; fx.working(toolStatus(j.toolStart)); }   // the AI just started a tool: light up the editor and name the file
           else if (j.tool) { thinkNode = null; say(toolLine(j.tool), 'tool'); if (fxOpen > 0) { fxOpen--; fx.idle(); } loadActivity(); }   // it finished: the strip fades, the changed lines flash when they arrive
           else if (j.sources) { if (!srcCard) { srcCard = sourcesCard([]); el.stAiLog.appendChild(srcCard.el); } srcCard.update(j.sources); el.stAiLog.scrollTop = 1e9; }
+          else if (j.maxUsage) { if (env.onMaxUsage) { try { env.onMaxUsage(j.maxUsage); } catch {} } }   // Agent Max day / month numbers: the counters must move in Studio too
           else if (j.studio) refreshSoon();
           else if (j.approve) approve(j.approve);
           else if (j.message && j.message.content) { reply += j.message.content; if (!node) node = say('', 'ai'); node.textContent = reply; el.stAiLog.scrollTop = 1e9; }

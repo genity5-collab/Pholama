@@ -309,3 +309,25 @@ header{border-bottom:1px solid var(--line);backdrop-filter:blur(18px);background
 .elhead{padding-top:8px;border-top:1px solid var(--line)}.editlog{box-shadow:inset 0 0 0 1px color-mix(in srgb,var(--acc) 7%,transparent)}.elrow>summary{padding:10px 12px}.elrow>summary:hover{background:color-mix(in srgb,var(--acc) 9%,var(--card2))}.elchip{letter-spacing:.04em}.elbody code{border-left:2px solid var(--acc)}
 .aiwarn,.sunset{box-shadow:0 8px 26px color-mix(in srgb,var(--warn) 10%,transparent)}
 @media(max-width:720px){.dhero{padding:15px}.platwrap{padding-inline:10px}.brand span{font-size:13px}}
+
+/* ---- big chat window (post replies and support tickets) ---- */
+dialog.bigchat{width:min(920px,96vw);max-width:none;height:min(86vh,900px);max-height:96vh;padding:0;display:none;flex-direction:column;overflow:hidden;border-radius:20px}
+dialog.bigchat[open]{display:flex}
+.bc-top{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:14px 18px;border-bottom:1px solid var(--line);flex:0 0 auto}
+.bc-title{min-width:0;display:flex;flex-direction:column}.bc-title b{font-size:17px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bc-acts{display:flex;gap:8px;flex-wrap:wrap;justify-content:flex-end}
+.bc-head{padding:0 18px;flex:0 0 auto;max-height:34vh;overflow:auto}.bc-head:not(:empty){padding-top:12px;padding-bottom:4px}
+.bc-list{flex:1 1 auto;overflow:auto;padding:14px 18px;display:flex;flex-direction:column;gap:10px;overscroll-behavior:contain}
+.bc-msg{max-width:78%;align-self:flex-start;background:var(--card);border:1px solid var(--line);border-radius:16px;padding:9px 13px}
+.bc-msg.mine{align-self:flex-end;background:color-mix(in srgb,var(--fg) 8%,var(--card))}
+.bc-msg.badge{border-color:color-mix(in srgb,var(--fg) 35%,var(--line))}
+.bc-msg .plbody{margin:4px 0 0;white-space:pre-wrap;overflow-wrap:anywhere}
+.bc-meta{display:flex;align-items:baseline;gap:6px;flex-wrap:wrap;font-size:12px}
+.bc-badge{font-size:10px;text-transform:uppercase;letter-spacing:.06em;border:1px solid var(--line);border-radius:999px;padding:1px 7px}
+.bc-empty{text-align:center;margin:auto}
+.bc-err{padding:0 18px;min-height:0}
+.bc-foot{display:flex;gap:10px;align-items:flex-end;padding:12px 18px;border-top:1px solid var(--line);flex:0 0 auto}
+.bc-foot textarea{flex:1;margin:0;resize:none;min-height:44px;max-height:30vh}.bc-foot p{margin:4px 0}
+.bigchat .bc-x{margin-left:4px}
+.openbig{font-size:12px}
+@media(max-width:640px){dialog.bigchat{width:100vw;height:100dvh;max-height:100dvh;border-radius:0}.bc-msg{max-width:92%}.bc-foot{padding-bottom:max(12px,env(safe-area-inset-bottom))}}

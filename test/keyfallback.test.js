@@ -3,7 +3,7 @@
 const fs = require('fs'), path = require('path');
 const src = fs.readFileSync(path.join(__dirname, '..', 'functions', 'pholamaCloud.ts'), 'utf8');
 const a = src.indexOf('const OR_MODELS'), b = src.indexOf('Deno.serve');
-const code = src.slice(a, b).replace(/\(k\): k is string =>/g, '(k) =>').replace(/async function aiJson\(prompt: string\): Promise<any>/, 'async function aiJson(prompt)').replace(/\(j: any\)/g, '(j)').replace(/: Promise<any>/g, '').replace(/ as any/g, '').replace(/: any/g, '');
+const code = require('./_stripTs')(src.slice(a, b));
 let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : '  -> ' + String(x).slice(0, 200))); if (!c) bad++; };
 const answer = { action: 'answer', answer: 'hello' };
 async function run(env, plan) {   // plan: key -> HTTP status (200 = good answer)
@@ -11,7 +11,7 @@ async function run(env, plan) {   // plan: key -> HTTP status (200 = good answer
   const fetch = async (url, init) => { const key = String(init.headers.Authorization).replace('Bearer ', ''); seen.push(key); const st = plan[key] || 500;
     return { status: st, ok: st === 200, json: async () => ({ choices: [{ message: { content: JSON.stringify(answer) } }] }) }; };
   const AbortSignal = { timeout: () => undefined };
-  const fn = new Function('Deno', 'fetch', 'AbortSignal', code.replace(/: Promise<any>/g, '').replace(/: any/g, '') + '\nreturn aiJson;')(Deno, fetch, AbortSignal);
+  const fn = new Function('Deno', 'fetch', 'AbortSignal', code + '\nreturn aiJson;')(Deno, fetch, AbortSignal);
   let res = null, err = null; try { res = await fn('hi'); } catch (e) { err = e.message; }
   return { res, err, seen: [...new Set(seen)] };
 }
