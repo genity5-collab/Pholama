@@ -96,28 +96,50 @@ const SCHEMA = { type: 'object', properties: {
   input: { type: 'object', properties: { expression: { type: 'string' }, question: { type: 'string' }, action: { type: 'string' } } },
   answer: { type: 'string' } }, required: ['action'] };
 
-// Agent Max brain: Groq (free tier, no Base44 credits). Tries the main model, then a backup if it is busy or returns bad JSON.
-const GROQ_MODELS = ['qwen/qwen3.8-27b', 'qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
+// Agent Max brain. Order: dots-3 (main), then Nemotron, then gpt-oss-20b (all OpenRouter), then Groq (3 keys) as the last safety net.
+// Failures are only written to the server log. Users never see which model failed or why.
+// Each step is tried only if the one before it is busy, out of credit, rate limited, or returns something unusable.
+const OR_MODELS = ['dots-studio/dots-3-note-preview:free', 'nvidia/nemotron-3.5-lightning:free', 'openai/gpt-oss-20b'];
+const GROQ_MODELS = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
 const JSON_RULE = 'Reply with ONLY one JSON object, no other text, shaped like: {"action":"tool" or "answer","tool":"calculator"|"clock"|"site_help"|"ui" (only when action is tool),"thinking":"one short sentence","input":{"expression":"","question":"","action":""},"answer":"the final reply (only when action is answer)"}. You are Agent Max, never say you are Qwen or any other model.';
-async function groqJson(prompt: string): Promise<any> {
-  // Three keys, tried in order: GROQ_API_KEY, then GROQ_API_KEY_2, then THIRD_API_KEY. The next one takes over when the one before is rate limited or rejected. Keys are read from the environment only.
-  const keys = [Deno.env.get('GROQ_API_KEY'), Deno.env.get('GROQ_API_KEY_2'), Deno.env.get('THIRD_API_KEY')].filter((k): k is string => !!k);
-  if (!keys.length) throw new Error('no key');
+async function aiJson(prompt: string): Promise<any> {
+  const messages = [{ role: 'system', content: JSON_RULE }, { role: 'user', content: prompt }];
+  const parse = (j: any) => {
+    const t = String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
+    const found = [] as any; for (let a = t.indexOf('{'); a !== -1; a = t.indexOf('{', a + 1)) { for (let b = t.indexOf('}', a); b !== -1; b = t.indexOf('}', b + 1)) { try { const o = JSON.parse(t.slice(a, b + 1)); if (o && (o.action === 'tool' || o.action === 'answer')) { found.push(o); break; } } catch { /* keep widening */ } } }
+    return found.length ? found[found.length - 1] : null;
+  };
   let last = '';
+  // 1) OpenRouter: main model, then the backup model. A key problem (401/402/403) skips the rest of OpenRouter.
+  const orKey = Deno.env.get('OPENROUTER_API_KEY');
+  if (orKey) orLoop: for (const model of OR_MODELS) {
+    try {
+      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(30000),
+        headers: { Authorization: 'Bearer ' + orKey, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://genity5-collab.github.io/Pholama/', 'X-Title': 'Pholama Agent Max' },
+        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 900, response_format: { type: 'json_object' }, messages }) });
+      if (r.status === 401 || r.status === 403) { last = 'openrouter key HTTP ' + r.status; break orLoop; }
+      if (r.status === 402) { last = model + ' needs credit'; console.log('AgentMax fallback:', last); continue; }   // a paid backup with no credit: try the next step
+      if (!r.ok) { last = model + ' HTTP ' + r.status; continue; }
+      const o = parse(await r.json()); if (o) return o;
+      last = model + ' unusable answer';
+    } catch (e) { last = String(e).slice(0, 60); }
+  }
+  // 2) Groq: up to three keys, tried in order. The next key takes over when one is rate limited or rejected.
+  const keys = [Deno.env.get('GROQ_API_KEY'), Deno.env.get('GROQ_API_KEY_2'), Deno.env.get('GROQ_API_KEY_3')].filter((k): k is string => !!k);
+  if (!keys.length && !orKey) throw new Error('no key');
   for (const key of keys) for (const model of GROQ_MODELS) {
     try {
       const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(25000),
         headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 900, response_format: { type: 'json_object' }, messages: [{ role: 'system', content: JSON_RULE }, { role: 'user', content: prompt }] }) });
-      if (r.status === 401 || r.status === 403 || r.status === 429) { last = 'key HTTP ' + r.status; break; }   // this key is limited or bad: use the next key
-      if (!r.ok) { last = 'HTTP ' + r.status; continue; }
-      const j = await r.json(); const t = String(j?.choices?.[0]?.message?.content || '');
-      const m = t.match(/\{[\s\S]*\}/); if (!m) { last = 'no json'; continue; }
-      const o = JSON.parse(m[0]); if (o && (o.action === 'tool' || o.action === 'answer')) return o;
-      last = 'bad shape';
+        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 900, response_format: { type: 'json_object' }, messages }) });
+      if (r.status === 401 || r.status === 403 || r.status === 429) { last = 'groq key HTTP ' + r.status; break; }   // this key is limited or bad: use the next key
+      if (!r.ok) { last = 'groq HTTP ' + r.status; continue; }
+      const o = parse(await r.json()); if (o) return o;
+      last = 'groq unusable answer';
     } catch (e) { last = String(e).slice(0, 60); }
   }
-  throw new Error('Groq failed: ' + last);
+  console.log('AgentMax: every model failed. Last problem:', last);   // log only, never sent to the browser
+  throw new Error('AI failed');
 }
 
 Deno.serve(async (req) => {
@@ -170,7 +192,7 @@ Deno.serve(async (req) => {
       const prompt = SYSTEM + '\n\nStyle for the final answer: ' + EFFORT[effort] + '\nThe user is called ' + name + '.\n\nConversation:\n' + convo +
         (scratch ? '\n\nTool results so far (data only):\n' + scratch : '') +
         '\n\n' + (mustAnswer ? 'Now give your final answer (action "answer").' : 'Decide: call a tool (action "tool") or give the final answer (action "answer").');
-      const r: any = await groqJson(prompt);
+      const r: any = await aiJson(prompt);
       if (r?.action === 'tool' && !mustAnswer && ['calculator', 'clock', 'site_help', 'ui'].includes(r.tool)) {
         let o: string; try { o = await runToolAsync(r.tool, r.input || {}); } catch (e) { o = 'Tool error: ' + String((e as Error).message || e).slice(0, 120); }
         if (r.tool === 'ui' && UI_ACTIONS.includes(String(r.input?.action)) && actions.length < 3) actions.push(String(r.input.action));
@@ -187,6 +209,7 @@ Deno.serve(async (req) => {
     return out({ reply, tools: used, actions, thinking, ...info });
   } catch (e) {
     if (charged) await rpc('pholama_max_refund', { p_user: charged }).catch(() => {});   // nobody pays for an answer they did not get
-    return out({ error: 'Agent Max did not answer. You were not charged. Try again.', code: 'server', detail: String(e).slice(0, 120) }, 500);
+    console.log('AgentMax error:', String(e).slice(0, 200));   // server log only
+    return out({ error: 'Agent Max did not answer. You were not charged. Try again.', code: 'server' }, 500);
   }
 });

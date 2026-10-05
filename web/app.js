@@ -1593,9 +1593,18 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
 
 // ---------- updates (PC app only; the server says if it is the PC app) ----------
 let shownBanner = null;
+// The version this page was loaded with. If the server later restarts on a newer one (an automatic update), reload so the page and Studio run the new code,
+// but never while Studio is working, has unsaved edits, or a message is being typed.
+let pageVersion = null, reloadWaiting = false;
+function reloadForNewVersion(now) {
+  if (now === pageVersion || reloadWaiting) return; reloadWaiting = true;
+  const tryIt = () => { let busy = false; try { busy = !!(studio && studio.isBusy && studio.isBusy()) || !!((document.getElementById('in') || {}).value || '').trim(); } catch {} if (busy) { setTimeout(tryIt, 5000); return; } location.reload(); };
+  setTimeout(tryIt, 1500);
+}
 async function paintUpdate() {
   try {
-    const r = await fetch('/api/update'); if (!r.ok) return; const u = await r.json();
+    const r = await fetch('/api/update', { cache: 'no-store' }); if (!r.ok) return; const u = await r.json();
+    if (u.current) { if (pageVersion === null) pageVersion = u.current; else reloadForNewVersion(u.current); }
     const state = updateInfo(u);
     $('#updBox').style.display = ''; $('#updAuto').checked = u.auto !== false;
     $('#updPill').style.display = state.visible ? '' : 'none';

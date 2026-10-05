@@ -71,8 +71,12 @@ const cmp = (a, b) => { const x = String(a).split('.').map(Number), y = String(b
 
 // Returns { current, latest, newer } or throws when GitHub cannot be reached.
 async function check() {
-  const pkg = JSON.parse(await fetchAny(process.env.PHOLAMA_UPDATE_BASE ? [RAW + '/package.json'] : textUrls()));
   const current = localVersion();
+  // Fresh answer first: the commits API is cached for 1 minute, the raw file for 5. Skipped when a test or mirror supplies its own address.
+  if (!process.env.PHOLAMA_UPDATE_BASE && !process.env.PHOLAMA_NO_FRESH) {
+    try { const f = await require('./freshcheck').latest({ repo: REPO, branch: BRANCH }); if (f.ok) return { current, latest: f.version || '0', newer: cmp(f.version || '0', current) > 0, sha: f.sha }; } catch {}
+  }
+  const pkg = JSON.parse(await fetchAny(process.env.PHOLAMA_UPDATE_BASE ? [RAW + '/package.json'] : textUrls()));
   return { current, latest: pkg.version || '0', newer: cmp(pkg.version || '0', current) > 0 };
 }
 

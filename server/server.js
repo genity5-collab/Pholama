@@ -1113,7 +1113,7 @@ try { require('./update').setRestartHandler(() => { if (process.env.PHOLAMA_TEST
 server.listen(PORT, HOST, () => {
   const h = hardware();
   console.log(`\n  Pholama running\n  Chat UI:  http://localhost:${PORT}\n  RAM: ${h.ramGB} GB${h.gpu ? '  GPU: ' + h.gpu + (h.vramGB ? ' (' + h.vramGB + ' GB)' : '') : ''}\n  Models folder: ${MODELS_DIR}\n`);
-  try { require('./update').startBackground(+process.env.PHOLAMA_UPDATE_EVERY_MIN > 0 ? +process.env.PHOLAMA_UPDATE_EVERY_MIN / 60 : 1 / 60); } catch {}   // every 1 minute (a small static file, not the rate-limited API)
+  try { require('./update').startBackground(+process.env.PHOLAMA_UPDATE_EVERY_MIN > 0 ? +process.env.PHOLAMA_UPDATE_EVERY_MIN / 60 : 1.25 / 60); } catch {}   // about every minute: 75 s keeps GitHub's 60-requests-an-hour allowance safe (see server/freshcheck.js)
   if (process.env.PHOLAMA_NO_SCHEDULE !== '1' && process.env.PHOLAMA_NO_AUTOUPDATE !== '1') setTimeout(() => { try { require('./update-scheduler').ensure(); } catch (e) { console.log('  Could not set up closed-app updates: ' + String(e.message || e).slice(0, 140) + '. You can retry with pholama schedule-updates.'); } }, 1500).unref();
   if (HOST !== '127.0.0.1') console.log('  Reachable on your network. Open http://<this-PC-IP>:' + PORT + ' on your phone.\n');
 });

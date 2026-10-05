@@ -1,6 +1,17 @@
 {
- "latest": "0.9.27",
+ "latest": "0.9.28",
  "releases": [
+  {
+   "version": "0.9.28",
+   "date": "2026-10-05",
+   "title": "New versions really arrive within about a minute, and an open page reloads itself",
+   "notes": [
+    "Fixed: new commits took up to 5 minutes to show up. GitHub keeps the version file cached for 5 minutes, so checking it every minute could not help. Pholama now asks GitHub for the newest commit itself (cached 1 minute) and reads the version from that exact commit",
+    "The check spaces itself out (about every 75 seconds) and slows down by itself if GitHub's hourly allowance runs low, then goes back to the normal route. It never gets your PC blocked",
+    "Fixed: after an automatic update the server restarted but an already open page (and Studio) kept running the old code. The page now notices the new version and reloads itself, but waits if Studio is working, has unsaved edits, or you are typing a message",
+    "Agent Max now tries dots-3-note-preview (free), then Nemotron 3.5 Lightning (free), then gpt-oss-20b on OpenRouter, and Groq with three keys as the last safety net. If one fails it quietly moves to the next; you never see which model failed or why, only a short generic message if every one fails"
+   ]
+  },
   {
    "version": "0.9.27",
    "date": "2026-10-05",
