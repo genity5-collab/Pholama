@@ -1,6 +1,17 @@
 {
- "latest": "0.9.26",
+ "latest": "0.9.27",
  "releases": [
+  {
+   "version": "0.9.27",
+   "date": "2026-10-05",
+   "title": "Pick plugins with @; find code across a Studio project",
+   "notes": [
+    "Type @ in chat to see built-in and custom plugins, then click one or select it with the arrow keys. Custom suggestions use the exact @x_tool name the AI sees.",
+    "Fixed: @x_<your_tool> now resolves to the saved plugin name, even when its switch is off. Explicit no-argument calls run directly; complete key=value arguments are routed directly; missing required values are not guessed or sent empty.",
+    "Custom-plugin instructions now explain the arguments and results more clearly. Data-changing calls still require Allow, including a tool explicitly enabled for one mentioned request.",
+    "Studio now searches all project files, shows matching file and line numbers, and jumps to a result. Press Ctrl+Shift+F in the editor to focus project search."
+   ]
+  },
   {
    "version": "0.9.26",
    "date": "2026-10-05",

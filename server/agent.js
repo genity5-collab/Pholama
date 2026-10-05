@@ -201,8 +201,9 @@ function systemPrompt(tools, thinking, memories, effort) {
   }
   if (tools.length) {
     const list = tools.map(t => `- ${t.name}: ${t.desc}`).join('\n');
-    p += `\n[private tool access]\nIf (and only if) the user's message needs fresh facts, exact math or the date, reply with ONLY one line: <tool>{"name":"TOOL_NAME","args":{...}}</tool>\nYou will get the result, then answer normally without mentioning the tool call or how you got it. Otherwise just answer; never use a tool for small talk, opinions or things you know. Never invent a tool result.\n${list}\n` +
+    p += `\n[private tool access]\nIf (and only if) the user's message needs fresh facts, exact math or the date, OR they explicitly ask to use a named x_ plugin, reply with ONLY one line: <tool>{"name":"TOOL_NAME","args":{...}}</tool>\nYou will get the result, then answer normally without mentioning the tool call or how you got it. Otherwise just answer; never use a tool for small talk, opinions or things you know. Never invent a tool result.\n${list}\n` +
     `Examples (follow the pattern, never repeat them):\nUser: what is 12*13?\nAssistant: <tool>{"name":"calculator","args":{"expression":"12*13"}}</tool>\nUser: what day is it?\nAssistant: <tool>{"name":"current_time","args":{}}</tool>\nUser: hi\nAssistant: Hi! How can I help?\n`;
+    if (tools.some(t => t.name.startsWith('x_'))) p += '\n[custom plugins]\nIf the user names a custom plugin with @name or @x_name, use that exact x_name tool for the request. Read its purpose and argument list. Fill values from the conversation only; if a required value is missing, ask the user rather than guessing or sending an empty value. After the result, report what it actually says. An HTTP failure is not success. If a write is waiting for the user to Allow it, say it is waiting and do not claim it ran.\n';
   }
   if (tools.length && agentTier === 'good') {   // a model that can really use tools gets the fuller, Qwen/Hermes-style instructions
     const names = tools.map(t => t.name);
@@ -366,7 +367,7 @@ async function buildTools(a) {
   if (a.tools) tools.push(...tools2.tools());   // workspace files + helpers: local, free, confined to one folder
   if (a.github) tools.push(...github.tools());
   if (a.platform) tools.push(...plugins.PLATFORM_TOOLS);   // read only: newest posts, daily post, projects, rules, updates
-  if (a.skills) { tools.push(...plugins.SKILL_TOOLS); tools.push(usertools.MAKER_TOOL, ...usertools.asTools().map(t => ({ name: t.name, desc: t.desc, kind: 'usertool' }))); }
+  if (a.skills) { tools.push(...plugins.SKILL_TOOLS); tools.push(usertools.MAKER_TOOL, ...usertools.asTools(a.mentionTools || []).map(t => ({ name: t.name, desc: t.desc, kind: 'usertool' }))); }
   if (a.search) tools.push(...media.tools());   // show_video / show_image: only when the web switch is on
   if (a.studio && a.inStudio) tools.push(...studio.tools());
   if (a.terminal) tools.push({ name: 'run_command', desc: 'Run ONE shell command on the user\'s PC. The user must click Allow first; nothing runs until they do. args: {"command": string, "cwd": string (optional folder inside the home folder), "why": string (one short sentence for the user)}', kind: 'cmd' });
@@ -445,12 +446,12 @@ async function runToolRaw(tools, name, args, ctx) {
   if (usertools.isMaker(name)) return usertools.runMaker(args);   // the AI writes the recipe only; secrets are added by the user
   if (usertools.isUserTool(name)) {   // a tool the user made: reads run, anything that changes data waits for the user's OK
     if (usertools.needsApproval(name)) {
-      const id = require('crypto').randomBytes(8).toString('hex'); pendingTools.set(id, { name, args: args || {}, at: Date.now() });
+      const id = require('crypto').randomBytes(8).toString('hex'), allowOff = !!(ctx && Array.isArray(ctx.mentionTools) && ctx.mentionTools.includes(name.slice(2))); pendingTools.set(id, { name, args: args || {}, allowOff, at: Date.now() });
       for (const [k, v] of pendingTools) if (Date.now() - v.at > 15 * 60 * 1000) pendingTools.delete(k);
       if (ctx && ctx.onPending) ctx.onPending({ id, type: 'tool', title: 'Run your tool ' + name.slice(2), tool: name.slice(2), details: JSON.stringify(args || {}).slice(0, 400) });
       return 'This tool changes data, so it is waiting for the user to click Allow. It has NOT run. Tell the user it needs their approval and stop. Do not say it ran.';
     }
-    return usertools.run(name, args);
+    return usertools.run(name, args, { allowOff: !!(ctx && Array.isArray(ctx.mentionTools) && ctx.mentionTools.includes(name.slice(2))) });
   }
   if (plugins.isPlatform(name)) { if (name !== 'platform_updates' && !spend(COST.search)) throw new Error('out of daily credits'); return plugins.runPlatform(name, args, ctx && ctx.pholamaToken); }
   if (github.isGithub(name)) {
@@ -535,8 +536,29 @@ function mediaRequest(text) {
   if (m) return { kind: 'image', query: (m[1] + ' photo').replace(/[?.!]+$/, '').slice(0, 160) };
   return null;
 }
+function mentionedUserToolIntent(text, tools) {
+  const defs = new Map((tools || []).filter(x => x && /^x_[a-z][a-z0-9_]{2,31}$/.test(x.name)).map(x => [x.name.slice(2), x]));
+  if (!defs.size) return null;
+  let found; try { found = require('./mentions').find(text, usertools.list().map(x => x.name)); } catch { return null; }
+  const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+  for (const slug of found.tools) {
+    const def = defs.get(slug), config = usertools.read(slug); if (!def || !config) continue;
+    const token = new RegExp('(^|[\\s([{,;:"\'])@(?:x_)?' + esc(slug) + '(?=$|[\\s)\\]},;:!?.])', 'i').exec(String(text || ''));
+    const args = {};
+    if (token) {
+      const tail = String(text || '').slice(token.index + token[0].length);
+      for (const key of usertools.requiredArgs(config)) {
+        const re = new RegExp('(?:^|[\\s,;])' + esc(key) + '\\s*(?:=|:)\\s*(?:"([^"]*)"|\'([^\']*)\'|([^\\s,;]+))', 'i'), m = re.exec(tail);
+        if (m) args[key] = m[1] != null ? m[1] : m[2] != null ? m[2] : m[3];
+      }
+    }
+    if (!usertools.missingArgs(config, args).length) return { name: def.name, args };
+  }
+  return null;
+}
 function routeIntent(text, tools, history) {
   const has = n => tools.some(t => t.name === n), t = String(text || '').trim();
+  const custom = mentionedUserToolIntent(t, tools); if (custom) return custom;
   const math = /(-?\d[\d.,]*\s*(?:[-+*/x×^%]|times|plus|minus|divided by|multiplied by)\s*-?\d[\d.,]*(?:\s*(?:[-+*/x×^%]|times|plus|minus|divided by|multiplied by)\s*-?\d[\d.,]*)*)/i.exec(t);
   if (math && has('calculator')) {
     const expr = math[1].replace(/×|x(?=\s*\d)/gi, '*').replace(/\s*times\s*|\s*multiplied by\s*/gi, '*').replace(/\s*plus\s*/gi, '+').replace(/\s*minus\s*/gi, '-').replace(/\s*divided by\s*/gi, '/').replace(/,(?=\d{3}\b)/g, '');
@@ -712,6 +734,6 @@ function safeShowLength(acc) {
 }
 const isToolFail = r => /^Tool error/.test(String(r || ''));
 
-async function approveTool(id) { const p = pendingTools.get(id); if (!p) throw new Error('That request expired or was already answered.'); pendingTools.delete(id); if (!usertools.isUserTool(p.name)) throw new Error('That tool no longer exists.'); return usertools.run(p.name, p.args); }
+async function approveTool(id) { const p = pendingTools.get(id); if (!p) throw new Error('That request expired or was already answered.'); pendingTools.delete(id); if (!usertools.isUserTool(p.name)) throw new Error('That tool no longer exists.'); return usertools.run(p.name, p.args, { allowOff: p.allowOff === true }); }
 function rejectTool(id) { return pendingTools.delete(id); }
 module.exports = { fetchText, webSearch, factualQuestion, mediaRequest, usertools, media, approveTool, rejectTool, cleanSearchQuery, loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

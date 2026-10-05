@@ -48,6 +48,19 @@ export function mergeIncoming(local, server, dirtyNames) {
   return { files: [...out.values()].sort((a, b) => (a.name === 'index.html' ? -1 : b.name === 'index.html' ? 1 : a.name.localeCompare(b.name))), conflicts };
 }
 
+export function searchProjectFiles(files, query, limit = 40) {
+  const q = String(query || '').trim().toLowerCase(); if (!q) return [];
+  const max = Math.max(1, Math.min(100, Number(limit) || 40)), hits = [];
+  for (const f of Array.isArray(files) ? files : []) {
+    const lines = String(f && f.content || '').split(/\r?\n/);
+    for (let i = 0; i < lines.length; i++) if (lines[i].toLowerCase().includes(q)) {
+      hits.push({ file: String(f.name || ''), line: i + 1, text: lines[i].trim().slice(0, 220) });
+      if (hits.length >= max) return hits;
+    }
+  }
+  return hits;
+}
+
 export function createStudio(env) {
   const { api, $, ghHeaders, getModel, mount } = env;
   const S = { project: null, files: [], current: null, dirty: new Set(), newFiles: new Set(), log: [], activity: [], busy: false, stopper: null, timers: {}, companion: false };
@@ -64,6 +77,8 @@ export function createStudio(env) {
   <div id="stSettingsPanel" class="st-settings" hidden><div class="st-panelhead"><b>Studio settings</b><span class="sp"></span><button id="stSettingsClose">Close</button></div><label class="st-setting"><input id="stCompanion" type="checkbox"><span><b>Pholama companion</b><small>Turn it on, drag it anywhere, then click for reactions. It never reads the page or sends anything.</small></span></label><div class="sys">The companion is off by default and can be turned off at any time.</div></div>
   <div class="st-main">
     <div class="st-left">
+      <div class="st-findbar"><input id="stFind" type="search" placeholder="Find in project… (Ctrl+Shift+F)" aria-label="Search all project files"><span id="stFindCount" class="st-findcount">Search all files</span></div>
+      <div id="stFindResults" class="st-findresults" role="listbox" aria-label="Project search results" hidden></div>
       <div class="st-tabs" id="stTabs"></div>
       <textarea id="stCode" spellcheck="false" autocapitalize="off" autocomplete="off" wrap="off" aria-label="Code editor"></textarea>
       <div class="st-foot"><span id="stStat">Saved</span><button id="stAddFile">+ File</button><button id="stNewScript">+ Script</button><button id="stRm">Remove file</button></div>
@@ -79,7 +94,7 @@ export function createStudio(env) {
     <div id="stAiLog" class="st-ailog"></div>
     <div class="st-aibox"><textarea id="stAsk" rows="2" placeholder="Ask the AI to build, fix or explain anything..."></textarea><button id="stDiagnose" title="Check the project and explain the next fix">Diagnose</button><button id="stSend" class="p">Send</button></div>
   </div>`;
-  for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stActivity', 'stSettings', 'stActivityPanel', 'stActivityRefresh', 'stActivityList', 'stSettingsPanel', 'stSettingsClose', 'stCompanion', 'stPublish', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stNewScript', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stDiagnose', 'stSend']) el[id] = mount.querySelector('#' + id);
+  for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stActivity', 'stSettings', 'stActivityPanel', 'stActivityRefresh', 'stActivityList', 'stSettingsPanel', 'stSettingsClose', 'stCompanion', 'stPublish', 'stFind', 'stFindCount', 'stFindResults', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stNewScript', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stDiagnose', 'stSend']) el[id] = mount.querySelector('#' + id);
   const fx = createFx({ host: el.stCode.parentElement, code: el.stCode, tabs: el.stTabs, frame: el.stFrame });   // the 'AI is editing' animation
   const activityTitle = e => e.kind === 'file' ? ((e.status === 'working' ? 'Working on ' : e.status === 'failed' ? 'Failed: ' : 'Changed ') + (e.path || 'a file')) : e.kind === 'command' ? (e.status === 'ok' ? 'Command finished' : e.status === 'proposed' ? 'Command waiting for approval' : 'Command ' + (e.status || 'updated')) : (e.text || e.status || e.kind || 'Activity');
   const paintActivity = () => { const box = el.stActivityList; if (!box) return; box.textContent = ''; if (!S.activity.length) { box.textContent = 'No Studio activity yet.'; return; } for (const e of S.activity.slice(0, 80)) { const d = document.createElement('details'); d.className = 'st-activityrow ' + (e.status === 'failed' || e.status === 'error' ? 'bad' : e.status === 'working' || e.status === 'proposed' ? 'wait' : 'good'); const s = document.createElement('summary'); const time = e.t ? new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''; s.textContent = (e.status || 'event') + ' · ' + activityTitle(e) + (time ? ' · ' + time : ''); d.appendChild(s); const body = document.createElement('div'); body.className = 'st-activitybody'; const bits = []; if (e.project) bits.push('Project: ' + e.project); if (e.added != null || e.removed != null) bits.push('Lines: +' + (e.added || 0) + ' / -' + (e.removed || 0)); if (e.error) bits.push('Error: ' + e.error); if (e.cmd) bits.push(e.cmd); body.textContent = bits.join('\n') || 'No additional details.'; d.appendChild(body); box.appendChild(d); } };
@@ -137,7 +152,7 @@ export function createStudio(env) {
   async function openProject(name) {
     S.project = name; S.dirty.clear(); S.newFiles.clear(); S.current = null;
     const j = await jget('api/studio/projects/' + encodeURIComponent(name)); S.files = j.files;
-    S.current = (S.files.find(f => f.name === 'index.html') || S.files[0] || {}).name || null; paintAll(); try { localStorage.setItem('pholama_studio_proj', name); } catch {}
+    S.current = (S.files.find(f => f.name === 'index.html') || S.files[0] || {}).name || null; paintAll(); paintFind(); try { localStorage.setItem('pholama_studio_proj', name); } catch {}
   }
   function paintAll() { paintTabs(); paintEditor(); renderPreview(true); }
   function paintTabs() {
@@ -148,6 +163,21 @@ export function createStudio(env) {
     const f = S.files.find(x => x.name === S.current);
     el.stCode.disabled = !f; el.stCode.value = f ? f.content : ''; el.stCode.placeholder = S.project ? 'Pick or add a file.' : 'Make a project first with "New".';
     el.stRm.disabled = !f; el.stAddFile.disabled = !S.project || S.busy; el.stNewScript.disabled = !S.project || S.busy;
+  }
+  function paintFind() {
+    const q = el.stFind.value.trim(); el.stFindResults.replaceChildren();
+    if (!q) { el.stFindResults.hidden = true; el.stFindCount.textContent = 'Search all files'; return; }
+    if (!S.project) { el.stFindResults.hidden = false; el.stFindCount.textContent = 'No project'; const e = document.createElement('div'); e.className = 'st-findempty'; e.textContent = 'Create or open a project first.'; el.stFindResults.appendChild(e); return; }
+    const hits = searchProjectFiles(S.files, q); el.stFindCount.textContent = hits.length ? `${hits.length}${hits.length === 40 ? '+' : ''} match${hits.length === 1 ? '' : 'es'}` : 'No matches';
+    el.stFindResults.hidden = false;
+    if (!hits.length) { const e = document.createElement('div'); e.className = 'st-findempty'; e.textContent = 'No matches in this project.'; el.stFindResults.appendChild(e); return; }
+    for (const hit of hits) { const b = document.createElement('button'); b.type = 'button'; b.className = 'st-findresult'; b.setAttribute('role', 'option'); b.textContent = `${hit.file}:${hit.line}  ${hit.text}`; b.title = `Open ${hit.file} at line ${hit.line}`; b.onclick = () => {
+      save.flush(); const f = S.files.find(x => x.name === hit.file); if (!f) return;
+      S.current = hit.file; S.newFiles.delete(hit.file); paintTabs(); paintEditor();
+      const lines = f.content.split(/\r?\n/), offset = lines.slice(0, hit.line - 1).reduce((n, line) => n + line.length + 1, 0);
+      el.stCode.focus(); el.stCode.setSelectionRange(Math.min(offset, f.content.length), Math.min(offset, f.content.length));
+      const lineHeight = parseFloat(getComputedStyle(el.stCode).lineHeight) || 21; el.stCode.scrollTop = Math.max(0, (hit.line - 3) * lineHeight);
+    }; el.stFindResults.appendChild(b); }
   }
 
   // ---- preview (debounced; identical content never reloads) ----
@@ -166,8 +196,9 @@ export function createStudio(env) {
     try { await jsend('api/studio/projects/' + encodeURIComponent(S.project) + '/file', 'PUT', { file: name, content: sent }); if (f.content === sent) S.dirty.delete(name); stat(S.dirty.size ? 'Unsaved' : 'Saved'); paintTabs(); }
     catch (e) { stat('Not saved: ' + e.message); }
   }, SAVE_DELAY);
-  el.stCode.addEventListener('input', () => { const f = S.files.find(x => x.name === S.current); if (!f) return; f.content = el.stCode.value; f.size = f.content.length; S.dirty.add(f.name); stat('Unsaved'); previewSoon(); save(); });
-  el.stCode.addEventListener('keydown', e => { if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); const t = el.stCode, s = t.selectionStart; t.setRangeText('  ', s, t.selectionEnd, 'end'); t.dispatchEvent(new Event('input')); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save.flush(); } });
+  el.stCode.addEventListener('input', () => { const f = S.files.find(x => x.name === S.current); if (!f) return; f.content = el.stCode.value; f.size = f.content.length; S.dirty.add(f.name); stat('Unsaved'); previewSoon(); save(); if (el.stFind.value.trim()) paintFind(); });
+  el.stFind.addEventListener('input', paintFind);
+  el.stCode.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.shiftKey && e.key.toLowerCase() === 'f') { e.preventDefault(); el.stFind.focus(); el.stFind.select(); return; } if (e.key === 'Tab' && !e.shiftKey) { e.preventDefault(); const t = el.stCode, s = t.selectionStart; t.setRangeText('  ', s, t.selectionEnd, 'end'); t.dispatchEvent(new Event('input')); } if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 's') { e.preventDefault(); save.flush(); } });
 
   // ---- pulling the AI's changes into the editor live, without clobbering what the user is typing ----
   async function refreshFromServer() {
@@ -181,7 +212,7 @@ export function createStudio(env) {
       if (!S.files.some(f => f.name === S.current)) S.current = (S.files.find(f => f.name === 'index.html') || S.files[0] || {}).name || null;
       paintTabs(); fx.restoreTabs(); const f = S.files.find(x => x.name === S.current);
       if (f && el.stCode.value !== f.content && !S.dirty.has(f.name)) { const before = el.stCode.value, fresh = keep === S.current && !typing; el.stCode.value = f.content; if (fresh && (S.busy || fxShow)) { fx.landed(before, f.content); fx.pulseTab(f.name); } if (pos && keep === S.current) el.stCode.setSelectionRange(Math.min(pos[0], f.content.length), Math.min(pos[1], f.content.length)); }
-      renderPreview(false); if (S.busy || fxShow) fx.pulsePreview();
+      renderPreview(false); paintFind(); if (S.busy || fxShow) fx.pulsePreview();
       if (added.length) say('New files added: ' + added.map(f => f.name).join(', ') + '. Click a NEW tab to review it.', 'act');
       if (m.conflicts.length) say('The AI also changed ' + m.conflicts.join(', ') + ' but you have unsaved edits there, so your version was kept.', 'warn');
     } catch (e) { say('Could not refresh: ' + e.message, 'err'); }

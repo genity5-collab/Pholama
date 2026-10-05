@@ -50,7 +50,12 @@ s.end(JSON.stringify({choices:[{message:{content:out}}]}))})}).listen(port,'127.
     ok('an unknown @name is ignored', !/called these plugins by name/.test(q.saw), q.saw.slice(0, 200));
     // ---- my tools: the API only works from this PC, secrets are never sent back
     const J = (p, b) => fetch(B + p, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(b) }).then(async r => ({ s: r.status, j: await r.json() }));
-    let r = await J('/api/mytools/secret', { name: 'SB_KEY', value: 'sbp_TOPSECRETVALUE_123' }); ok('saves a secret', r.j.ok && r.j.secrets.includes('SB_KEY'), JSON.stringify(r));
+    let r = await J('/api/mytools/save', { name: 'github_local_test', what: 'Run the local GitHub connection test', method: 'POST', url: 'https://example.com/test', body: '{}', on: false });
+    ok('saves an off-state custom write tool for the x_ mention regression', r.j.ok && r.j.tools.some(x => x.name === 'github_local_test' && x.on === false), JSON.stringify(r.j));
+    q = await ask('@x_github_local_test run this', { skills: false });
+    ok('the screenshot spelling gives the AI the exact custom tool even with its switch off', /x_github_local_test/.test(q.saw) && /called these plugins by name/.test(q.saw), q.saw.slice(0, 400));
+    ok('explicit custom write calls route to the Allow card and are not executed silently', /"approve":\{"id":"[a-f0-9]+","type":"tool"/.test(q.txt) && /This tool changes data, so it is waiting/.test(q.txt) && /has NOT run/.test(q.txt), q.txt.slice(0, 1200));
+    r = await J('/api/mytools/secret', { name: 'SB_KEY', value: 'sbp_TOPSECRETVALUE_123' }); ok('saves a secret', r.j.ok && r.j.secrets.includes('SB_KEY'), JSON.stringify(r));
     r = await fetch(B + '/api/mytools').then(x => x.text()); ok('the secret VALUE is never sent back', !/TOPSECRETVALUE/.test(r) && /SB_KEY/.test(r), r);
     r = await J('/api/mytools/save', { name: 'db_read', what: 'Read rows from my database table', method: 'GET', url: 'https://abc.supabase.co/rest/v1/{{table}}', headers: { apikey: '{{secret.SB_KEY}}' }, params: ['table'] }); ok('saves a tool', r.j.ok, JSON.stringify(r));
     r = await J('/api/mytools/save', { name: 'bad', what: 'points at my own PC', url: 'https://127.0.0.1/x' }); ok('a tool can be saved but is blocked when run', r.j.ok || r.s === 400, JSON.stringify(r));

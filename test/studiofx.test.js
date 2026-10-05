@@ -4,6 +4,7 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
 const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
 (async () => {
   const { changedLines, runs, toolStatus } = await import(path.join(__dirname, '..', 'web', 'studiofx.js'));
+  const { searchProjectFiles } = await import(path.join(__dirname, '..', 'web', 'studio.js'));
   const t = l => l.join('\n');
   // which lines lit up
   ok('identical text lights nothing', eq(changedLines('a\nb\nc', 'a\nb\nc'), []));
@@ -21,6 +22,11 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
     ok('a 3000-line file with one edit finds just that line, quickly', eq(r, [1500]) && Date.now() - t0 < 2000, r.length + ' lines, ' + (Date.now() - t0) + ' ms'); }
   { const big = Array.from({ length: 6000 }, (_, i) => 'line ' + i); const t0 = Date.now(); const r = changedLines(t(big), t(big.map((x, i) => i === 10 ? 'z' : x)));
     ok('a huge file never freezes the page (cheap path)', Date.now() - t0 < 2000 && r.includes(10), (Date.now() - t0) + ' ms'); }
+  const project = [{ name: 'index.html', content: '<h1>Home</h1>\n<script src="game.js"></script>' }, { name: 'game.js', content: 'function jump() {}\n// jump twice' }];
+  ok('Studio search finds text across files case-insensitively with accurate lines', JSON.stringify(searchProjectFiles(project, 'JUMP').map(x => [x.file, x.line])) === JSON.stringify([['game.js', 1], ['game.js', 2]]));
+  ok('Studio search caps its result list', searchProjectFiles(project, 'jump', 1).length === 1);
+  ok('Studio search treats empty queries as no results', searchProjectFiles(project, '  ').length === 0);
+  ok('Studio search ignores empty files safely', searchProjectFiles([{ name: 'empty.js' }], 'word').length === 0);
   // grouping
   ok('consecutive lines become one bar', eq(runs([2, 3, 4, 9]), [{ from: 2, to: 4 }, { from: 9, to: 9 }]));
   ok('no lines, no bars', eq(runs([]), []));
@@ -42,6 +48,8 @@ const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   ok('Studio has a direct script creation control', /id="stNewScript"/.test(st) && /el\.stNewScript\.onclick/.test(st));
   ok('new files are labelled for review in tabs', /S\.newFiles\.add\(f\.name\)/.test(st) && /'  NEW'/.test(st));
   ok('new JavaScript files are attached to the live preview when possible', /<script src="' \+ src \+ '"><\/script>/.test(st));
+  ok('Studio includes a project-wide file search and Ctrl+Shift+F shortcut', /id="stFind"/.test(st) && /searchProjectFiles\(S\.files, q\)/.test(st) && /e\.shiftKey && e\.key\.toLowerCase\(\) === 'f'/.test(st));
+  ok('search results jump to their file and line in the editor', /setSelectionRange\(Math\.min\(offset/.test(st) && /st-findresult/.test(css));
   ok('companion position is saved and restored', /pholama_studio_companion_pos/.test(st) && /placeCompanion\(companionPos\.x, companionPos\.y, true\)/.test(st));
   ok('companion has selectable reactions', /data-reaction="👋 Wave"/.test(st) && /data-reaction="💃 Dance"/.test(st));
   ok('Studio starts the strip on toolStart and ends it on the finished tool line', /j\.toolStart\) \{ fxOpen\+\+; fx\.working/.test(st) && /fxOpen > 0\) \{ fxOpen--; fx\.idle\(\)/.test(st));

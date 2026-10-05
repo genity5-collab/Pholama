@@ -10,6 +10,8 @@ ok('two plugins at once', f('@github and @search please').groups.join() === 'git
 ok('the same plugin twice counts once', f('@github @github @git').groups.join() === 'github');
 ok('after punctuation', f('ok, (@github) now').groups.join() === 'github' && f('hi:@search').groups.join() === 'search');
 ok('a custom tool is found', f('@notion_page read 12', ['notion_page']).tools.join() === 'notion_page');
+ok('the model-facing @x_name spelling resolves to the saved plugin', f('@x_notion_page run this', ['notion_page']).tools.join() === 'notion_page');
+ok('custom x_ mention works after text and punctuation', f('please run @x_notion_page, now', ['notion_page']).tools.join() === 'notion_page');
 ok('a custom tool is found in any case', f('@Notion_Page read', ['notion_page']).tools.join() === 'notion_page');
 ok('an unknown custom tool is ignored', f('@notion_page read', []).tools.length === 0);
 ok('an email address is NOT a mention', f('mail me at bob@github.com').groups.length === 0 && f('a.b@search.io').groups.length === 0);
@@ -45,5 +47,6 @@ fnd = f('@github look'); d = m.apply(A(), fnd, { canTools: false, creditsOk: tru
 ok('no hint when the plugin could not be turned on', m.hint(fnd, d) === '');
 fnd = f('@notion_page x', ['notion_page']); d = m.apply(A(), fnd, { canTools: true, creditsOk: true });
 ok('the hint names a custom tool as x_name', /x_notion_page/.test(m.hint(fnd, d)));
+ok('custom mention instructions tell the model to ask rather than invent missing arguments', /required argument is missing, ask the user/.test(m.hint(fnd, d)));
 ok('no hint when nothing was mentioned', m.hint(f('hello'), { forced: [], blocked: [] }) === '');
 console.log(bad ? bad + ' FAILED' : 'ALL PASSED'); process.exit(bad ? 1 : 0);

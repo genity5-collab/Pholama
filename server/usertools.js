@@ -98,14 +98,33 @@ function secretValues() { return readSecrets(); }   // server use only: lets a d
 function secretNames() { return Object.keys(readSecrets()).sort(); }
 function setSecret(name, value) { const n = String(name || '').replace(/[^A-Za-z0-9_]/g, '').slice(0, 40); if (!n) throw new Error('Give the secret a name like SUPABASE_KEY.'); const o = readSecrets(); if (value == null || value === '') delete o[n]; else { if (Object.keys(o).length >= 40 && !(n in o)) throw new Error('Up to 40 secrets.'); o[n] = String(value).slice(0, 2000); } ensure(); fs.writeFileSync(SECRETS, JSON.stringify(o), { mode: 0o600 }); return n; }
 
-// What the AI is told about each tool: its name, what it does and the few values it fills in. Never the address, headers or secrets.
-function asTools() { return list().filter(t => t.on).map(t => ({ name: TOOL_PREFIX + t.name, desc: `${t.what} args: {${t.params.map(p => `"${p}": string`).join(', ')}}${t.method !== 'GET' ? ' (changes data: the user is asked to approve first)' : ''}`, method: t.method })); }
+// Values used in the request template must be supplied; never turn an omitted value into an empty URL segment.
+function requiredArgs(t) {
+  const raw = [t && t.url, JSON.stringify(t && t.headers || {}), t && t.body].join('\n'), out = new Set();
+  const re = /\{\{\s*(?!secret\.)([A-Za-z0-9_]+)\s*\}\}/g; let m;
+  while ((m = re.exec(raw))) out.add(m[1]);
+  return [...out];
+}
+function missingArgs(t, args) { return requiredArgs(t).filter(n => !args || args[n] == null || String(args[n]).trim() === ''); }
+// The AI gets the purpose and argument instructions, but never the address, headers or secrets.
+function asTools(mentioned = []) {
+  const wanted = new Set((Array.isArray(mentioned) ? mentioned : []).map(slugify));
+  return list().filter(t => t.on || wanted.has(t.name)).map(t => {
+    const required = requiredArgs(t), params = t.params.length ? t.params.map(p => `"${p}": string`).join(', ') : 'none';
+    const desc = `User-created API plugin x_${t.name} (${t.title || t.name}). Use when: ${t.what}. Arguments: {${params}}. ` +
+      (required.length ? `Required template values: ${required.join(', ')}. ` : 'No arguments are required. ') +
+      `Take values from the user's request. If a required value is missing, ask instead of guessing. ` +
+      (t.method !== 'GET' ? 'This changes data and requires the user to approve each call.' : 'This is a read request.');
+    return { name: TOOL_PREFIX + t.name, desc, method: t.method };
+  });
+}
 const isUserTool = name => typeof name === 'string' && name.startsWith(TOOL_PREFIX) && !!read(name.slice(TOOL_PREFIX.length));
 const needsApproval = name => { const t = read(String(name).slice(TOOL_PREFIX.length)); return !!t && t.method !== 'GET'; };
 
 function hide(text, used) { let s = String(text); for (const v of used) if (v && v.length >= 4) s = s.split(v).join('[secret]'); return s; }
 async function run(name, args, opts = {}) {
-  const t = read(String(name).slice(TOOL_PREFIX.length)); if (!t) throw new Error('No such custom tool.'); if (!t.on) throw new Error('That tool is switched off.');
+  const t = read(String(name).slice(TOOL_PREFIX.length)); if (!t) throw new Error('No such custom tool.'); if (!t.on && opts.allowOff !== true) throw new Error('That tool is switched off.');
+  const missing = missingArgs(t, args); if (missing.length) throw new Error('Missing value(s): ' + missing.join(', ') + '. Ask the user for them before calling this tool.');
   const secrets = readSecrets(), used = new Set();
   const url = await checkUrl(fillUrl(t.url, args, secrets, used));
   const headers = {}; for (const [k, v] of Object.entries(t.headers)) headers[k] = fill(v, args, secrets, used).replace(/[\r\n]/g, '');
@@ -140,4 +159,4 @@ function sanitizeDraft(o, secretValues, allowed) {
 }
 function runMaker(args) { const a = args || {}; const name = save({ ...a, by: 'ai', on: true }); const t = read(name); return `MADE custom tool x_${name} (${t.method}). It is on now. ${needed(t).length ? 'The user must add these secret(s) in Plugins > My tools before it works: ' + needed(t).join(', ') + '. ' : ''}${t.method !== 'GET' ? 'It will ask for approval before each use.' : ''}`; }
 
-module.exports = { secretValues, update, cleanThumb, TOOL_WRITER_PROMPT, parseToolJson, sanitizeDraft, TOOL_PREFIX, slugify, privateIp, checkUrl, fill, fillUrl, problem, clean, list, read, save, remove, setOn, secretNames, setSecret, asTools, isUserTool, needsApproval, run, MAKER_TOOL, isMaker, runMaker, hide, needed };
+module.exports = { secretValues, update, cleanThumb, TOOL_WRITER_PROMPT, parseToolJson, sanitizeDraft, TOOL_PREFIX, slugify, privateIp, checkUrl, fill, fillUrl, problem, clean, list, read, save, remove, setOn, secretNames, setSecret, requiredArgs, missingArgs, asTools, isUserTool, needsApproval, run, MAKER_TOOL, isMaker, runMaker, hide, needed };

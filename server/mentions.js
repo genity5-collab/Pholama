@@ -15,15 +15,16 @@ const GROUPS = {
 };
 const ALIAS = {}; for (const [id, g] of Object.entries(GROUPS)) for (const a of g.aliases) ALIAS[a] = id;
 // A mention starts at the beginning or after a space/punctuation (so "me@github.com" is NOT a mention) and is followed by a word end.
-const RE = /(^|[\s(\[{,;:"'])@([a-z][a-z0-9_]{1,31})(?![a-z0-9_@.-]*@)(?=$|[\s)\]},;:!?"'.])/gi;
+const RE = /(^|[\s(\[{,;:"'])@([a-z][a-z0-9_]{1,33})(?![a-z0-9_@.-]*@)(?=$|[\s)\]},;:!?"'.])/gi;
 
 // Returns { groups: ['github'], tools: ['notion_page'], names: ['github','notion_page'] } for the plugins the message calls.
 function find(text, customNames = []) {
-  const out = { groups: [], tools: [], names: [] }, custom = new Set((customNames || []).map(n => String(n).toLowerCase()));
+  const out = { groups: [], tools: [], names: [] }, custom = new Map();
+  for (const n of customNames || []) { const slug = String(n).toLowerCase().replace(/^x_/, ''); if (/^[a-z][a-z0-9_]{2,31}$/.test(slug)) { custom.set(slug, slug); custom.set('x_' + slug, slug); } }
   const s = String(text || '').slice(0, 4000); let m; RE.lastIndex = 0;
   while ((m = RE.exec(s))) {
     const w = m[2].toLowerCase();
-    if (custom.has(w)) { if (!out.tools.includes(w)) { out.tools.push(w); out.names.push(w); } }
+    if (custom.has(w)) { const slug = custom.get(w); if (!out.tools.includes(slug)) { out.tools.push(slug); out.names.push(w); } }
     else if (ALIAS[w]) { const g = ALIAS[w]; if (!out.groups.includes(g)) { out.groups.push(g); out.names.push(w); } }
     if (out.names.length >= 6) break;
   }
@@ -47,8 +48,8 @@ function apply(allow, found, { canTools, creditsOk, paid = { github: true, searc
 // A line added to the system prompt so the model knows WHICH plugin the person meant and does not say "I can't access that".
 function hint(found, did) {
   const ok = new Set(did.forced.concat(found.groups.filter(g => did.forced.indexOf(g) < 0 && !did.blocked.some(b => b.name === g))));
-  const names = [...found.groups.filter(g => ok.has(g)).map(g => '@' + g + ' = the ' + GROUPS[g].label + ' tools'), ...found.tools.filter(t => ok.has(t)).map(t => '@' + t + ' = the tool x_' + t)];
+  const names = [...found.groups.filter(g => ok.has(g)).map(g => '@' + g + ' = the ' + GROUPS[g].label + ' tools'), ...found.tools.filter(t => ok.has(t)).map(t => '@' + t + ' / @x_' + t + ' = the tool x_' + t)];
   if (!names.length) return '';
-  return '\n[the user called these plugins by name in their message, so USE their tools for this request and do not say you cannot access them: ' + names.join('; ') + ']';
+  return '\n[the user called these plugins by name in their message, so USE their tools for this request and do not say you cannot access them. If a required argument is missing, ask the user instead of guessing: ' + names.join('; ') + ']';
 }
 module.exports = { GROUPS, find, apply, hint };

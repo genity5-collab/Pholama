@@ -19,10 +19,11 @@ import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pick
 import { READER } from './attach.js';
 import { buildKeysPanel, friendlyModelName } from './keys.js';
 import { initAttach, hasAttachments, attachedNames, clearAttachments, prepare } from './attachui.js';
+import { findMentionQuery, pluginOptions, filterPluginOptions } from './mention-picker.js';
 
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
-const chatEl = $('#chat'), inEl = $('#in'), sel = $('#model'), dlg = $('#dlg'), listEl = $('#list');
+const chatEl = $('#chat'), inEl = $('#in'), mentionMenu = $('#mentionMenu'), sel = $('#model'), dlg = $('#dlg'), listEl = $('#list');
 const heroEl = $('#hero');   // kept so New session can bring the welcome screen back
 let hasGPU = false;
 let hasF16 = false;
@@ -1002,7 +1003,53 @@ function newSession() {
   chatEl.innerHTML = ''; chatEl.appendChild(heroEl); inEl.value = ''; paintCloudLeft(null); inEl.focus();
 }
 $('#newSess').onclick = () => { if (history.length && !confirm('Start a new session? This clears the current chat.')) return; newSession(); };
-inEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !/Mobi|Android/i.test(navigator.userAgent)) { e.preventDefault(); send(); } });
+let mentionState = null, mentionItems = [], mentionIndex = 0, customMentionTools = [], mentionLoading = null, mentionFetchedAt = 0;
+function closeMentionMenu() { mentionState = null; mentionItems = []; mentionMenu.hidden = true; inEl.setAttribute('aria-expanded', 'false'); }
+function paintMentionMenu() {
+  if (!mentionState) return closeMentionMenu();
+  mentionItems = filterPluginOptions(pluginOptions(customMentionTools), mentionState.query);
+  mentionIndex = Math.max(0, Math.min(mentionIndex, mentionItems.length - 1)); mentionMenu.replaceChildren();
+  if (!mentionItems.length) { const empty = document.createElement('div'); empty.className = 'mention-empty'; empty.textContent = 'No matching plugins'; mentionMenu.appendChild(empty); }
+  mentionItems.forEach((item, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.className = 'mention-option' + (i === mentionIndex ? ' on' : ''); b.setAttribute('role', 'option'); b.setAttribute('aria-selected', String(i === mentionIndex));
+    const name = document.createElement('span'); name.className = 'mention-name'; name.textContent = '@' + item.name;
+    const meta = document.createElement('span'); meta.className = 'mention-meta'; meta.textContent = (item.title || item.name) + (item.off ? ' · Off (mention turns it on for this message)' : '');
+    const desc = document.createElement('small'); desc.textContent = item.description || '';
+    b.append(name, meta, desc); b.onmouseenter = () => { mentionIndex = i; mentionMenu.querySelectorAll('.mention-option').forEach((x, j) => { x.classList.toggle('on', j === i); x.setAttribute('aria-selected', String(j === i)); }); };
+    b.onmousedown = e => e.preventDefault(); b.onclick = () => selectMention(item); mentionMenu.appendChild(b);
+  });
+  mentionMenu.hidden = false; inEl.setAttribute('aria-expanded', 'true');
+}
+async function loadMentionTools(force = false) {
+  if (mentionLoading) return mentionLoading;
+  if (!force && Date.now() - mentionFetchedAt < 1500) return;
+  mentionFetchedAt = Date.now();
+  mentionLoading = (async () => { try { const r = await api('api/mytools'); if (r.ok) { const j = await r.json(); customMentionTools = Array.isArray(j.tools) ? j.tools : []; } } catch {} finally { mentionLoading = null; if (mentionState) paintMentionMenu(); } })();
+  return mentionLoading;
+}
+function updateMentionMenu() {
+  const q = findMentionQuery(inEl.value, inEl.selectionStart);
+  if (!q) return closeMentionMenu();
+  const opening = !mentionState; mentionState = q; mentionIndex = 0; paintMentionMenu();
+  if (opening) void loadMentionTools(true);
+}
+function selectMention(item) {
+  if (!mentionState) return;
+  const q = mentionState; inEl.setRangeText('@' + item.name + ' ', q.start, q.end, 'end'); closeMentionMenu();
+  inEl.focus(); inEl.dispatchEvent(new Event('input', { bubbles: true }));
+}
+function moveMentionIndex(delta) { if (!mentionItems.length) return; mentionIndex = (mentionIndex + delta + mentionItems.length) % mentionItems.length; paintMentionMenu(); const active = mentionMenu.querySelector('[aria-selected="true"]'); if (active) active.scrollIntoView({ block: 'nearest' }); }
+inEl.addEventListener('input', updateMentionMenu); inEl.addEventListener('click', updateMentionMenu); inEl.addEventListener('keyup', e => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) updateMentionMenu(); });
+inEl.addEventListener('blur', () => setTimeout(() => { if (!mentionMenu.contains(document.activeElement)) closeMentionMenu(); }, 80));
+inEl.addEventListener('keydown', e => {
+  if (mentionState && !mentionMenu.hidden) {
+    if (e.key === 'ArrowDown') { e.preventDefault(); moveMentionIndex(1); return; }
+    if (e.key === 'ArrowUp') { e.preventDefault(); moveMentionIndex(-1); return; }
+    if (e.key === 'Escape') { e.preventDefault(); closeMentionMenu(); return; }
+    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') { if (mentionItems.length) { e.preventDefault(); selectMention(mentionItems[mentionIndex]); return; } }
+  }
+  if (e.key === 'Enter' && !e.shiftKey && !/Mobi|Android/i.test(navigator.userAgent)) { e.preventDefault(); send(); }
+});
 
 // ----- Settings dialog & tabs -----
 function openSettings(tabName = 'usage') {

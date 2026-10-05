@@ -383,12 +383,13 @@ async function chat(req, res, b) {
     const maxStudio = inStudio && model === 'cloud:pholama';   // a remote API key can never make the AI touch files on this PC
     if (inStudio) { allow.studio = true; if (canTools && !allow.github && (req.headers['x-github-token'] || '')) allow.github = sw.github !== false; }   // Studio tools are local and free; GitHub only with the user's own token
     // "@github ...", "@search ...", "@my_tool ...": the person called a plugin by name, so it is on for THIS message even if its switch is off.
-    let mentionHint = '';
+    let mentionHint = '', mentionTools = [];
     if (b.agent && !inStudio) {
       try {
         const mentions = require('./mentions'), txt = (() => { const u = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return u ? String(u.content) : ''; })();
         const found = mentions.find(txt, agent.usertools.list().map(t => t.name));
         if (found.names.length) {
+          mentionTools = found.tools;
           const did = mentions.apply(allow, found, { canTools, creditsOk: !!allow.credits });
           mentionHint = mentions.hint(found, did);
           if (did.forced.length) log('step', 'You called ' + did.forced.map(n => '@' + n).join(', ') + ', so ' + (did.forced.length > 1 ? 'they are' : 'it is') + ' on for this message.');
@@ -397,10 +398,10 @@ async function chat(req, res, b) {
         }
       } catch (e) { log('error', 'Could not read the @ mention: ' + String(e.message).slice(0, 80)); }
     }
-    const { tools } = await agent.buildTools({ ...allow, memory: memOn, inStudio });
+    const { tools } = await agent.buildTools({ ...allow, memory: memOn, inStudio, mentionTools });
     if (inStudio && !canTools) log('error', 'This model cannot use tools, so it cannot build in Studio. Pick a model tagged "tools" (Qwen3 0.6B is the smallest).');
     const visited = agent.sources.makeCollector(12); let sentSrc = 0;
-    const tctx = { sources: visited, pholamaToken: String(req.headers['x-pholama-token'] || '').slice(0, 4000), ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), onPending: p => line({ approve: p }), onMedia: m => line({ media: m }) };
+    const tctx = { sources: visited, pholamaToken: String(req.headers['x-pholama-token'] || '').slice(0, 4000), ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), mentionTools, onPending: p => line({ approve: p }), onMedia: m => line({ media: m }) };
     if (tools.length) log('step', `${tools.length} tools ready: ${tools.map(t => t.name).join(', ')}`);
     const effort = ['long', 'max'].includes(b.effort) ? b.effort : 'normal';
     // Price this message from the two levels, then take the credits BEFORE answering so the counter visibly drops.
@@ -451,7 +452,7 @@ async function chat(req, res, b) {
     }
     let generated = '';   // everything the model wrote this message (all turns), used only for the estimate
     const skillNote = allow.skills ? agent.plugins.skillsPrompt(agent.plugins.listSkills()) : '';
-    const messages = [{ role: 'system', content: skillNote + agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effortUse) + mentionHint + (inStudio && tools.length ? agent.studioPrompt(b.studio.project, (() => { try { return stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })); } catch { return []; } })()) + (() => { try { const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.studioFocus(stu.snapshot(b.studio.project), lu && lu.content, b.studio.project); } catch { return ''; } })() : '') + (() => { if (tools.length) return ''; const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.aboutUserHint(lu && lu.content, b.memory === true && Array.isArray(b.memories) ? b.memories : []); })() }, ...(b.messages || []).filter(m => m.role !== 'system')];
+    const messages = [{ role: 'system', content: mentionHint + skillNote + agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effortUse) + (inStudio && tools.length ? agent.studioPrompt(b.studio.project, (() => { try { return stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })); } catch { return []; } })()) + (() => { try { const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.studioFocus(stu.snapshot(b.studio.project), lu && lu.content, b.studio.project); } catch { return ''; } })() : '') + (() => { if (tools.length) return ''; const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.aboutUserHint(lu && lu.content, b.memory === true && Array.isArray(b.memories) ? b.memories : []); })() }, ...(b.messages || []).filter(m => m.role !== 'system')];
     // Host-side routing: obvious intents run their tool before the model answers (weak models skip tool calls).
     if (tools.length) {
       const lastUser = [...messages].reverse().find(m => m.role === 'user');

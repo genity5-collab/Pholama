@@ -47,7 +47,8 @@
     </div>
   </div>
   <div class="composer">
-    <textarea id="in" rows="1" placeholder="Message Pholama..."></textarea>
+    <textarea id="in" rows="1" placeholder="Message Pholama... (type @ for plugins)" aria-autocomplete="list" aria-haspopup="listbox" aria-controls="mentionMenu" aria-expanded="false"></textarea>
+    <div id="mentionMenu" class="mention-menu" role="listbox" aria-label="Plugin suggestions" hidden></div>
     <button id="crBox" class="pill" style="display:none" title="Usage" aria-label="Usage"></button>
     <button class="p" id="send" title="Send" aria-label="Send">&#8593;</button>
   </div>
