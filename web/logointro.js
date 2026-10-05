@@ -30,9 +30,9 @@ export function sceneHTML(id = 'pl', { name = true } = {}) {
     <g class="pi-dots">${dots}</g>
     <g class="pi-llama" clip-path="url(#${id}-rise)">
       <use class="pi-shape" href="#${id}-p"/>
-      <g class="pi-bare"><rect x="236" y="${GLASSES.y0 - 2}" width="296" height="${GLASSES.y1 - GLASSES.y0 + 6}" class="pi-skin"/><circle class="pi-eye" cx="326" cy="286" r="9"/><circle class="pi-eye" cx="442" cy="286" r="9"/></g>
+      <g class="pi-bare"><rect x="246" y="${GLASSES.y0 + 4}" width="276" height="${GLASSES.y1 - GLASSES.y0 - 8}" class="pi-skin"/><circle class="pi-eye" cx="326" cy="286" r="9"/><circle class="pi-eye" cx="442" cy="286" r="9"/></g>
     </g>
-    <g class="pi-glasses" clip-path="url(#${id}-glass)"><use class="pi-shape" href="#${id}-p"/></g>
+    <g clip-path="url(#${id}-glass)"><g class="pi-glasses"><rect class="pi-plate" x="246" y="${GLASSES.y0 + 4}" width="276" height="${GLASSES.y1 - GLASSES.y0 - 8}"/><use class="pi-shape" href="#${id}-p"/></g></g>
   </svg>${name ? '<div class="pi-name" aria-hidden="true">PHOLAMA</div>' : ''}</div>`;
 }
 
@@ -40,17 +40,17 @@ export function sceneHTML(id = 'pl', { name = true } = {}) {
 export const INTRO_CSS = `
 .pi{display:flex;flex-direction:column;align-items:center;gap:14px;color:var(--fg);--skin:var(--fg)}
 .pi svg{width:min(46vmin,260px);height:auto;overflow:visible}
-.pi-shape{fill:currentColor}.pi-skin{fill:var(--skin)}.pi-eye{fill:var(--bg)}
+.pi-shape{fill:currentColor}.pi-skin{fill:var(--skin)}.pi-eye{fill:var(--bg)}.pi-plate{fill:var(--bg)}
 .pi-dot{fill:currentColor;opacity:0;transform-box:fill-box;transform-origin:center;animation:pi-dot 1s ease-in-out both}
 @keyframes pi-dot{0%{opacity:0;scale:.5}30%{opacity:1;scale:1}75%{opacity:1}100%{opacity:0;translate:var(--dx) var(--dy);scale:.4}}
 .pi-wipe{y:${VB}px;animation:pi-rise .9s cubic-bezier(.3,.6,.3,1) .9s both}
 @keyframes pi-rise{from{y:${VB}px}to{y:0px}}
-.pi-bare{opacity:1;animation:pi-bare .01s linear 3.0s forwards}@keyframes pi-bare{to{opacity:0}}
+.pi-bare{opacity:1;animation:pi-bare .01s linear 3.25s forwards}@keyframes pi-bare{to{opacity:0}}
 .pi-glasses{opacity:0;translate:0 -70px;animation:pi-drop .55s cubic-bezier(.3,1.5,.5,1) 2.7s forwards}
 @keyframes pi-drop{60%{opacity:1}to{opacity:1;translate:0 0}}
 .pi-name{letter-spacing:.32em;font-weight:650;font-size:clamp(15px,3.6vmin,22px);opacity:0;translate:0 6px;animation:pi-name .7s ease 3.3s forwards;padding-left:.32em}
 @keyframes pi-name{to{opacity:.85;translate:0 0}}
-.pi.fast .pi-dot{animation-duration:.5s}.pi.fast .pi-wipe{animation-duration:.5s;animation-delay:.5s}.pi.fast .pi-bare{animation-delay:1.65s}.pi.fast .pi-glasses{animation-duration:.3s;animation-delay:1.5s}.pi.fast .pi-name{animation-duration:.4s;animation-delay:1.8s}
+.pi.fast .pi-dot{animation-duration:.5s}.pi.fast .pi-wipe{animation-duration:.5s;animation-delay:.5s}.pi.fast .pi-bare{animation-delay:1.8s}.pi.fast .pi-glasses{animation-duration:.3s;animation-delay:1.5s}.pi.fast .pi-name{animation-duration:.4s;animation-delay:1.8s}
 .pi.still .pi-dot,.pi.still .pi-bare{display:none}.pi.still .pi-wipe,.pi.still .pi-glasses,.pi.still .pi-name{animation:none;opacity:1;translate:0 0;transform:none}.pi.still .pi-wipe{y:0px}.pi.still .pi-name{opacity:.85}
 @media (prefers-reduced-motion:reduce){.pi .pi-dot,.pi .pi-bare{display:none}.pi .pi-wipe,.pi .pi-llama,.pi .pi-glasses,.pi .pi-name{animation:none;opacity:1;translate:0 0;transform:none}.pi .pi-wipe{y:0px}.pi .pi-name{opacity:.85}}
 .plogo{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;background:var(--bg);transition:opacity .45s ease,visibility .45s}

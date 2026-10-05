@@ -1,6 +1,15 @@
 {
- "latest": "0.9.33",
+ "latest": "0.9.34",
  "releases": [
+  {
+   "version": "0.9.34",
+   "date": "2026-10-05",
+   "title": "Fixed the sunglasses glitch in the opening animation.",
+   "notes": [
+    "Fixed: in the opening logo animation, the sunglasses used to show as a flat white or black block and then snap into place. They now drop onto the face and land smoothly.",
+    "The same fix applies to the short version shown after an update, and it looks right on both the light and the dark theme."
+   ]
+  },
   {
    "version": "0.9.33",
    "date": "2026-10-05",

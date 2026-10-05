@@ -55,6 +55,15 @@ const root = path.join(__dirname, '..');
       await ev("sessionStorage.clear()"); await open(base); await wait(500);
       ok(`${label}: the app is already running behind the splash`, await ev("!!document.querySelector('#viewSw')"));
     }
+    // the glasses must be visible WHILE they drop (a white block over them was the bug): step the animation clock and read the lens colour
+    await ev("sessionStorage.clear()"); await open(`http://127.0.0.1:${port}/`); await splashUp();
+    await ev("document.querySelector('#plogo').getAnimations({subtree:true}).forEach(a=>a.pause())");
+    const lens = async ms => ev(`(()=>{const r=document.querySelector('#plogo');r.getAnimations({subtree:true}).forEach(a=>a.currentTime=${ms});const g=r.querySelector('.pi-glasses'),b=r.querySelector('.pi-bare');return {g:+getComputedStyle(g).opacity,b:+getComputedStyle(b).opacity,y:g.getBoundingClientRect().top}})()`);
+    const before = await lens(2600), start = await lens(2760), mid = await lens(2950), after = await lens(3400);
+    ok('before the drop: glasses hidden, bare face shown', before.g === 0 && before.b === 1, JSON.stringify(before));
+    ok('during the drop: glasses are already visible while the bare face is still under them', mid.g > 0.5 && mid.b === 1, JSON.stringify(mid));
+    ok('the glasses start above their final spot and settle exactly on it (small bounce allowed)', start.y < after.y - 5 && Math.abs((await lens(3600)).y - after.y) < 0.5, start.y + ' / ' + after.y);
+    ok('after landing: glasses fully in, bare face gone (no leftover block)', after.g === 1 && after.b === 0, JSON.stringify(after));
     // reduced motion: the finished logo at once, no moving parts
     await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'reduce' }] });
     await ev("sessionStorage.clear()"); await open(`http://127.0.0.1:${port}/`); await wait(600);

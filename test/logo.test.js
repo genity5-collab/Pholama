@@ -49,6 +49,11 @@ const px = (im, x, y) => { const i = (y * im.w + x) * im.bpp; return { r: im.px[
   ok('stageAt follows the clock', m.stageAt(p, 0) === 'dots' && m.stageAt(p, 1000) === 'rise' && m.stageAt(p, 2800) === 'glasses' && m.stageAt(p, 3500) === 'name' && m.stageAt(p, 9000) === 'done');
   // ---- markup
   const h = m.sceneHTML('t1'), h2 = m.sceneHTML('t2', { name: false });
+  // glasses: the lenses are holes in the llama shape, so the dropping glasses need their own solid plate, and the clip must not travel with them
+  ok('glasses clip sits on a fixed outer group, only the inner group moves', /<g clip-path="url\(#t1-glass\)"><g class="pi-glasses">/.test(h));
+  ok('glasses carry a solid plate so the lenses read dark while dropping', /class="pi-plate"/.test(h) && /\.pi-plate\{fill:var\(--bg\)\}/.test(m.INTRO_CSS));
+  { const drop = /animation:pi-drop \.55s[^;]*2\.7s/.test(m.INTRO_CSS), bare = (m.INTRO_CSS.match(/\.pi-bare\{[^}]*animation:pi-bare \.01s linear ([\d.]+)s/) || [])[1];
+    ok('the bare face only goes once the glasses have landed (2.7s + .55s)', drop && parseFloat(bare) >= 3.25, bare); }
   ok('the llama path is written once and reused', (h.match(/fill-rule="evenodd" d=/g) || []).length === 1 && (h.match(/<use /g) || []).length === 2);
   ok('ids are unique per scene', !h2.includes('t1-') && h2.includes('t2-p'));
   ok('the name can be left out', h.includes('PHOLAMA') && !h2.includes('PHOLAMA'));
