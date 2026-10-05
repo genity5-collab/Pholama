@@ -1,6 +1,17 @@
 {
- "latest": "0.9.30",
+ "latest": "0.9.31",
  "releases": [
+  {
+   "version": "0.9.31",
+   "date": "2026-10-05",
+   "title": "Cheaper Studio: chat 1, task 3, big task 4. Your companion wanders and codes.",
+   "notes": [
+    "Changed: Studio credits now depend on the size of the job. A chat or a question costs 1, a normal build or edit (a medium task) costs 3, and a big task costs 4. A big task is a whole app, game or site, a long request, a numbered list of four or more jobs, or a request that touches three or more files. The server decides this from your real message, so it cannot be set lower from the page.",
+    "Changed: Agent Max in Studio used to add 20 credits on top (23 per message). It now costs the same as any other model. It still uses its own daily and monthly Max messages, and your own model still takes over for free when Max runs out.",
+    "New: the Studio companion now lives. It wanders around the screen on its own, faces the way it walks, and naps when nothing is happening. While the AI is building it sits down at a tiny laptop and types code, like a mini Codex, then goes back to wandering when the work is done. The laptop screen is only for show and never touches your files.",
+    "The companion stands still while you drag it or while its menu is open, and it holds still if your system asks for reduced motion."
+   ]
+  },
   {
    "version": "0.9.30",
    "date": "2026-10-05",

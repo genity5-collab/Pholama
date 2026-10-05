@@ -424,12 +424,12 @@ async function chat(req, res, b) {
     let extraSpent = 0;
     if (b.agent) {
       const lastUser = (() => { const u = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return u ? String(u.content) : ''; })();
-      const want = pricing.extraCost({ images: b.images, codeChars: pricing.codeCharsIn(lastUser), studio: inStudio, maxStudio });
+      const want = pricing.extraCost({ images: b.images, codeChars: pricing.codeCharsIn(lastUser), studio: inStudio, size: inStudio ? pricing.taskSize(lastUser) : null, maxStudio });
       if (want.total > 0) {
         if (agent.credits().left >= want.total && agent.spend(want.total)) {
           extraSpent = want.total;
           log('step', `Spent ${want.total} credits (${pricing.describe(want)}). ${agent.credits().left} left.`);
-          if (want.mx) log('action', `Agent Max in Studio: ${want.mx} extra credits, and up to ${maxcloud.MAX_CALLS} Max messages from your daily and monthly allowance.`);
+          if (maxStudio) log('action', `Agent Max in Studio uses up to ${maxcloud.MAX_CALLS} Max messages from your daily and monthly allowance. No extra credits.`);
           line({ credits: { spent: want.total, left: agent.credits().left } });
         } else {
           log('error', `Not enough credits for ${pricing.describe(want)} (${want.total} needed, ${agent.credits().left} left). Your chat still works. It is free on your own model.`);

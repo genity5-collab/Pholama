@@ -3,6 +3,7 @@
 // and the preview runs in a sandboxed iframe that cannot reach Pholama's storage, keys or account.
 import { sourcesCard } from './sources.js';
 import { createFx, toolStatus } from './studiofx.js';
+import * as CL from './companionlife.js';
 
 export const PREVIEW_DELAY = 300, SAVE_DELAY = 600, MAX_CONSOLE = 200, MAX_LINE = 400;
 
@@ -114,17 +115,44 @@ export function createStudio(env) {
   const makeCompanion = () => {
     if (companionEl || !S.companion) return;
     companionEl = document.createElement('div'); companionEl.className = 'st-companion-wrap';
-    companionEl.innerHTML = '<button class="st-companion" type="button" title="Drag to place Pholama; click for reactions" aria-label="Pholama companion" aria-expanded="false"><img src="icon.svg" alt=""><span>drag me</span></button><div class="st-companion-actions" hidden aria-label="Pholama reactions"><button type="button" data-reaction="👋 Wave">👋 Wave</button><button type="button" data-reaction="✨ Yay!">✨ Yay</button><button type="button" data-reaction="💚 Love">💚 Love</button><button type="button" data-reaction="💃 Dance">💃 Dance</button><button type="button" data-reaction="😴 Nap">😴 Nap</button><button type="button" data-reaction="🤔 Thinking...">🤔 Think</button></div><div class="st-companion-bubble" hidden></div>';
+    companionEl.innerHTML = '<button class="st-companion" type="button" title="Drag to place Pholama; click for reactions" aria-label="Pholama companion" aria-expanded="false"><img src="icon.svg" alt=""><span>drag me</span></button><div class="st-companion-actions" hidden aria-label="Pholama reactions"><button type="button" data-reaction="👋 Wave">👋 Wave</button><button type="button" data-reaction="✨ Yay!">✨ Yay</button><button type="button" data-reaction="💚 Love">💚 Love</button><button type="button" data-reaction="💃 Dance">💃 Dance</button><button type="button" data-reaction="😴 Nap">😴 Nap</button><button type="button" data-reaction="🤔 Thinking...">🤔 Think</button></div><div class="st-companion-bubble" hidden></div><div class="st-companion-pc" hidden aria-hidden="true"><div class="st-pc-screen"><pre></pre></div><div class="st-pc-base"></div></div>';
     companionBtn = companionEl.querySelector('.st-companion'); companionActions = companionEl.querySelector('.st-companion-actions'); companionBubble = companionEl.querySelector('.st-companion-bubble');
-    companionBtn.addEventListener('pointerdown', e => { if (e.button !== 0) return; dragCompanion = { id: e.pointerId, x: e.clientX, y: e.clientY, left: companionPos.x, top: companionPos.y, moved: false }; try { companionBtn.setPointerCapture(e.pointerId); } catch {} });
+    companionBtn.addEventListener('pointerdown', e => { if (e.button !== 0) return; lastActive = Date.now(); stopWalking(); dragCompanion = { id: e.pointerId, x: e.clientX, y: e.clientY, left: companionPos.x, top: companionPos.y, moved: false }; try { companionBtn.setPointerCapture(e.pointerId); } catch {} });
     companionBtn.addEventListener('pointermove', e => { if (!dragCompanion || dragCompanion.id !== e.pointerId) return; const dx = e.clientX - dragCompanion.x, dy = e.clientY - dragCompanion.y; if (Math.abs(dx) + Math.abs(dy) > 5) dragCompanion.moved = true; if (dragCompanion.moved) placeCompanion(dragCompanion.left + dx, dragCompanion.top + dy); });
     companionBtn.addEventListener('pointerup', e => { if (!dragCompanion || dragCompanion.id !== e.pointerId) return; if (dragCompanion.moved) { placeCompanion(companionPos.x, companionPos.y, true); suppressCompanionClick = true; setTimeout(() => { suppressCompanionClick = false; }, 150); } dragCompanion = null; });
-    companionBtn.onclick = () => { if (suppressCompanionClick) { suppressCompanionClick = false; return; } companionActions.hidden = !companionActions.hidden; companionBtn.setAttribute('aria-expanded', String(!companionActions.hidden)); if (!companionActions.hidden) companionSay('Choose a reaction'); };
+    companionBtn.onclick = () => { if (suppressCompanionClick) { suppressCompanionClick = false; return; } lastActive = Date.now(); stopWalking(); companionActions.hidden = !companionActions.hidden; companionBtn.setAttribute('aria-expanded', String(!companionActions.hidden)); if (!companionActions.hidden) companionSay('Choose a reaction'); };
     companionActions.addEventListener('click', e => { const b = e.target.closest('[data-reaction]'); if (!b) return; companionEl.classList.remove('react'); void companionEl.offsetWidth; companionEl.classList.add('react'); companionSay(b.dataset.reaction); companionActions.hidden = true; companionBtn.setAttribute('aria-expanded', 'false'); });
     document.addEventListener('pointerdown', e => { if (companionEl && !companionEl.contains(e.target) && companionActions && !companionActions.hidden) { companionActions.hidden = true; companionBtn.setAttribute('aria-expanded', 'false'); } });
-    document.body.appendChild(companionEl); placeCompanion(companionPos.x, companionPos.y);
+    document.body.appendChild(companionEl); placeCompanion(companionPos.x, companionPos.y); startLife();
   };
-  const removeCompanion = () => { if (companionEl) { companionEl.remove(); companionEl = null; } };
+  // ---- the companion's little life: wanders around, codes on a tiny laptop while the AI builds, naps when nothing happens ----
+  let lifeTimer = 0, codeTimer = 0, walkTimer = 0, lastActive = Date.now(), codeTick = 0, mood = 'idle';
+  const calm = () => { try { return window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches; } catch { return false; } };
+  const setMood = m => { mood = m; if (!companionEl) return; companionEl.dataset.mood = m; const pc = companionEl.querySelector('.st-companion-pc'); if (pc) pc.hidden = m !== 'code'; };
+  const drawCode = () => { const pre = companionEl && companionEl.querySelector('.st-pc-screen pre'); if (pre) pre.textContent = CL.codeView(codeTick, 4, 22).join('\n'); };
+  const stopLife = () => { clearTimeout(lifeTimer); clearInterval(codeTimer); clearTimeout(walkTimer); lifeTimer = codeTimer = walkTimer = 0; };
+  const stopWalking = () => { if (!companionEl) return; clearTimeout(walkTimer); const r = companionEl.getBoundingClientRect(); companionEl.classList.remove('walking'); companionEl.style.transition = 'none'; placeCompanion(r.left, r.top, true); void companionEl.offsetWidth; companionEl.style.transition = ''; };
+  const walkTo = spot => {   // glide to the spot, facing the way it goes
+    if (!companionEl) return; const from = { ...companionPos }, ms = CL.walkMs(from, spot);
+    companionEl.dataset.face = spot.x < from.x ? 'left' : 'right'; companionEl.classList.add('walking');
+    companionEl.style.transition = 'left ' + ms + 'ms ease-in-out, top ' + ms + 'ms ease-in-out'; placeCompanion(spot.x, spot.y, true);
+    walkTimer = setTimeout(() => { if (companionEl) { companionEl.classList.remove('walking'); companionEl.style.transition = ''; } }, ms + 50);
+  };
+  const lifeStep = () => {
+    clearTimeout(lifeTimer); if (!companionEl || !S.companion) return;
+    const blocked = calm() || !!dragCompanion || (companionActions && !companionActions.hidden) || !document.body.classList.contains('studio-on') || document.hidden;
+    if (S.busy) lastActive = Date.now();
+    const next = CL.nextMood({ busy: S.busy && !blocked, blocked, idleSeconds: (Date.now() - lastActive) / 1000 });
+    if (next === 'code') { if (mood !== 'code') { codeTick = 0; setMood('code'); clearInterval(codeTimer); codeTimer = setInterval(() => { codeTick += 2; drawCode(); }, 90); companionSay(CL.say('code')); } }
+    else { if (mood === 'code') { clearInterval(codeTimer); codeTimer = 0; } setMood(next);
+      if (next === 'walk') { walkTo(CL.pickSpot(companionPos, { w: window.innerWidth, h: window.innerHeight })); if (Math.random() < 0.3) companionSay(CL.say('walk')); }
+      else if (next === 'nap' && Math.random() < 0.5) companionSay(CL.say('nap')); }
+    lifeTimer = setTimeout(lifeStep, next === 'code' ? 1500 : 2600 + Math.random() * 3400);
+  };
+  const startLife = () => { stopLife(); lastActive = Date.now(); lifeTimer = setTimeout(lifeStep, 1800); };
+  document.addEventListener('visibilitychange', () => { if (document.hidden) { clearInterval(codeTimer); codeTimer = 0; } });
+  window.__pholamaStudioBusy = v => { S.busy = !!v; };   // used by the browser tests to stand in for a real build
+  const removeCompanion = () => { stopLife(); if (companionEl) { companionEl.remove(); companionEl = null; } };
   const companionFrame = () => { if (companionEl) companionEl.style.display = S.companion && document.body.classList.contains('studio-on') ? '' : 'none'; };
   if (window.MutationObserver) new MutationObserver(companionFrame).observe(document.body, { attributes: true, attributeFilter: ['class'] });
   window.addEventListener('resize', () => placeCompanion(companionPos.x, companionPos.y));
@@ -257,7 +285,7 @@ export function createStudio(env) {
     const model = getModel(); if (!model) { say('Pick a model at the top first.', 'err'); return; }
     const previewErrors = S.log.filter(x => x.kind === 'error' || x.kind === 'warn').slice(-8).map(x => x.kind.toUpperCase() + ': ' + x.text).join('\n');
     const modelText = previewErrors ? text + '\n\n[Preview diagnostics from the running app]\n' + previewErrors + '\n[/Preview diagnostics]' : text;
-    if (model === 'cloud:pholama' && !S.maxWarned) { S.maxWarned = true; say('Agent Max in Studio costs more: about 23 credits a message, plus up to 8 Max messages from your daily and monthly allowance. If Max runs out, your own model on this PC takes over for free.', 'warn'); }
+    if (model === 'cloud:pholama' && !S.maxWarned) { S.maxWarned = true; say('Credits in Studio: chat 1, a medium task 3, a big task 4. Agent Max costs the same, and also uses up to 8 Max messages from your daily and monthly allowance. If Max runs out, your own model on this PC takes over for free.', 'warn'); }
     S.busy = true; el.stAddFile.disabled = true; el.stNewScript.disabled = true; el.stSend.textContent = 'Stop'; say(text, 'me'); hist.push({ role: 'user', content: modelText }); if (hist.length > 8) hist.splice(0, hist.length - 8);
     const ac = new AbortController(); S.stopper = () => ac.abort(); let reply = '', node = null, srcCard = null, thinkNode = null;
     try {

@@ -45,6 +45,10 @@ async function main() {
     ok('sending a fake price changes nothing (still 5)', b - a === 5, [b, a]);
     b = await left(); r = await chat({ messages: msg('make a page'), studio: { project: 'price-test' } }); a = await left();
     ok('a Studio message costs 3', b - a === 3 && spentIn(r.text).includes(3), [b, a, spentIn(r.text)]);
+    b = await left(); r = await chat({ messages: msg('what does this project do?'), studio: { project: 'price-test' } }); a = await left();
+    ok('a chat question in Studio costs 1', b - a === 1, [b, a]);
+    b = await left(); r = await chat({ messages: msg('make a whole shop website with login, a dashboard and a cart'), studio: { project: 'price-test' } }); a = await left();
+    ok('a big task in Studio costs 4', b - a === 4, [b, a]);
     b = await left(); r = await chat({ messages: msg('make a page'), studio: { project: 'price-test' }, images: 1 }); a = await left();
     ok('Studio + 1 picture adds up (3 + 5 = 8)', b - a === 8, [b, a]);
     b = await left(); r = await chat({ messages: msg('hello'), studio: {} }); a = await left();

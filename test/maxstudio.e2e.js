@@ -43,11 +43,11 @@ s.end(JSON.stringify({choices:[{message:{content:out}}]}))})}).listen(port,'127.
     ok('the final answer came from Max', /Max built it/.test(t), t.slice(0, 400));
     ok('the sign-in token was sent to the cloud', calls.length > 0 && calls.every(c => c.auth === 'Bearer tok_ABC123'), JSON.stringify(calls.map(c => c.auth)));
     ok('the token never comes back to the page', !t.includes('tok_ABC123'), t.slice(0, 200));
-    ok('the extra Max price is shown (23 total with Studio)', /Agent Max in Studio 20/.test(t) && /Spent 23 credits/.test(t), (t.match(/Spent[^"]*/g) || []).join(' | '));
+    ok('Max costs the same as any Studio task (3 for a medium task, no extra)', /Studio task 3/.test(t) && !/Agent Max in Studio 20/.test(t) && !/Spent 23/.test(t), (t.match(/Spent[^"]*/g) || []).join(' | '));
     const uevs = t.split('\n').map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(e => e && e.maxUsage && e.maxUsage.day_used != null).map(e => e.maxUsage);
     ok('Studio tells the page the day and month numbers after each Max call', uevs.length >= 2 && uevs.every(u => u.day_cap === 10 && u.month_cap === 30), JSON.stringify(uevs));
     ok('and the numbers go UP from one Max call to the next (the counter moves)', uevs.length >= 2 && uevs[uevs.length - 1].day_used > uevs[0].day_used && uevs[uevs.length - 1].month_used > uevs[0].month_used, JSON.stringify(uevs));
-    const after = await credits(); if (before != null && after != null) ok('23 credits were taken', before - after >= 23, before + ' -> ' + after);
+    const after = await credits(); if (before != null && after != null) ok('Max added no extra charge: only Thinking (25) + a medium Studio task (3) were taken, not the old 20 more', before - after === 28, before + ' -> ' + after);
     // Max is for Studio only
     t = await chat({ model: 'cloud:pholama', agent: true, messages: [{ role: 'user', content: 'hi' }] }); ok('outside Studio it explains, and does not call the cloud', /only works inside Studio/.test(t), t.slice(0, 300));
     // the step cap: a model that loops forever is stopped after 8 cloud calls

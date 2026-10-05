@@ -458,3 +458,20 @@ header{border-bottom:1px solid var(--line);backdrop-filter:blur(18px);background
 .tl-review{display:grid;gap:6px;margin-top:8px;padding:10px;border:1px dashed var(--line);border-radius:12px}
 .tl-review input,.tl-review textarea{width:100%}
 @media (prefers-reduced-motion:reduce){.s-pane{animation:none}}
+
+/* companion life: it walks (bobbing, facing the way it goes), codes on a tiny laptop, and naps */
+.st-companion-wrap[data-face="left"] .st-companion img{transform:scaleX(-1)}
+.st-companion-wrap.walking .st-companion{animation:st-walk .5s ease-in-out infinite}
+.st-companion-wrap[data-mood="nap"] .st-companion{opacity:.8;animation:st-nap 3s ease-in-out infinite}
+.st-companion-wrap[data-mood="code"] .st-companion{box-shadow:0 0 0 2px color-mix(in srgb,var(--acc) 60%,transparent),0 10px 28px color-mix(in srgb,var(--acc) 30%,transparent)}
+.st-companion-pc{position:absolute;left:50%;bottom:62px;transform:translateX(-50%);width:148px;pointer-events:none;filter:drop-shadow(0 6px 10px color-mix(in srgb,#000 25%,transparent))}
+.st-companion-pc[hidden]{display:none}
+.st-pc-screen{height:70px;padding:6px 7px;border:2px solid var(--line);border-bottom:0;border-radius:8px 8px 0 0;background:#0d1117;overflow:hidden}
+.st-pc-screen pre{margin:0;font:9.5px/1.35 ui-monospace,Consolas,monospace;color:#7ee787;white-space:pre;overflow:hidden}
+.st-pc-screen pre::after{content:"";display:inline-block;width:5px;height:9px;margin-left:1px;background:#7ee787;vertical-align:-1px;animation:st-blink .8s steps(2) infinite}
+.st-pc-base{height:7px;margin:0 -8px;border-radius:0 0 8px 8px;background:var(--line)}
+.st-companion-wrap[data-vertical="top"] .st-companion-pc{top:62px;bottom:auto}
+@keyframes st-walk{0%,100%{translate:0 0;rotate:-3deg}50%{translate:0 -4px;rotate:3deg}}
+@keyframes st-nap{0%,100%{scale:1}50%{scale:.94}}
+@keyframes st-blink{50%{opacity:0}}
+@media (prefers-reduced-motion:reduce){.st-companion-wrap.walking .st-companion,.st-companion-wrap[data-mood="nap"] .st-companion,.st-pc-screen pre::after{animation:none}}
