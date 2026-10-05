@@ -50,7 +50,7 @@ grant execute on function public.pholama_my_plan() to authenticated;
 
 -- ---------- one-time codes ----------
 -- The person asks for a code in Settings > Plans, then types it inside the Roblox game.
--- Only a hash is stored. A code works once, for 15 minutes, for the account that asked for it.
+-- Only a hash is stored. A code works once, for 30 minutes, for the account that asked for it.
 create table if not exists public.pholama_pro_codes (
   code_hash  text primary key,
   user_id    uuid not null references auth.users(id) on delete cascade,
@@ -70,7 +70,7 @@ begin
   if recent >= 10 then raise exception 'Too many codes. Try again in a while.'; end if;
   update public.pholama_pro_codes set expires_at = now() where user_id = auth.uid() and used_at is null and expires_at > now();   -- a new code cancels the old one
   c := upper(substr(replace(gen_random_uuid()::text, '-', ''), 1, 8));                                                                  -- 8 characters, 4 billion possibilities
-  insert into public.pholama_pro_codes (code_hash, user_id, expires_at) values (encode(sha256(convert_to(c, 'UTF8')), 'hex'), auth.uid(), now() + interval '15 minutes');
+  insert into public.pholama_pro_codes (code_hash, user_id, expires_at) values (encode(sha256(convert_to(c, 'UTF8')), 'hex'), auth.uid(), now() + interval '30 minutes');
   return c;
 end $$;
 revoke all on function public.pholama_pro_code_new() from public, anon;
