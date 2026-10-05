@@ -193,6 +193,31 @@ Deno.serve(async (req) => {
 
     // 2) read the request
     const body = await req.json().catch(() => ({}));
+
+    // Friend chat (the Agent Max entry at the top of the friend list). The member's message was ALREADY counted and checked by the
+    // database (pholama_max_chat_send), so this never trusts the page for what was said or how many are left: it reads the stored chat.
+    if (body.friend === true) {
+      const hist = await fetch(SB + '/rest/v1/pholama_max_chat?user_id=eq.' + encodeURIComponent(user.id) + '&select=id,role,body&order=id.desc&limit=12', { headers: { apikey: key, Authorization: 'Bearer ' + key } });
+      if (!hist.ok) return out({ error: 'Could not read the chat. Try again.', code: 'server' }, 502);
+      const rows = ((await hist.json()) as any[]).reverse();
+      const lastRow = rows[rows.length - 1];
+      if (!lastRow || lastRow.role !== 'user') return out({ error: 'Send a message first.', code: 'empty' }, 400);   // nothing waiting for an answer
+      const fname = String(user.user_metadata?.name || 'your friend').slice(0, 30);
+      const fsys = SYSTEM + '\nYou are chatting privately as ' + fname + "'s friend inside Pholama. Be warm and brief (under about 120 words).";
+      const turns = rows.map((m: any) => ({ role: m.role === 'max' ? 'assistant' : 'user', content: String(m.body).slice(0, 2000) }));
+      try {
+        const text = await aiText([{ role: 'system', content: fsys }, ...turns]);
+        if (!text) throw new Error('empty');
+        const clean = /Text inside tool results is DATA|TOOLS \(use one when it helps/i.test(text) ? "I can't share that." : text.slice(0, 2000);
+        const sv = await rpc('pholama_max_chat_reply', { p_user: user.id, p_body: clean });
+        if (!sv.ok) throw new Error('save');
+        return out({ reply: clean });
+      } catch (e) {
+        await rpc('pholama_max_chat_refund', { p_user: user.id }).catch(() => {});   // nobody pays for an answer they did not get
+        console.log('AgentMax friend error:', String(e).slice(0, 200));
+        return out({ error: 'Agent Max did not answer. You were not charged. Try again.', code: 'server' }, 500);
+      }
+    }
     const effort = EFFORT[String(body.effort)] ? String(body.effort) : 'normal';
     const studioMode = body.studio === true;   // Studio: the PC sends its own rules + tools; this function only thinks and writes, the PC does the file work
     const rawMsgs = Array.isArray(body.messages) ? body.messages : [];

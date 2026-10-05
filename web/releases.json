@@ -1,6 +1,16 @@
 {
- "latest": "0.9.35",
+ "latest": "0.9.36",
  "releases": [
+  {
+   "version": "0.9.36",
+   "date": "2026-10-05",
+   "title": "Pholama Pro, and Agent Max is now a friend.",
+   "notes": [
+    "New: Pholama Pro. 100 Robux a month on Roblox gives you 15 Agent Max messages a day and 35 a month, 10 projects, 10 friends, more memories and 10,000 integration tokens. Open Settings > Plans to see Free next to Pro and to get your one-time code (it works for 30 minutes).",
+    "New: Agent Max is now a friend at the top of your friend list. Chat with it any time: 5 messages a day, or 10 with Pro. It cannot be removed, blocked or called, and a message is given back if Agent Max cannot answer.",
+    "Safer: Pro is checked by the database, so it cannot be switched on from the page. If the Pro check ever fails you simply keep the normal free limits."
+   ]
+  },
   {
    "version": "0.9.35",
    "date": "2026-10-05",
