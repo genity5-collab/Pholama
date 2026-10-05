@@ -4,7 +4,8 @@
 // -> { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }  or { error, code }
 
 const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
-const DAY_CAP_NO_LOCAL = 10, DAY_CAP_WITH_LOCAL = 1, MONTH_CAP = 30;   // a capable local AI is free and unlimited, so the cloud one is only a backup
+const DAY_CAP_NO_LOCAL = 10, DAY_CAP_WITH_LOCAL = 1, FREE_MONTH_CAP = 30;
+const PRO_DAY_CAP_NO_LOCAL = 15, PRO_DAY_CAP_WITH_LOCAL = 2, PRO_MONTH_CAP = 35;   // Pholama Pro (a Roblox subscription): a little more room   // a capable local AI is free and unlimited, so the cloud one is only a backup
 const ROUNDS: Record<string, number> = { normal: 3, long: 4, max: 5 };   // model calls per message; one message always counts as 1
 const KNOWLEDGE: { id: string; keys: string; text: string; remote?: boolean }[] = /*KNOWLEDGE*/[];
 const KNOWLEDGE_URL = 'https://genity5-collab.github.io/Pholama/max-knowledge.json';
@@ -203,7 +204,11 @@ Deno.serve(async (req) => {
     if (!last || last.role !== 'user' || !last.content.trim()) return out({ error: 'Type a message first.', code: 'empty' }, 400);
 
     // The page reports whether this PC has a local AI that can run tools. With one, the daily allowance is 1; without, 10.
-    const DAY_CAP = body.localTools === true ? DAY_CAP_WITH_LOCAL : DAY_CAP_NO_LOCAL;
+    // Pro members get more. If the Pro check fails for ANY reason the person simply gets the normal allowance: Pro can add room, never take it away.
+    let isPro = false;
+    try { const pr = await rpc('pholama_is_pro', { p_user: user.id }); if (pr.ok) isPro = (await pr.json()) === true; } catch { isPro = false; }
+    const MONTH_CAP = isPro ? PRO_MONTH_CAP : FREE_MONTH_CAP;
+    const DAY_CAP = body.localTools === true ? (isPro ? PRO_DAY_CAP_WITH_LOCAL : DAY_CAP_WITH_LOCAL) : (isPro ? PRO_DAY_CAP_NO_LOCAL : DAY_CAP_NO_LOCAL);
 
     // 3) count ONE message (atomic in the database) before doing any work
     const sp = await rpc('pholama_max_spend', { p_user: user.id, p_day_cap: DAY_CAP, p_month_cap: MONTH_CAP });
@@ -213,7 +218,7 @@ Deno.serve(async (req) => {
     if (!row.ok) {
       return out(row.reason === 'month'
         ? { error: `You used all ${MONTH_CAP} Agent Max messages this month. It restocks next month (1st, UTC). Local models stay free and unlimited.`, code: 'limit-month', ...info }
-        : { error: `You used today's ${DAY_CAP} Agent Max messages. They come back tomorrow (midnight UTC). Local models stay free.${DAY_CAP === DAY_CAP_WITH_LOCAL ? ' You have a local AI that runs tools, so your daily allowance is 1. Remove it from Models and the daily allowance goes back to 10.' : ''}`, code: 'limit-day', ...info }, 429);
+        : { error: `You used today's ${DAY_CAP} Agent Max messages. They come back tomorrow (midnight UTC). Local models stay free.${DAY_CAP === DAY_CAP_WITH_LOCAL ? ' You have a local AI that runs tools, so your daily allowance is 1. Remove it from Models and the daily allowance goes back to ${isPro ? PRO_DAY_CAP_NO_LOCAL : DAY_CAP_NO_LOCAL}.' : ''}`, code: 'limit-day', ...info }, 429);
     }
     charged = user.id;
 

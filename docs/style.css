@@ -331,3 +331,12 @@ dialog.bigchat[open]{display:flex}
 .bigchat .bc-x{margin-left:4px}
 .openbig{font-size:12px}
 @media(max-width:640px){dialog.bigchat{width:100vw;height:100dvh;max-height:100dvh;border-radius:0}.bc-msg{max-width:92%}.bc-foot{padding-bottom:max(12px,env(safe-area-inset-bottom))}}
+
+/* Settings > Plans */
+.pl-now{margin:0 0 10px;color:var(--fg)}
+.pl-tbl{width:100%;border-collapse:collapse;font-size:13.5px;margin:6px 0 10px}
+.pl-tbl th,.pl-tbl td{padding:6px 8px;border-bottom:1px solid var(--line);text-align:left}
+.pl-tbl th:nth-child(n+2),.pl-tbl td:nth-child(n+2){text-align:center;width:64px}
+.pl-p{font-weight:700}
+.pl-how{margin:8px 0;padding-left:20px;line-height:1.5;font-size:13.5px}
+.pl-codebox{font:700 28px/1.2 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.18em;text-align:center;padding:12px;margin:6px 0;border:1px dashed var(--line);border-radius:12px;user-select:all}

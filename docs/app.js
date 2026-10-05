@@ -907,8 +907,16 @@ $('#newSess').onclick = () => { if (history.length && !confirm('Start a new sess
 inEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !/Mobi|Android/i.test(navigator.userAgent)) { e.preventDefault(); send(); } });
 
 // ----- Settings dialog & tabs -----
+// Settings > Plans: Free vs Pro and the one-time code for the Roblox game (plans.js does the work).
+let plansTab = null;
+async function paintPlans() {
+  try {
+    if (!plansTab) plansTab = await (await import('./plans.js')).mount($('#plans_host'), { Account, cfg: window.PHOLAMA || {} });
+    await plansTab.paint();
+  } catch { $('#plans_host').textContent = 'Could not load the plans page. Try again.'; }
+}
 function openSettings(tabName = 'usage') {
-  const tabs = ['usage', 'tools', 'account', 'script', 'remote', 'safety'];
+  const tabs = ['usage', 'tools', 'account', 'plans', 'script', 'remote', 'safety'];
   if (!tabs.includes(tabName)) tabName = 'usage';
   for (const t of tabs) {
     const btn = $('#s_tab_' + t);
@@ -919,11 +927,12 @@ function openSettings(tabName = 'usage') {
   if (tabName === 'usage') paintUsage();
   if (tabName === 'tools') openOpts();
   if (tabName === 'account') { $('#a_msg').textContent = ''; paintAcct(); }
+  if (tabName === 'plans') paintPlans();
   if (tabName === 'remote') paintRemoteUI();
   $('#dlgSettings').showModal();
 }
 
-for (const t of ['usage', 'tools', 'account', 'script', 'remote', 'safety']) {
+for (const t of ['usage', 'tools', 'account', 'plans', 'script', 'remote', 'safety']) {
   const btn = $('#s_tab_' + t);
   if (btn) btn.onclick = () => openSettings(t);
 }
