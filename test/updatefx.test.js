@@ -3,7 +3,7 @@ const fs = require('fs'), path = require('path');
 let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : '  -> ' + x)); if (!c) bad++; };
 (async () => {
   const m = await import(path.join(__dirname, '..', 'web', 'updatefx.js'));
-  const { cmpVer, newSince, shouldCelebrate, progress, STEPS, tidyNotes } = m;
+  const { cmpVer, updateInfo, newSince, shouldCelebrate, progress, STEPS, tidyNotes } = m;
   // version order
   ok('0.9.14 is newer than 0.9.9 (numbers, not text)', cmpVer('0.9.14', '0.9.9') === 1);
   ok('0.10.0 is newer than 0.9.99', cmpVer('0.10.0', '0.9.99') === 1);
@@ -11,6 +11,9 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   ok('1.0 equals 1.0.0', cmpVer('1.0', '1.0.0') === 0);
   ok('older is -1', cmpVer('0.8.0', '0.9.0') === -1);
   ok('junk never throws', (() => { try { cmpVer(null, undefined); cmpVer('abc', '1'); return true; } catch { return false; } })());
+  ok('new version is surfaced even when auto-install is off', (() => { const s = updateInfo({ current: '0.9.25', latest: '0.9.26', ready: false, auto: false }); return s.available && s.visible && !s.ready; })());
+  ok('downloaded version is presented as ready, not merely available', (() => { const s = updateInfo({ current: '0.9.26', latest: '0.9.26', ready: true }); return s.ready && s.visible && !s.available; })());
+  ok('current version keeps the update notice hidden', !updateInfo({ current: '0.9.26', latest: '0.9.26', ready: false }).visible);
   // which releases are new
   const R = ['0.9.14', '0.9.13', '0.9.12', '0.9.11', '0.9.10', '0.9.9', '0.9.8'].map(v => ({ version: v, title: 't' + v, notes: ['n'] }));
   ok('from 0.9.11 to 0.9.14 shows 0.9.12, .13, .14 newest first', newSince(R, '0.9.11', '0.9.14').map(r => r.version).join() === '0.9.14,0.9.13,0.9.12');
@@ -75,7 +78,7 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
 
   // wiring
   const R2 = p => fs.readFileSync(path.join(__dirname, '..', p), 'utf8'), app = R2('web/app.js'), css = R2('web/style.css'), sw = R2('web/sw.js'), fx = R2('web/updatefx.js');
-  ok('the app loads the update animations', /from '\.\/updatefx\.js'/.test(app));
+  ok('the app loads the update state and banner helpers', /from '\.\/updatefx\.js'/.test(app) && /updateInfo/.test(app));
   ok('an automatic update plays the scene instead of reloading silently', /playAutoUpdate\(v\.version\)/.test(app) && !/v\.version !== loadedServerVersion\) location\.reload\(\)/.test(app));
   ok('the scene cannot start twice', /updatePlaying/.test(app));
   ok('the celebration is retried, not a one-shot timer', /celebrateWithRetry\(/.test(app) && !/setTimeout\(async \(\) => \{ try \{ const v = await \(await fetch\(server/.test(app));
@@ -85,6 +88,8 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   ok('a network error during restart is treated as the old server exiting', /NetworkError\|Failed to fetch/.test(app));
   ok('restart waits for the expected new server version', /v\.version === version/.test(app));
   ok('an already-open PC tab reloads after the server version changes', /setInterval\(watchServerVersion, 5000\)/.test(app) && /location\.reload\(\)/.test(app));
+  ok('a discovered update is shown without pressing Check now', /state\.visible/.test(app) && /setInterval\(paintUpdate,\s*60\s*\*\s*1000\)/.test(app));
+  ok('the available-update banner installs directly; downloaded updates restart', /onInstall: button => installAvailableUpdate/.test(app) && /JSON\.stringify\(\{ install: true \}\)/.test(app) && /onRestart: \(\) => restartPholama/.test(app));
   ok('the celebration is checked at start-up (with retries)', /celebrateWithRetry\(async \(\) => \{ const v = await/.test(app));
   ok('the new files work offline (service worker list)', /'studiofx\.js', 'updatefx\.js'/.test(sw));
   ok('all colours come from the theme (no fixed hex) in the update styles', !/\.(updb|upds|updn)[^{]*\{[^}]*#[0-9a-fA-F]{3,6}\b/.test(css.slice(css.indexOf('Update animations:'))));

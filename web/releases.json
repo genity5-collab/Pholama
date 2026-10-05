@@ -1,6 +1,16 @@
 {
- "latest": "0.9.25",
+ "latest": "0.9.26",
  "releases": [
+  {
+   "version": "0.9.26",
+   "date": "2026-10-05",
+   "title": "Update notices appear automatically",
+   "notes": [
+    "When a newer version is found, Pholama now shows an update banner automatically instead of making you open Settings and press Check now",
+    "The notice checks in with the app's one-minute update refresh; with automatic installation off, Install update starts it directly, while a downloaded update offers Restart now",
+    "Returning to an open Pholama tab refreshes update status immediately"
+   ]
+  },
   {
    "version": "0.9.25",
    "date": "2026-10-04",
