@@ -362,7 +362,8 @@ async function chat(req, res, b) {
   const ac = new AbortController(); res.on('close', () => ac.abort());
   // Agent Max as the brain: one cloud call per step, capped per message. Everything else goes to the normal backends.
   const maxBudget = maxcloud.newBudget(), maxToken = String(req.headers['x-pholama-token'] || '').slice(0, 4000);
-  const streamTurn = (m, msgs, o, onTok, sig, u) => m === 'cloud:pholama' ? maxcloud.streamMax(maxToken, msgs, o, onTok, sig, u, maxBudget) : streamTurnBase(m, msgs, o, onTok, sig, u);
+  let maxLocalTools = null;   // asked once per message, only when Max is used: same answer the chat page gives
+  const streamTurn = async (m, msgs, o, onTok, sig, u) => { if (m !== 'cloud:pholama') return streamTurnBase(m, msgs, o, onTok, sig, u); if (maxLocalTools === null) maxLocalTools = await hasToolAI().catch(() => false); return maxcloud.streamMax(maxToken, msgs, o, onTok, sig, u, maxBudget, maxLocalTools); };
   try {
     log('step', 'Got your message. Model: ' + model.replace(/^(gguf|ollama|byok|cloud):/, ''));
     if (memUnloaded) { log('step', memUnloaded); memUnloaded = ''; }   // explain why the AI had to load again
@@ -483,7 +484,8 @@ async function chat(req, res, b) {
     // Real thinking for ANY model. A model with its own <think> mode does it itself. Every other model gets a hidden first pass that
     // writes short working notes (what is asked, the steps, a check), shown as "Thought for Xs"; the answer pass then uses them.
     // The amount of thinking follows the effort: Normal a few lines, Long more steps, Max step by step plus a double check.
-    if (thinking && !caps.thinking) {
+    // Agent Max reasons inside its own answer, and every cloud call spends one of the user's 10 daily messages, so it gets no separate hidden pass.
+    if (thinking && !caps.thinking && model !== 'cloud:pholama') {
       const lastU = [...messages].reverse().find(m => m.role === 'user');
       const depth = effortUse === 'max' ? 'Work step by step. List what is asked, each step of the working, then CHECK the result once more and fix any slip. Up to 12 short lines.'
         : effortUse === 'long' ? 'Work it through in 4 to 8 short lines: what is asked, the steps, and a quick check.'

@@ -4,9 +4,13 @@ const { spawn } = require('child_process'), fs = require('fs'), os = require('os
 const root = path.join(__dirname, '..'); const wait = ms => new Promise(r => setTimeout(r, ms));
 let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : '  -> ' + String(x).slice(0, 400))); if (!c) bad++; };
 async function main() {
-  const calls = []; let mode = 'ok';
+  const calls = [], seen = []; let mode = 'ok', daily = 0;
   const cloud = http.createServer((q, s) => { let b = ''; q.on('data', c => b += c); q.on('end', () => {
     calls.push({ auth: q.headers.authorization, body: b }); s.setHeader('Content-Type', 'application/json');
+    // the real cloud rule: a PC with a tool-capable local AI gets a daily cap of 1, otherwise 10. Studio must send the TRUE answer, not always true.
+    if (mode === 'cap') { let j = {}; try { j = JSON.parse(b); } catch {} seen.push(j.localTools); const cap = j.localTools === true ? 1 : 10;
+      if (daily >= cap) { s.statusCode = 429; s.end(JSON.stringify({ error: 'daily', code: 'limit-day' })); return; }
+      daily++; s.end(JSON.stringify({ reply: 'Cap test answer ' + daily })); return; }
     if (mode === 'limit') { s.statusCode = 429; s.end(JSON.stringify({ error: 'daily limit', code: 'limit-day' })); return; }
     if (mode === 'login') { s.statusCode = 401; s.end(JSON.stringify({ error: 'Log in', code: 'login' })); return; }
     const sawResult = /Wrote|wrote|saved|OK/i.test(b.split('"role":"user"').slice(-1)[0] || '') && /tool result|Tool result|TOOL RESULT/.test(b);
@@ -51,6 +55,19 @@ s.end(JSON.stringify({choices:[{message:{content:out}}]}))})}).listen(port,'127.
     // not signed in
     mode = 'login'; t = await chat({ model: 'cloud:pholama', agent: true, studio, messages: [{ role: 'user', content: 'x' }] }, {});
     ok('no sign-in gives a clear message', /Sign in to use Agent Max/.test(t), t.slice(0, 300));
+    // Studio tells the cloud the truth about local tools (always sending true made it see a cap of 1 while the page showed 2 of 10)
+    mode = 'cap'; seen.length = 0; daily = 1;   // one message already used today
+    t = await chat({ model: 'cloud:pholama', agent: true, studio, thinking: true, effort: 'max', messages: [{ role: 'user', content: 'cap test' }] });
+    ok('a PC WITH a tool AI tells the cloud localTools=true', seen.length > 0 && seen.every(x => x === true), JSON.stringify(seen));
+    ok('…and with one message used, that honest cap of 1 is reached (the page shows x/1 then)', /daily limit/i.test(t), t.slice(0, 300));
+    try { fs.unlinkSync(path.join(models, lm.file)); } catch {}
+    seen.length = 0; daily = 2; calls.length = 0;   // the page showed 2 of 10 used
+    t = await chat({ model: 'cloud:pholama', agent: true, studio, thinking: true, effort: 'max', messages: [{ role: 'user', content: 'cap test again' }] });
+    ok('a PC WITHOUT a tool AI tells the cloud localTools=false', seen.length > 0 && seen.every(x => x === false), JSON.stringify(seen));
+    ok('…so 2 of 10 used is NOT a limit, and Max answers', /Cap test answer/.test(t) && !/daily limit/i.test(t), t.slice(0, 400));
+    ok('thinking on Max spends ONE cloud message, not two (no hidden thinking pass)', seen.length === 1, 'cloud calls=' + seen.length);
+    ok('no "Thinking pass failed" or "Improve request failed" noise', !/Thinking pass failed|Improve request failed/.test(t), t.slice(0, 300));
+    fs.writeFileSync(path.join(models, lm.file), 'x');   // put the local model back for the fallback checks below
     // a limit falls back to the local model, free
     mode = 'limit'; t = await chat({ model: 'cloud:pholama', agent: true, studio, messages: [{ role: 'user', content: 'hello again' }] });
     ok('at the limit it says it is switching to the local model', /daily limit/i.test(t) && /Switching to/.test(t) && /free/i.test(t), t.slice(0, 500));

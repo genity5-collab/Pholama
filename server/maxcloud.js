@@ -14,12 +14,14 @@ function limitError(j, status) {
 // A per-message counter so the cap is for ONE Studio message, not forever.
 function newBudget(max) { return { used: 0, max: max || MAX_CALLS }; }
 
-async function streamMax(token, messages, options, onToken, signal, usage, budget) {
+// localTools: does this PC have a local AI that can run tools? The cloud then counts a daily cap of 1 instead of 10, exactly like the chat page does.
+// It must be the REAL answer: always sending true made Studio see a cap of 1 while the page showed 2 of 10 used.
+async function streamMax(token, messages, options, onToken, signal, usage, budget, localTools) {
   token = String(token || '').trim();
   if (!token) throw limitError({ code: 'login' }, 401);
   if (budget) { if (budget.used >= budget.max) { const e = new Error('Agent Max used its ' + budget.max + ' steps for this message. Ask again to continue.'); e.code = 'steps'; e.limit = false; throw e; } budget.used++; }
   let r;
-  try { r = await fetch(FN, { method: 'POST', signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ messages: messages.slice(-12), effort: 'normal', localTools: true, studio: true }) }); }
+  try { r = await fetch(FN, { method: 'POST', signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ messages: messages.slice(-12), effort: 'normal', localTools: localTools === true, studio: true }) }); }
   catch (e) { if (e && e.name === 'AbortError') throw e; const er = new Error('Could not reach Agent Max. Check your connection.'); er.code = 'network'; throw er; }
   let j = {}; try { j = await r.json(); } catch {}
   if (!r.ok) throw limitError(j, r.status);

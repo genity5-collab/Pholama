@@ -1,6 +1,15 @@
 {
- "latest": "0.9.28",
+ "latest": "0.9.29",
  "releases": [
+  {
+   "version": "0.9.29",
+   "date": "2026-10-05",
+   "title": "Agent Max in Studio no longer says the daily limit is reached when it is not",
+   "notes": [
+    "Fixed: Studio said 'Agent Max reached its daily limit' while the counter showed 2 of 10. Studio always told the cloud this PC had a local AI that runs tools, which lowers the daily allowance to 1. It now sends the real answer, the same one the chat page uses, so you get the full 10 a day unless a tool-capable local model is really installed",
+    "Fixed: using Agent Max in Studio with Thinking on no longer spends a second message on a hidden thinking pass. Max already reasons inside its own answer, so one Studio step costs one of your daily messages, not two"
+   ]
+  },
   {
    "version": "0.9.28",
    "date": "2026-10-05",
