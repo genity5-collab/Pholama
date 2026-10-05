@@ -1,5 +1,5 @@
 // Network-first with cache fallback (offline). Versioned so old caches are purged on update.
-const C = 'pholama-v37';
+const C = 'pholama-v38';
 const F = ['./', 'index.html', 'app.js', 'memlimit.js', 'duo.js', 'reader.js', 'attachui.js', 'attach.js', 'editlog.js', 'thinking.js', 'fallback.js', 'style.css', 'account.js', 'pclink.js', 'cloud.js', 'remote.js', 'loader.js', 'config.js', 'models.json', 'releases.json', 'dashboard.js', 'info.js', 'platform.js', 'platformui.js', 'manifest.webmanifest', 'icon.svg', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 self.addEventListener('message', e => { if (e.data && e.data.type === 'SKIP_WAITING') self.skipWaiting(); });
 self.addEventListener('install', e => { self.skipWaiting(); e.waitUntil(caches.open(C).then(c => c.addAll(F.map(u => new Request(u, { cache: 'reload' }))))); });

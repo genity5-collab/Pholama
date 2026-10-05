@@ -7,6 +7,12 @@ export function cmpVer(a, b) {
   const p = v => String(v || '0').split('.').map(n => parseInt(n, 10) || 0);
   const x = p(a), y = p(b); for (let i = 0; i < Math.max(x.length, y.length); i++) { const d = (x[i] || 0) - (y[i] || 0); if (d) return d < 0 ? -1 : 1; } return 0;
 }
+// A newer version is worth surfacing even when automatic installation is disabled.
+export function updateInfo(u) {
+  const ready = !!(u && u.ready);
+  const available = !ready && !!(u && u.latest) && cmpVer(u.latest, u.current) > 0;
+  return { ready, available, visible: ready || available };
+}
 // Releases newer than the last version you saw, up to and including the one you run now. Newest first, at most 5 so the card stays short.
 export function newSince(releases, seen, current) {
   const list = Array.isArray(releases) ? releases : [];
@@ -25,11 +31,11 @@ const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls)
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ---- 1. the banner ----
-export function showBanner({ version, title, onRestart }) {
+export function showBanner({ version, title, ready = false, onRestart, onInstall }) {
   let b = document.getElementById('updBanner');
   if (!b) { b = el('div', 'updb'); b.id = 'updBanner'; b.setAttribute('role', 'status'); document.body.appendChild(b); }
-  b.innerHTML = `<span class="updb-ico"><i></i></span><span class="updb-txt"><b>Version ${esc(version)} is ready</b><small>${esc(title || 'New features are waiting')}</small></span><button class="p updb-go">Update now</button><button class="updb-x" aria-label="Later">\u00d7</button>`;
-  b.classList.remove('out'); b.classList.add('in'); b.querySelector('.updb-go').onclick = () => { onRestart && onRestart(); };
+  b.innerHTML = `<span class="updb-ico"><i></i></span><span class="updb-txt"><b>Version ${esc(version)} is ${ready ? 'ready' : 'available'}</b><small>${esc(title || 'New features are waiting')}</small></span><button class="p updb-go">${ready ? 'Restart now' : 'Install update'}</button><button class="updb-x" aria-label="Later">\u00d7</button>`;
+  b.classList.remove('out'); b.classList.add('in'); b.querySelector('.updb-go').onclick = e => { if (ready) onRestart && onRestart(); else onInstall && onInstall(e.currentTarget); };
   b.querySelector('.updb-x').onclick = () => { b.classList.add('out'); setTimeout(() => b.remove(), 400); };
   return b;
 }

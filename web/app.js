@@ -13,7 +13,7 @@ import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 import { downloadDecision, readCached, writeCached } from './pclink.js';
 import { canSave, usedText } from './memlimit.js';
 import { loadReader, readerLoaded } from './reader.js';
-import { showBanner, hideBanner, openInstalling, checkCelebrate, celebrateWithRetry, playAutoUpdate } from './updatefx.js';
+import { showBanner, hideBanner, openInstalling, checkCelebrate, celebrateWithRetry, playAutoUpdate, updateInfo } from './updatefx.js';
 import { mediaCard, toolAsk, paintMyTools } from './mytools.js';
 import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
 import { READER } from './attach.js';
@@ -1549,13 +1549,38 @@ let shownBanner = null;
 async function paintUpdate() {
   try {
     const r = await fetch('/api/update'); if (!r.ok) return; const u = await r.json();
+    const state = updateInfo(u);
     $('#updBox').style.display = ''; $('#updAuto').checked = u.auto !== false;
-    $('#updPill').style.display = u.ready ? '' : 'none'; $('#updRestart').style.display = u.ready ? '' : 'none';
-    if (u.ready) { if (shownBanner !== u.latest) { shownBanner = u.latest; let t = ''; try { t = ((await (await fetch('releases.json', { cache: 'no-cache' })).json()).releases || []).find(r => r.version === u.latest)?.title || ''; } catch {} showBanner({ version: u.latest, title: t, onRestart: () => restartPholama($('#updRestart'), u.latest) }); } } else { shownBanner = null; hideBanner(); }
-    $('#updMsg').textContent = u.ready ? `Version ${u.latest} is downloaded. Press Restart now to use it.`
-      : u.error ? u.error : u.latest && u.latest !== u.current ? `New version ${u.latest} is available. Turn on automatic updates or press Check now.`
+    $('#updPill').style.display = state.visible ? '' : 'none';
+    $('#updPill').textContent = state.ready ? 'Update ready' : 'Update available';
+    $('#updPill').title = state.ready ? 'A new version was downloaded' : 'A new version is available to install';
+    $('#updRestart').style.display = state.ready ? '' : 'none';
+    const bannerKey = state.visible ? `${u.latest}:${state.ready ? 'ready' : 'available'}` : null;
+    if (state.visible) {
+      if (shownBanner !== bannerKey) {
+        shownBanner = bannerKey; let t = '';
+        try { t = ((await (await fetch('releases.json', { cache: 'no-cache' })).json()).releases || []).find(r => r.version === u.latest)?.title || ''; } catch {}
+        showBanner({ version: u.latest, title: t, ready: state.ready,
+          onRestart: () => restartPholama($('#updRestart'), u.latest),
+          onInstall: button => installAvailableUpdate(u.latest, button) });
+      }
+    } else { shownBanner = null; hideBanner(); }
+    $('#updMsg').textContent = state.ready ? `Version ${u.latest} is downloaded. Press Restart now to use it.`
+      : u.error ? u.error
+      : state.available ? `New version ${u.latest} is available. You can install it now, or leave automatic updates on.`
       : `You have the newest version (${u.current}).`;
   } catch {}
+}
+async function installAvailableUpdate(version, button) {
+  if (button) { button.disabled = true; button.textContent = 'Installing...'; }
+  $('#updMsg').textContent = `Downloading version ${version}...`;
+  try {
+    const r = await fetch('/api/update/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ install: true }) });
+    const result = await r.json().catch(() => ({}));
+    if (!r.ok || result.error) $('#updMsg').textContent = result.error || 'Could not start the update. Try again.';
+  } catch { /* The server may be restarting after installing; the version watcher below handles that case. */ }
+  if (button && button.isConnected) { button.disabled = false; button.textContent = 'Install update'; }
+  paintUpdate();
 }
 // Ask this PC's server to start a fresh copy of itself, wait for it to come back, then reload the page so the new version is what you see.
 async function restartPholama(btn, version) {
@@ -1576,6 +1601,7 @@ $('#updCheck').onclick = async () => { $('#updCheck').disabled = true; $('#updMs
 $('#updAuto').onchange = async e => { try { await fetch('/api/update/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: e.target.checked }) }); } catch {} paintUpdate(); };
 $('#updPill').onclick = () => { $('#opt').click(); };
 paintUpdate(); setInterval(paintUpdate, 60 * 1000);   // ask the server every minute
+document.addEventListener('visibilitychange', () => { if (!document.hidden) paintUpdate(); });
 // An automatic update restarts the server in the background; once the replacement reports
 // a different version, refresh this already-open tab so it cannot keep serving stale Studio code.
 { let loadedServerVersion = '', updatePlaying = false; const watchServerVersion = async () => { if (!server) return; try { const r = await fetch('/api/version', { cache: 'no-store' }); if (!r.ok) return; const v = await r.json(); if (!loadedServerVersion) loadedServerVersion = v.version; else if (v.version && v.version !== loadedServerVersion && !updatePlaying) { updatePlaying = true; playAutoUpdate(v.version); } } catch {} }; watchServerVersion(); setInterval(watchServerVersion, 5000); }
