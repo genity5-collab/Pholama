@@ -31,6 +31,11 @@ const px = (im, x, y) => { const i = (y * im.w + x) * im.bpp; return { r: im.px[
   for (let y = 0; y < 512; y += 2) for (let x = 0; x < 512; x += 2) if (px(mk, x, y).r > 128 && Math.hypot(x - 256, y - 256) > 205) out++;
   ok('maskable llama stays inside the phone-safe circle', out === 0, out + ' bright pixels outside');
   ok('maskable icon has no transparent corners', px(mk, 0, 0).a === 255);
+  // the vector must not be a wrong-way-round trace: the white area has to be roughly the same size as the PNG's (about 12% of the tile)
+  { const svg = rd('web/icon.svg'), fillW = /<path[^>]*fill="#fff"/.test(svg), bgBlack = /<rect[^>]*fill="#000"/.test(svg);
+    ok('icon.svg is a black tile with a white drawing on top', fillW && bgBlack);
+    const png512 = png('web/icon-512.png'); let white = 0; for (let y = 0; y < 512; y += 2) for (let x = 0; x < 512; x += 2) if (px(png512, x, y).r > 128 && px(png512, x, y).a > 128) white++;
+    ok('the llama covers a sensible part of the icon (not inverted)', white / (256 * 256) > 0.08 && white / (256 * 256) < 0.35, (white / (256 * 256)).toFixed(3)); }
   ok('web and docs icon.svg are identical', rd('web/icon.svg') === rd('docs/icon.svg'));
   ok('icon.svg is a real drawing (path data), not a 1 KB stub', rd('web/icon.svg').length > 3000 && /<path[^>]+d="M/.test(rd('web/icon.svg')));
   for (const f of ['icon-192.png', 'icon-512.png', 'icon-maskable-512.png']) ok(`web and docs ${f} are the same picture`, fs.readFileSync(path.join(root, 'web', f)).equals(fs.readFileSync(path.join(root, 'docs', f))));
