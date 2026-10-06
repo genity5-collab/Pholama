@@ -3,7 +3,7 @@
 *{box-sizing:border-box}html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--fg);font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
 header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;padding-top:max(10px,env(safe-area-inset-top));position:sticky;top:0;background:var(--bg);z-index:5}
-.brand{display:flex;align-items:center;gap:8px;font-weight:650;font-size:18px;letter-spacing:-.01em}.brand svg{display:none}.brand::before{content:"";width:28px;height:28px;display:block;background:url("icon.svg") center/contain no-repeat;border-radius:8px;box-shadow:0 0 20px var(--glow)}
+.brand{display:flex;align-items:center;gap:8px;font-weight:650;font-size:18px;letter-spacing:-.01em}.brand svg{display:none}.brand::before{display:none!important}
 .sp{flex:1}
 select,button,textarea,input{font:inherit;color:inherit}
 select,button{background:transparent;border:1px solid var(--line);border-radius:999px;padding:7px 14px;cursor:pointer;min-height:36px;transition:background .15s,border-color .15s}
@@ -64,7 +64,7 @@ input[type=text]:focus,input[type=password]:focus{border-color:var(--mut)}
 /* Pholama studio polish: quiet chrome, clear state, and a stronger local-first identity. */
 body{background-image:radial-gradient(circle at 50% -20%,color-mix(in srgb,var(--acc) 9%,transparent),transparent 38%)}
 header{border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);backdrop-filter:blur(18px)}
-.brand{font-weight:750;letter-spacing:-.035em}.brand::before{width:32px;height:32px;border-radius:10px;box-shadow:0 0 0 1px var(--line),0 8px 24px var(--glow)}
+.brand{font-weight:750;letter-spacing:-.035em}.brand::before{display:none!important}
 .viewsw{box-shadow:0 8px 24px rgba(0,0,0,.12)}
 #hero{margin-top:7vh;max-width:680px}.hero-kicker{display:inline-flex;align-items:center;gap:7px;color:var(--ok);font-size:12px;font-weight:750;letter-spacing:.1em;text-transform:uppercase}.hero-kicker::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 12px currentColor}
 #hero h1{font-size:clamp(28px,5vw,42px);line-height:1.08;letter-spacing:-.055em}#hero p{max-width:520px;margin-left:auto;margin-right:auto}
@@ -94,7 +94,7 @@ header{border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);ba
   header .sp{display:none}.brand{margin-right:auto}.brand span{font-size:17px}
   .s-tabs{border-radius:14px;flex-wrap:wrap;justify-content:flex-start}
 }
-@media (max-width:430px){.brand span{display:none}.brand::before{width:30px;height:30px}
+@media (max-width:430px){.brand span{display:none}.brand::before{display:none!important}
   header button{padding:6px 11px;font-size:14px;min-height:36px}
   #cr{order:1;min-width:0}#cr::before{content:'\26A1\FE0E ';opacity:.7}#mgr,#settingsBtn{order:1}
   #model{order:2;flex:1 1 100%;max-width:100%;min-height:36px}
@@ -534,3 +534,19 @@ header{border-bottom:1px solid var(--line);backdrop-filter:blur(18px);background
 .st-setuprow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin:6px 0;background:var(--card)}
 .st-setuprow.ok span{color:var(--ok)}.st-setuprow small{flex-basis:100%;color:var(--mut)}.st-setuprow button{margin-left:auto;min-height:34px;padding:4px 12px}
 .st-setupprog,.st-setupnote{margin-top:8px;font-size:13px;color:var(--mut)}
+
+/* Pholama monochrome refresh: calm surfaces, black-and-white controls, and the supplied llama mark. */
+:root{--bg:#fafaf8;--fg:#171717;--mut:#70706d;--line:#e4e4df;--card:#ffffff;--card2:#f1f1ed;--acc:#171717;--acct:#ffffff;--bubble:#eeeeea;--ok:#557a4d;--err:#b84d4d;--warn:#9a6a23;--glow:rgba(0,0,0,.10)}
+@media (prefers-color-scheme:dark){:root{--bg:#0c0c0b;--fg:#f5f5f1;--mut:#a2a29c;--line:#2a2a27;--card:#141413;--card2:#1d1d1b;--acc:#f5f5f1;--acct:#11110f;--bubble:#22221f;--ok:#9ac38c;--err:#ff8989;--warn:#e2b26a;--glow:rgba(255,255,255,.12)}}
+body{background-image:none;letter-spacing:-.005em}header{background:color-mix(in srgb,var(--bg) 92%,transparent);border-bottom:1px solid var(--line);backdrop-filter:blur(20px)}
+.brand{gap:9px;font-weight:700;letter-spacing:-.045em}.brand::before{display:none}.brand-mark{display:block;width:32px;height:32px;border-radius:9px;object-fit:cover;box-shadow:0 0 0 1px var(--line);background:#000}
+button,select{border-color:var(--line);border-radius:10px}button:hover,select:hover{background:var(--card2)}button.p{background:var(--acc);color:var(--acct);border-color:var(--acc)}button.p:hover{background:var(--acc);opacity:.86}.viewsw{background:var(--card);border-color:var(--line);box-shadow:none}.viewsw button{border-radius:8px}.viewsw button.on{background:var(--acc);color:var(--acct)}
+#hero{margin-top:8vh;max-width:720px}#heroLogo .llama{display:inline-block!important;width:112px!important;height:112px!important;border-radius:22px;background:#000;box-shadow:0 16px 40px var(--glow);overflow:hidden}#heroLogo .llama svg{display:none}#heroLogo .llama::before{content:"";display:block;width:100%;height:100%;background:url("icon-512.png") center/cover no-repeat}#hero h1{font-size:clamp(30px,5vw,44px);font-weight:650;letter-spacing:-.065em}#hero p{color:var(--mut)}#hero .chips button{border-radius:10px;background:var(--card);color:var(--fg)}
+.composer{background:var(--card);border-color:var(--line);border-radius:14px;box-shadow:0 10px 30px var(--glow)}.composer:focus-within{border-color:var(--fg)}.composer button.p{border-radius:10px;width:40px;height:40px;min-height:40px}
+.row,.card-box,.dcard,.dpanel,.feature,.promo,.sunset,.aiwarn,.editlog,.live,.thinkcard,.st-left,.st-right,.st-ai{border-radius:12px;box-shadow:none}.row:hover,.dcard:hover{border-color:var(--fg)}.chipbtn.on,.elf.on{background:var(--acc);color:var(--acct);border-color:var(--acc)}
+#heroLogo .llama.ok{color:var(--fg)}
+/* Keep the same supplied mark in model rows and Studio companion surfaces. */
+.row .llama svg{display:none}.row .llama{background:#000;border-radius:7px;overflow:hidden}.row .llama::before{content:"";display:block;width:100%;height:100%;background:url("icon-512.png") center/cover no-repeat}
+@media(max-width:640px){header{padding-left:12px;padding-right:12px}.brand-mark{width:30px;height:30px}}
+
+.pl-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.08em;margin-right:6px}.pl-badge.pro{background:#111;color:#fff}.pl-badge.free{background:var(--card2);color:var(--mut);border:1px solid var(--line)}

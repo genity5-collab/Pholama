@@ -623,6 +623,31 @@ function routeIntent(text, tools, history) {
   return null;
 }
 
+// A small deterministic plan keeps local models from jumping straight to an answer on multi-step work.
+// It follows the open-deep-research shape: discover, inspect the strongest evidence, then synthesize.
+// Plans are guidance only; the normal one-tool-per-turn loop and existing safety checks still decide what runs.
+function taskPlan(text, tools) {
+  const q = String(text || '').trim(), names = new Set((tools || []).map(t => t && t.name));
+  if (!q || !names.size) return [];
+  const has = n => names.has(n);
+  if (has('web_search') && /\b(research|investigate|compare|deep dive|comprehensive|sources?|evidence|latest|what do we know)\b/i.test(q)) {
+    const p = [{ key: 'discover', label: 'Search for relevant sources' }];
+    if (has('fetch_page')) p.push({ key: 'inspect', label: 'Open the strongest source pages and check their details' });
+    p.push({ key: 'synthesize', label: 'Cross-check the evidence and answer with source links' });
+    return p;
+  }
+  if (has('studio_diagnose') && /\b(build|create|make|change|edit|fix|debug|improve|update)\b/i.test(q)) return [
+    { key: 'inspect', label: 'Inspect the project and locate the exact files' },
+    { key: 'change', label: 'Make the smallest safe change' },
+    { key: 'verify', label: 'Run checks and repair any reported problem' },
+  ];
+  if ((has('read_file') || has('list_files')) && /\b(edit|change|fix|update|remove|delete|rename)\b/i.test(q)) return [
+    { key: 'inspect', label: 'Read the relevant file before changing it' },
+    { key: 'change', label: 'Apply one targeted change' },
+    { key: 'verify', label: 'Read it back and confirm the result' },
+  ];
+  return [];
+}
 const TOOL_RE = /<tool(?:_call)?>([\s\S]*?)<\/tool(?:_call)?>/;   // <tool> is Pholama's own tag, <tool_call> is the Qwen/Hermes tag that big models are trained on
 // Small models often break the closing of the JSON (a missing } or a stray >). Repair only those slips, and accept
 // the result only if it is a real call: a string name plus an object of args.
@@ -770,4 +795,4 @@ const isToolFail = r => /^Tool error/.test(String(r || ''));
 
 async function approveTool(id) { const p = pendingTools.get(id); if (!p) throw new Error('That request expired or was already answered.'); pendingTools.delete(id); if (p.builtin) { const all = require('./tools2').tools(); const out = await runTool(all, p.name, p.args, { approved: p.name, userId: 'approved' }); return out; } if (!usertools.isUserTool(p.name)) throw new Error('That tool no longer exists.'); return usertools.run(p.name, p.args, { allowOff: p.allowOff === true }); }
 function rejectTool(id) { return pendingTools.delete(id); }
-module.exports = { studioResearch, fetchText, webSearch, factualQuestion, mediaRequest, usertools, media, approveTool, rejectTool, cleanSearchQuery, loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };
+module.exports = { studioResearch, fetchText, webSearch, factualQuestion, mediaRequest, usertools, media, approveTool, rejectTool, cleanSearchQuery, loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, taskPlan, COST, DAILY };

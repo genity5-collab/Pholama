@@ -96,7 +96,7 @@ export function createStudio(env) {
   </div>
   <div class="st-ai">
     <div id="stAiLog" class="st-ailog"></div>
-    <div class="st-aibox"><textarea id="stAsk" rows="2" placeholder="Ask the AI to build, fix or explain anything..."></textarea><button id="stDiagnose" title="Check the project and explain the next fix">Diagnose</button><button id="stSend" class="p">Send</button></div>
+    <div class="st-aibox"><textarea id="stAsk" rows="2" placeholder="Describe an app to build, then inspect Preview, Code and Logs side by side..."></textarea><button id="stDiagnose" title="Check the project and explain the next fix">Diagnose</button><button id="stSend" class="p">Send</button></div>
   </div>`;
   for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stActivity', 'stSettings', 'stActivityPanel', 'stActivityRefresh', 'stActivityList', 'stHistory', 'stHistoryPanel', 'stHistorySave', 'stHistoryClose', 'stHistoryList', 'stSetup', 'stSetupPanel', 'stSetupRefresh', 'stSetupClose', 'stSetupBody', 'stSettingsPanel', 'stSettingsClose', 'stCompanion', 'stPublish', 'stFind', 'stFindCount', 'stFindResults', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stNewScript', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stDiagnose', 'stSend']) el[id] = mount.querySelector('#' + id);
   const live = createLiveCard(el.stAiLog);   // the Live Activity card: what the AI thinks and which files it touches, right in the chat

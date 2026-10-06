@@ -36,11 +36,13 @@ export function codeClock(expiresAt, now = Date.now()) {
 }
 
 export function html(plan, gameUrl) {
-  const pro = !!(plan && plan.pro);
+  const pro = !!(plan && (plan.pro === true || plan.is_pro === true || plan.plan === 'pro'));
+  const until = plan && (plan.until || plan.expires_at || plan.expiresAt || plan.renewed_until);
+  const status = pro ? '<span class="pl-badge pro">PRO ACTIVE</span>' : '<span class="pl-badge free">FREE PLAN</span>';
   const table = rows().map(r => '<tr><td>' + esc(r[0]) + '</td><td class="pl-f">' + esc(r[1]) + '</td><td class="pl-p">' + esc(r[2]) + '</td></tr>').join('');
   const head = pro
-    ? '<p class="pl-now"><b>You are on Pholama Pro.</b> ' + daysLeft(plan.until) + ' day' + (daysLeft(plan.until) === 1 ? '' : 's') + ' left. It renews by itself while your Roblox subscription is active.</p>'
-    : '<p class="pl-now"><b>You are on the Free plan.</b> Pholama Pro gives you more of everything below.</p>';
+    ? '<p class="pl-now">' + status + ' <b>You are on Pholama Pro.</b> ' + daysLeft(until) + ' day' + (daysLeft(until) === 1 ? '' : 's') + ' left. It renews while your Roblox subscription is active.</p>'
+    : '<p class="pl-now">' + status + ' <b>You are on the Free plan.</b> Pholama Pro gives you more of everything below.</p>';
   const how = '<ol class="pl-how"><li>Tap <b>Get my code</b> below.</li><li>Open the Pholama game on Roblox and subscribe to Pholama Pro (100 Robux a month).</li><li>Type the code into the box in the game. It only works for ' + CODE_MINUTES + ' minutes and only once.</li></ol>';
   const link = gameUrl ? '<p><a href="' + esc(gameUrl) + '" target="_blank" rel="noopener">Open the game on Roblox</a></p>' : '';
   return head + '<table class="pl-tbl"><thead><tr><th></th><th>Free</th><th>Pro</th></tr></thead><tbody>' + table + '</tbody></table>'

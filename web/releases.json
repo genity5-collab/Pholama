@@ -1,8 +1,8 @@
 {
- "latest": "0.9.37",
+ "latest": "0.9.40",
  "releases": [
   {
-   "version": "0.9.37",
+   "version": "0.9.40",
    "date": "2026-10-06",
    "title": "Updates are your choice, and Pholama sets itself up.",
    "notes": [
@@ -14,6 +14,38 @@
     "Safer: every tool the AI can use now has a permission level. Deleting files and running tests wait for your Allow, and the AI cannot call tools without limit.",
     "Fixed: the companion icon was hard to see on dark pages. It now has a light ring and backing.",
     "Pholama for PC is made for Windows."
+   ]
+  },
+  {
+   "version": "0.9.39",
+   "title": "Reliable PC updates, visible branding, and Pro plan fixes",
+   "notes": [
+    "PC apps check for updates shortly after launch and can install the newest release.",
+    "Header logos use the supplied Pholama mark reliably on the site and PC app.",
+    "Free and Pro plan status is clearer and expiry field handling is more tolerant."
+   ],
+   "date": "2026-10-06"
+  },
+  {
+   "version": "0.9.38",
+   "date": "2026-10-06",
+   "title": "Structured research plans and tool-run telemetry",
+   "notes": [
+    "Added a deterministic plan-first workflow for research, Studio edits and file changes: inspect, act, verify.",
+    "Local tool runs now emit completion status, duration and failure details for clearer PC chat and Studio diagnostics.",
+    "Research tasks are guided toward source discovery, primary-page inspection and evidence-based synthesis, inspired by the smolagents open deep research example.",
+    "Includes the v0.9.37 monochrome interface and supplied Pholama llama branding refresh."
+   ]
+  },
+  {
+   "version": "0.9.37",
+   "date": "2026-10-06",
+   "title": "New monochrome Pholama look and supplied llama icon",
+   "notes": [
+    "Updated the public site and PC app with a calm monochrome interface inspired by the clean, minimal local-AI aesthetic of Ollama.",
+    "Replaced the visible Pholama branding, model loaders and hero mark with the supplied white llama wearing sunglasses on a black tile.",
+    "Updated browser, PWA, maskable, Linux/Mac and Windows icon assets so the same mark is used everywhere.",
+    "Kept the latest v0.9.36 features and PC/site behavior intact while refreshing the visual layer."
    ]
   },
   {

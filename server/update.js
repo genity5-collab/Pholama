@@ -177,7 +177,7 @@ async function backgroundCheck({ installNow = false } = {}) {
 // Checks shortly after start, then every minute (server.js passes 1/60 hour). Never throws, never blocks the app.
 function startBackground(hours = 6) {
   if (timer || process.env.PHOLAMA_NO_AUTOUPDATE === '1') return;
-  setTimeout(() => backgroundCheck().catch(() => {}), 20000).unref();
+  setTimeout(() => backgroundCheck().catch(() => {}), 1500).unref();
   timer = setInterval(() => backgroundCheck().catch(() => {}), hours * 3600 * 1000); timer.unref();
 }
 // Scheduled OS task: respect the user's auto-update setting and do nothing if the app is running;
