@@ -1,565 +1,575 @@
 {
- "latest": "0.9.38",
- "releases": [
-  {
-   "version": "0.9.38",
-   "date": "2026-10-06",
-   "title": "Structured research plans and tool-run telemetry",
-   "notes": [
-    "Added a deterministic plan-first workflow for research, Studio edits and file changes: inspect, act, verify.",
-    "Local tool runs now emit completion status, duration and failure details for clearer PC chat and Studio diagnostics.",
-    "Research tasks are guided toward source discovery, primary-page inspection and evidence-based synthesis, inspired by the smolagents open deep research example.",
-    "Includes the v0.9.37 monochrome interface and supplied Pholama llama branding refresh."
-   ]
-  },
-  {
-   "version": "0.9.37",
-   "date": "2026-10-06",
-   "title": "New monochrome Pholama look and supplied llama icon",
-   "notes": [
-    "Updated the public site and PC app with a calm monochrome interface inspired by the clean, minimal local-AI aesthetic of Ollama.",
-    "Replaced the visible Pholama branding, model loaders and hero mark with the supplied white llama wearing sunglasses on a black tile.",
-    "Updated browser, PWA, maskable, Linux/Mac and Windows icon assets so the same mark is used everywhere.",
-    "Kept the latest v0.9.36 features and PC/site behavior intact while refreshing the visual layer."
-   ]
-  },
-  {
-   "version": "0.9.36",
-   "date": "2026-10-05",
-   "title": "Pholama Pro, and Agent Max is now a friend.",
-   "notes": [
-    "New: Pholama Pro. 100 Robux a month on Roblox gives you 15 Agent Max messages a day and 35 a month, 10 projects, 10 friends, more memories and 10,000 integration tokens. Open Settings > Plans to see Free next to Pro and to get your one-time code (it works for 30 minutes).",
-    "New: Agent Max is now a friend at the top of your friend list. Chat with it any time: 5 messages a day, or 10 with Pro. It cannot be removed, blocked or called, and a message is given back if Agent Max cannot answer.",
-    "Safer: Pro is checked by the database, so it cannot be switched on from the page. If the Pro check ever fails you simply keep the normal free limits."
-   ]
-  },
-  {
-   "version": "0.9.35",
-   "date": "2026-10-05",
-   "title": "Friends, private chat, calls, notifications, and pictures and videos on the website.",
-   "notes": [
-    "New: Friends on Pholama Platform. Send a friend request by Platform name, accept or decline, remove or block someone. Blocking stops their messages and calls and hides you from them.",
-    "New: private chat with friends, with pictures and videos. Only the two of you can open the files. Links are still not allowed, in messages or anywhere else.",
-    "New: voice calls between friends, with a ringing banner you can accept or decline. Calls may not connect on very strict networks.",
-    "New: a notification bell for friend requests, new messages and missed calls, with a soft sound you can turn off.",
-    "New: a Privacy tab where you switch on or off friend requests, private messages, calls, and notifications.",
-    "New: add a picture or video to a post, a reply, a support ticket or a build (pictures up to 5 MB, videos up to 25 MB; PNG, JPG, WebP, GIF, MP4, WebM). Ticket files can be seen only by you and the moderators.",
-    "Fixed: new visitors on the website no longer get the 'download an AI' box. It only opens in the PC app now.",
-    "Fixed: the 'kys' word filter never matched in posts and replies, and private details (who has calls off, who is friends with whom) could be looked up by any member. Both are closed.",
-    "Fixed: support tickets did not block links or secret keys. They do now.",
-    "Owner setup: run supabase/social.sql, supabase/media.sql and supabase/post_replies.sql once in the Supabase SQL editor. Until then the new tabs say they are not set up yet."
-   ]
-  },
-  {
-   "version": "0.9.34",
-   "date": "2026-10-05",
-   "title": "Fixed the sunglasses glitch in the opening animation.",
-   "notes": [
-    "Fixed: in the opening logo animation, the sunglasses used to show as a flat white or black block and then snap into place. They now drop onto the face and land smoothly.",
-    "The same fix applies to the short version shown after an update, and it looks right on both the light and the dark theme."
-   ]
-  },
-  {
-   "version": "0.9.33",
-   "date": "2026-10-05",
-   "title": "New Pholama logo and an opening animation.",
-   "notes": [
-    "New llama-with-sunglasses logo everywhere: the app icon, your Desktop and Start Menu shortcut, the browser tab, and the phone home-screen icon.",
-    "A short logo animation plays when you open Pholama or the website: dots gather, the llama rises, the sunglasses drop on, and the name fades in. Click or press Escape to skip it.",
-    "The same llama now plays on the update screen while Pholama installs a new version, and the progress ring still shows how far along it is.",
-    "After an update restart you get a shorter version. People who turn on Reduce motion see the finished logo with no movement.",
-    "On Windows the Desktop icon can keep the old picture for a little while until Windows refreshes its icon cache. Signing out and in, or restarting Explorer, fixes it."
-   ]
-  },
-  {
-   "version": "0.9.32",
-   "date": "2026-10-05",
-   "title": "Live Activity card: watch the AI think and edit, right in the chat.",
-   "notes": [
-    "New: while the AI works in Studio, a Live Activity card appears in the chat. It shows what the AI is doing right now (Thinking, Reading a file, Editing a file, Testing), the thought it is on, and a list of the files it touches, each ticked off when it is done.",
-    "When the job ends the card stays as a short summary such as Changed 2 files. If the AI only answered a question, the card quietly disappears.",
-    "File names are always shown as plain text, so a strangely named file can never run anything in the page."
-   ]
-  },
-  {
-   "version": "0.9.31",
-   "date": "2026-10-05",
-   "title": "Cheaper Studio: chat 1, task 3, big task 4. Your companion wanders and codes.",
-   "notes": [
-    "Changed: Studio credits now depend on the size of the job. A chat or a question costs 1, a normal build or edit (a medium task) costs 3, and a big task costs 4. A big task is a whole app, game or site, a long request, a numbered list of four or more jobs, or a request that touches three or more files. The server decides this from your real message, so it cannot be set lower from the page.",
-    "Changed: Agent Max in Studio used to add 20 credits on top (23 per message). It now costs the same as any other model. It still uses its own daily and monthly Max messages, and your own model still takes over for free when Max runs out.",
-    "New: the Studio companion now lives. It wanders around the screen on its own, faces the way it walks, and naps when nothing is happening. While the AI is building it sits down at a tiny laptop and types code, like a mini Codex, then goes back to wandering when the work is done. The laptop screen is only for show and never touches your files.",
-    "The companion stands still while you drag it or while its menu is open, and it holds still if your system asks for reduced motion."
-   ]
-  },
-  {
-   "version": "0.9.30",
-   "date": "2026-10-05",
-   "title": "Run Python, C++, Rust and more. Big chat windows. Choose what powers Agent Max. Phone models are gone.",
-   "notes": [
-    "New: your AI can now write and run programs. Python, C++, C, Rust, Go, Java, JavaScript, TypeScript, C#, Ruby, PHP, Lua, Bash, PowerShell, Kotlin, Swift, Dart, R and Zig. You install the languages you want; Pholama finds them. If one is missing the AI tells you exactly what to install instead of making up a result. Settings > Usage > Programming languages shows what was found, with a Check again button",
-    "Programs run only inside the Pholama workspace folder, stop after 20 seconds by default (up to 120), and their output is cut at 8000 characters. A file name can never inject a command",
-    "New: big chat windows on the Platform. Open a support ticket or a post in a large window that refreshes by itself. Reporters and moderators chat in tickets, moderators keep Close, Reopen and the member tools inside the window. Posts get a reply chat (run supabase/post_replies.sql once in Supabase to switch replies on)",
-    "New: choose what powers Agent Max in Settings > Usage. The official cloud is the smartest and uses your daily and monthly messages. One of your own local AIs is free and unlimited but only as smart as that model. The chat box label and Studio follow your choice",
-    "Fixed: Agent Max in Studio could not really edit files. The cloud function ignored Studio's instructions, cut messages to 2000 characters and only knew the calculator, clock and site help. It now follows Studio's rules, has room for real code and still counts as one message (refunded on failure)",
-    "Removed: phone and in-browser models. The browser model tab, phone models in the model list, the phone cards on the dashboard and the phone wording in Agent Max's knowledge and the guides are gone. Phones can still use Agent Max, the Platform, or open your own PC app over your network"
-   ]
-  },
-  {
-   "version": "0.9.29",
-   "date": "2026-10-05",
-   "title": "Agent Max in Studio no longer says the daily limit is reached when it is not",
-   "notes": [
-    "Fixed: Studio said 'Agent Max reached its daily limit' while the counter showed 2 of 10. Studio always told the cloud this PC had a local AI that runs tools, which lowers the daily allowance to 1. It now sends the real answer, the same one the chat page uses, so you get the full 10 a day unless a tool-capable local model is really installed",
-    "Fixed: using Agent Max in Studio with Thinking on no longer spends a second message on a hidden thinking pass. Max already reasons inside its own answer, so one Studio step costs one of your daily messages, not two"
-   ]
-  },
-  {
-   "version": "0.9.28",
-   "date": "2026-10-05",
-   "title": "New versions really arrive within about a minute, and an open page reloads itself",
-   "notes": [
-    "Fixed: new commits took up to 5 minutes to show up. GitHub keeps the version file cached for 5 minutes, so checking it every minute could not help. Pholama now asks GitHub for the newest commit itself (cached 1 minute) and reads the version from that exact commit",
-    "The check spaces itself out (about every 75 seconds) and slows down by itself if GitHub's hourly allowance runs low, then goes back to the normal route. It never gets your PC blocked",
-    "Fixed: after an automatic update the server restarted but an already open page (and Studio) kept running the old code. The page now notices the new version and reloads itself, but waits if Studio is working, has unsaved edits, or you are typing a message",
-    "Agent Max now tries dots-3-note-preview (free), then Nemotron 3.5 Lightning (free), then gpt-oss-20b on OpenRouter, and Groq with three keys as the last safety net. If one fails it quietly moves to the next; you never see which model failed or why, only a short generic message if every one fails"
-   ]
-  },
-  {
-   "version": "0.9.27",
-   "date": "2026-10-05",
-   "title": "Pick plugins with @; find code across a Studio project",
-   "notes": [
-    "Type @ in chat to see built-in and custom plugins, then click one or select it with the arrow keys. Custom suggestions use the exact @x_tool name the AI sees.",
-    "Fixed: @x_<your_tool> now resolves to the saved plugin name, even when its switch is off. Explicit no-argument calls run directly; complete key=value arguments are routed directly; missing required values are not guessed or sent empty.",
-    "Custom-plugin instructions now explain the arguments and results more clearly. Data-changing calls still require Allow, including a tool explicitly enabled for one mentioned request.",
-    "Studio now searches all project files, shows matching file and line numbers, and jumps to a result. Press Ctrl+Shift+F in the editor to focus project search."
-   ]
-  },
-  {
-   "version": "0.9.26",
-   "date": "2026-10-05",
-   "title": "Update notices appear automatically",
-   "notes": [
-    "When a newer version is found, Pholama now shows an update banner automatically instead of making you open Settings and press Check now",
-    "The notice checks in with the app's one-minute update refresh; with automatic installation off, Install update starts it directly, while a downloaded update offers Restart now",
-    "Returning to an open Pholama tab refreshes update status immediately"
-   ]
-  },
-  {
-   "version": "0.9.25",
-   "date": "2026-10-04",
-   "title": "Studio can improve your real project, tools can research an API, updates check every minute",
-   "notes": [
-    "Fixed: in Studio, 'improve it' or 'ok start' on a project that already has files now really changes them. Before, the AI talked, or copied an example from its own prompt and made a file called 'bro'",
-    "Pholama shows the AI your real files, asks for the complete updated version, and refuses answers that lose code, leave 'rest of the code' placeholders, or break the page. If the result has more problems than before, your files are put back exactly",
-    "The AI can only change files it was shown, and never a file outside your project",
-    "New in Tools: 'What can this key do?'. Type a service name and the AI reads its API docs and suggests tools you can tick. Only the service name is searched. Your key is never searched and the AI never sees it",
-    "Updates are now checked every minute (it was every 5 minutes, on both the server and the page)"
-   ]
-  },
-  {
-   "version": "0.9.24",
-   "date": "2026-10-04",
-   "title": "Studio no longer says it added things it did not add",
-   "notes": [
-    "Fixed: the Studio AI sometimes said it added a timer or changed your page when it had not touched any file",
-    "If the AI claims an edit but no file was really written, Pholama now replaces that claim with an honest answer and tells you how to ask again",
-    "Real edits are never blocked: a claim is kept whenever a file was actually written, including the guided build paths",
-    "Offers and questions like 'Want me to add a timer?' are left alone",
-    "@plugin mentions and the Updating animation from 0.9.23 are included"
-   ]
-  },
-  {
-   "version": "0.9.23",
-   "date": "2026-10-04",
-   "title": "@plugin mentions, and the update animation is back",
-   "notes": [
-    "Type @github, @search, @tools, @skills, @mcp or @platform (or @ and the name of a tool you made) and that plugin is used for that message, even if its switch is off",
-    "The AI is told which plugin you meant, so it no longer says it cannot access your files on GitHub",
-    "@terminal is never turned on by a mention, and models that cannot run tools are not forced to. Email addresses like me@github.com are ignored",
-    "Automatic updates now play the Updating animation before the page reloads. They used to reload with no animation at all",
-    "The What's new card is tried again if the release notes are slow to load, instead of being lost"
-   ]
-  },
-  {
-   "version": "0.9.22",
-   "date": "2026-10-04",
-   "title": "Settings is organised, and the AI can create tools for you",
-   "notes": [
-    "Settings > Tools is now split into groups: Features, Plugins and skills, My tools, MCP, and Updates and log. Only one shows at a time, and Pholama remembers your last one",
-    "New: Create a tool with AI. Say what you want, paste the API key, and the AI writes the tool. You check it, then save it",
-    "The AI never sees your API key. It is saved on your PC first and the AI is only told the key's name",
-    "Every tool is now a card with a picture, a title and a description. You can rename a tool, change its description and give it a picture or remove it",
-    "Pictures only accept png, jpeg, webp, gif or an https link. SVG is refused because it can carry script",
-    "Agent Max now has a third backup key: if the first two are busy or rejected, the third one answers"
-   ]
-  },
-  {
-   "version": "0.9.21",
-   "date": "2026-10-04",
-   "title": "Web answers, videos, pictures and your own tools",
-   "notes": [
-    "Ask a plain question (who, when, how tall, how far) and the AI looks it up on the web first. It answers only when a result clearly supports it, says which website it came from, and says it could not confirm it otherwise",
-    "Ask for a video and the AI finds a real YouTube video and plays it in the chat. Ask for a picture and it shows a real one",
-    "New My tools panel in Plugins: make a tool that lets the AI use any web service, like Supabase or Discord. Or just ask the AI to make one",
-    "Your keys stay on this PC and the AI never sees them. A tool can only reach the internet, never your own network. Anything that changes data asks you to Allow first",
-    "Fix: Studio could not load (\"invalid regular expression flag\"). A broken pattern in the Studio file is fixed, and a new test now checks every file so it cannot happen again",
-    "A second Groq key can now take over when the first is busy"
-   ]
-  },
-  {
-   "version": "0.9.20",
-   "date": "2026-10-04",
-   "title": "Updates work in the background; Studio and model integrations grow",
-   "notes": [
-    "Check now installs an available update immediately. The server restarts only after its old listener exits, and an interrupted browser connection now waits for the replacement version instead of reporting a false failure.",
-    "Automatic checks run every five minutes while Pholama is open and every five hours while it is closed (when the PC is on and the user is signed in). The app tab reloads itself after a server update; existing installs set up the background task on launch.",
-    "Studio now provides a personal + Script action, marks new AI-created files for review, and links a new JavaScript file into the preview when possible. Local-model guided builds use more reliable multi-file HTML/CSS/JavaScript output and check for missing project files.",
-    "The optional Studio companion is draggable, remembers its place, and has wave, yay, love, dance, nap and thinking reactions.",
-    "Added Alibaba Cloud Model Studio/Qwen with International, US and China endpoints. Added native Ollama passthrough for chat, generate, models, embeddings and local model management (pull, create, copy and delete)."
-   ]
-  },
-  {
-   "version": "0.9.19",
-   "date": "2026-10-04",
-   "title": "Studio feels more like a local coding workbench",
-   "notes": [
-    "Studio now has a live Activity panel with AI file edits, checks, failures and command outcomes, while the PC Chat edit log remains available for the full history.",
-    "Local models can use more tool-call formats reliably, including function tags and fenced JSON, and Studio gives them a diagnose tool plus stronger duplicate-ID and project checks.",
-    "Preview warnings and runtime errors are included in the next Studio request so the local AI can debug what is actually running instead of guessing.",
-    "Added an optional local Pholama companion in Studio Settings: it follows the cursor and can be petted, stays off by default, and respects reduced-motion settings.",
-    "Added a one-click Diagnose action and clearer workbench guidance for inspect, edit, test and fix loops."
-   ]
-  },
-  {
-   "version": "0.9.18",
-   "date": "2026-10-04",
-   "title": "PC updates restart cleanly and compact models are easier to find",
-   "notes": [
-    "The public website no longer exposes the browser model manager; model downloads and model management stay in the PC app.",
-    "Turn on automatic updates in PC Settings and Pholama downloads, closes, and reopens on the new version so the updated Studio is active.",
-    "Added an Under 3 GB filter and clearer descriptions for capable compact models, including Qwen3 4B, Phi-4 Mini and Qwen2.5 Coder 3B."
-   ]
-  },
-  {
-   "version": "0.9.17",
-   "date": "2026-10-04",
-   "title": "New local-first Pholama mark",
-   "notes": [
-    "Reworked the Pholama icon into a simpler, more recognizable llama silhouette that stays legible from a browser tab to a desktop shortcut",
-    "Used the same source mark across the public site, PC app, PWA icons and Windows installer icon",
-    "Added a small mint eye accent to distinguish Pholama while keeping the charcoal and warm-white local-first palette"
-   ]
-  },
-  {
-   "version": "0.9.15",
-   "date": "2026-10-04",
-   "title": "Animated Studio updates",
-   "notes": [
-    "When a new version is ready, a banner slides in from the top with the version and what it brings. Press Update now, or close it to do it later",
-    "Updating now shows a full screen scene: a progress ring and four steps (saving your chats, closing the old version, starting the new one, loading it) that tick off one by one",
-    "The first time you open a new version, a What's new card pops up with confetti and lists the new features one by one. It shows once, and never on a brand new install",
-    "Works in light and dark, fits a phone screen, and calms down if your system is set to reduce motion",
-    "If the update does not come back, the scene says so instead of hanging"
-   ]
-  },
-  {
-   "version": "0.9.14",
-   "date": "2026-10-04",
-   "title": "Studio shows the AI editing live",
-   "notes": [
-    "New Studio animation. While the AI works, the editor glows with a sweeping light and a pill at the bottom says what it is doing: Editing index.html, Reading, Checking the code for mistakes",
-    "When the change lands, the lines that are new or changed flash green and fade, the editor scrolls to the first change, the file's tab pulses, and the preview glows as it reloads",
-    "Only real changes light up. Adding one line at the top does not light up the whole file",
-    "It never gets in your way: you can keep clicking and typing while it plays, and it switches itself off if your system is set to reduce motion (the status pill still shows)",
-    "Works in both the light and dark theme"
-   ]
-  },
-  {
-   "version": "0.9.13",
-   "date": "2026-10-04",
-   "title": "Studio readable again, website downloads ended, Connect ChatGPT removed",
-   "notes": [
-    "Studio on the PC is readable again. The last fix forced white text onto a light background, so parts of Studio were invisible. Studio now uses the normal light or dark theme colours, and every panel was measured in both themes",
-    "Model downloads from the website have ended. The website no longer downloads models to your phone or browser. Chat there uses the cloud assistant. Models on your own computer come from the PC app",
-    "Mobile support has fully ended",
-    "Removed the Connect ChatGPT card and the ChatGPT connection it switched on, so your PC no longer has that door. Using your own ChatGPT, Gemini or Groq key inside Pholama is not affected",
-    "Removed the credit line at the bottom of the website"
-   ]
-  },
-  {
-   "version": "0.9.16",
-   "date": "2026-10-04",
-   "title": "Studio graphite contrast refresh",
-   "notes": [
-    "Rebalanced the PC Studio surfaces so the editor, output log, AI panel and controls are visible instead of collapsing into near-black",
-    "Kept the quiet monochrome mascot and restrained product chrome while improving hierarchy and focus states"
-   ]
-  },
-  {
-   "version": "0.9.15",
-   "date": "2026-10-04",
-   "title": "Studio contrast and mascot polish",
-   "notes": [
-    "Raised contrast across the PC Studio editor, preview, output log and AI panel so text remains readable in dark mode",
-    "Kept the monochrome, local-first mascot treatment consistent across the PC app and public site"
-   ]
-  },
-  {
-   "version": "0.9.14",
-   "date": "2026-10-04",
-   "title": "Studio readability refresh",
-   "notes": [
-    "Improved contrast across the PC Studio editor, preview controls, output log and AI workspace",
-    "Updated the release so the PC updater can install the Studio improvements"
-   ]
-  },
-  {
-   "version": "0.9.13",
-   "date": "2026-10-04",
-   "title": "New Pholama mascot and refreshed icons",
-   "notes": [
-    "Replaced the old logo across the PC app and public site with a white profile llama wearing sunglasses on a dark tile",
-    "Updated the shared source SVG used by the browser icons and site branding"
-   ]
-  },
-  {
-   "version": "0.9.12",
-   "date": "2026-10-04",
-   "title": "Fix live site and Studio updates",
-   "notes": [
-    "The PC updater now detects this release instead of reporting an older install as current",
-    "The website and PC Studio use a new cache generation so updated files and branding are picked up after deployment"
-   ]
-  },
-  {
-   "version": "0.9.11",
-   "date": "2026-10-04",
-   "title": "Gemini and ChatGPT: retry when the company is busy",
-   "notes": [
-    "When Gemini, ChatGPT or another company answers that it is overloaded or down (HTTP 500, 502, 503 or 504), Pholama now waits a moment and tries again up to 3 more times before giving up. Most of these pass within seconds",
-    "If it still fails, the message now says your key and model are fine, shows the company's own reason, and suggests Change model. Pressing Stop while it waits cancels at once"
-   ]
-  },
-  {
-   "version": "0.9.10",
-   "date": "2026-10-04",
-   "title": "Fix: ChatGPT and Gemini keys",
-   "notes": [
-    "Fixed: ChatGPT and Gemini keys did not work. Gemini's old default model (gemini-2.0-flash) was shut down by Google on June 1, 2026, so a correct key still failed. Model names change often, so Pholama no longer trusts a fixed name",
-    "A key is now checked with the company the moment you add it. A wrong key is refused with a plain reason and is not saved. A correct key asks the company which models it can use and picks one that really exists, and tells you if it had to change your choice",
-    "New Change model button on every saved key. It lists only the chat models your key can use right now (no embedding, voice or image models). If a model is retired later, chat says so in plain words instead of showing raw error text",
-    "Newer ChatGPT models that refuse some settings (max_tokens or a custom temperature) now work: Pholama drops or renames just that setting and tries again",
-    "Updated starting models: ChatGPT gpt-5-mini, Gemini gemini-3.8-flash, OpenRouter openai/gpt-5-mini, Grok grok-4"
-   ]
-  },
-  {
-   "version": "0.9.9",
-   "date": "2026-10-04",
-   "title": "Connect ChatGPT to Pholama",
-   "notes": [
-    "Connect ChatGPT: Pholama can now be an MCP server, so ChatGPT can ask your PC for the newest Pholama news, a web search, your installed models and your credits left. These four tools are read-only. ChatGPT cannot see or change your files, run commands, use GitHub or read your keys. It is off until you turn it on in Models, and it works through Tailscale Funnel",
-    "A key is always needed for this connection, even from your own PC, and too many wrong keys get locked out. Remove the key and it stops at once. The steps are in docs-md/CHATGPT.md",
-    "Safer tunnels: requests that come through Tailscale are now treated as outside requests everywhere, so they can never be mistaken for the PC itself"
-   ]
-  },
-  {
-   "version": "0.9.8",
-   "date": "2026-10-04",
-   "title": "Your own AI keys, Agent Max in Studio, 6 more models, and a search fix",
-   "notes": [
-    "Your own AI keys: use ChatGPT, Gemini, Groq, OpenRouter, Mistral, DeepSeek, Together, Grok or any OpenAI-style address with your own account. Add a key in Models, then pick it at the top. It works in Chat and in Studio with all the tools. The key stays on this PC in a private file, is never shown again (only the last 4 characters), and is only ever sent to the company it belongs to. You pay that company directly",
-    "Keys are PC only: a website can never read, add or remove them, and a custom address that points into your home network is refused. Known companies get the full tool set. A custom address gets simple tools only, because Pholama cannot know what is behind it",
-    "Agent Max now works in Studio. Max does the thinking and this PC does the file work. It costs more: 20 extra credits per message on top of the normal Studio price, and up to 8 Max messages from your daily and monthly allowance. You are told the price first. If Max runs out, your own model on this PC takes over for free",
-    "Fixed: 'search me a image of a cat' crashed with \"Cannot access 'searchRan' before initialization\", and searched the wrong words. It now searches 'cat image'",
-    "6 new models about the size of Llama 3.2 3B: Hermes 3 (Llama 3.2) 3B, Llama 3.2 3B high quality, Granite 3.1 3B, Dolphin 3.0 3B, Falcon3 3B and EXAONE 3.5 2.4B. Only ones proven with tools are marked Runs tools"
-   ]
-  },
-  {
-   "version": "0.9.7",
-   "date": "2026-10-04",
-   "title": "Fixed tool calls written as text, and a live edit log",
-   "notes": [
-    "Fixed: some models (including tool-capable Llama) typed a tool call as plain text, like <web_search {\"query\": ...}>, and then made up an answer. Pholama now recognises that form, plus function style, Mistral and Llama forms. The search really runs, the raw text is never shown, and the answer comes from the real result. Only real tool names are matched, so normal text and HTML are untouched",
-    "The edit log is now live: new entries appear by themselves, with no need to press Refresh. It reconnects if the link drops and only works on the PC itself",
-    "Every file edit the AI makes in Studio shows up live as Working, then Done with how many lines were added and removed, including the quick one-line edits",
-    "Studio chat now shows the model's thinking live as it happens"
-   ]
-  },
-  {
-   "version": "0.9.6",
-   "date": "2026-10-04",
-   "title": "Plugins, skills, the Pholama Platform plugin, a working credit limit, and 5 more models",
-   "notes": [
-    "Plugins: switch Live search, Pholama Platform, GitHub, Files and tools, Skills, MCP and the Terminal on or off from one list. An off plugin is not given to the AI at all. A self-check reports anything broken and ignores it, so chat keeps working",
-    "New plugin, Pholama Platform: the AI can read the newest community posts, the daily post, projects, the rules and the app updates. It is read only, it uses your own login so it sees only what you can see, and it can never post, edit or moderate",
-    "Skills: a skill is a saved recipe the AI follows. Write one yourself, press Write it with the AI, or just tell the AI in chat to make one. Skills can be switched off or deleted, and a skill can never change the AI's rules",
-    "When your integration credits run out, Pholama now says exactly how long until the restock (never NaN), and search, web pages, GitHub, Platform, MCP, thinking and memory really stop. Plain chat on your own model stays free",
-    "Moderators: help now lists every command, with new me and mods commands. An owner can give credits to anyone, including themselves, with no limit. Normal moderators keep their limits. Gifts reach the app within 2 minutes, or press Collect now",
-    "The AI no longer invents search results: a reply that says it found something when no search ran is replaced with an honest answer, and a bare search such as ok start searching uses what you were just talking about",
-    "A normal request refused as too complex (for example a Lua simulator game) is asked again once, firmly, so you get a real first version. Harmful requests are never pushed",
-    "Every tool now has a 45 second limit and a size cap, so a slow site or a stuck server can no longer freeze a chat",
-    "5 more models under 5 GB: Qwen3 4B Instruct 2507, Qwen3 4B Thinking 2507, Granite 4.0 H Tiny (all run tools), Qwen2.5 Coder 3B (simple tools) and Gemma 3n E2B (chat)"
-   ]
-  },
-  {
-   "version": "0.9.5",
-   "date": "2026-10-04",
-   "title": "Support tickets, moderator credit gifts, report rewards, 7 newer models, and gentler on low memory",
-   "notes": [
-    "Support: open a ticket from the Platform. Only moderators can reply. Moderators can close tickets, give integration credits, remove warnings and unban, all from an inbox without typing commands",
-    "Report a post that a moderator then removes and you earn 100 integration credits (max 500 a day, once per post, never for your own post). Moderator gifts and report rewards are collected together the next time you open Pholama on your PC",
-    "7 newer models: Qwen3.5 0.8B, 2B, 4B, 9B, 27B and 35B-A3B, plus Gemma 4 E4B. 4B and up run tools. The recommended model now grows with your memory (Qwen3.5 4B from 6 GB, 9B from 12 GB) instead of always being a 2024 model",
-    "Low memory: under 3 GB free, Pholama runs gently (smaller chat memory, compressed cache, fewer threads, short rests). Under 1.5 GB free it unloads the AI to give the memory back and loads it again on your next message. It never cuts off a reply",
-    "Pictures, pasted code and Studio messages now use integration credits (5 per picture, 2 per 1,000 characters of code up to 30, 3 per Studio message). Chat on your own model stays free, even at zero credits",
-    "File tools: a missing \"content\" no longer silently empties a file, Windows device names (CON, NUL, COM1...) are refused, and deleting a folder says so clearly"
-   ]
-  },
-  {
-   "version": "0.9.4",
-   "date": "2026-10-04",
-   "title": "Phone never downloads models if your PC is linked, and Pholama sleeps after a day",
-   "notes": [
-    "Signed in with an account that already has Pholama on a PC? The phone and the website no longer download any model. Chat goes through your PC. Models already on the device keep working, and if the app cannot tell (offline) it never blocks chat",
-    "After one day with nobody using an AI, Pholama shuts every local AI down so nothing sits in your memory. Run  pholama awake  to wake it. An open tab refreshing in the background does not count as use",
-    "Closing Pholama frees the memory every time, even when it is force-closed (End task) or crashes: a tiny watcher stops the AI engine. It never touches other programs, and never the engine of a restarted Pholama",
-    "New command: pholama awake"
-   ]
-  },
-  {
-   "version": "0.9.3",
-   "date": "2026-10-04",
-   "title": "The AI now retries when a command fails",
-   "notes": [
-    "Fixed: when the AI wrote a tool command wrongly, the raw command showed up in the chat and nothing happened. It is now hidden, and the AI is asked to write it again, up to 2 times",
-    "Fixed: when a tool failed (for example a file was not found), the AI gave up at once. It now reads the error and tries again, up to 2 times, then explains in plain words",
-    "Fixed: commands written inside the thinking notes can no longer appear on screen",
-    "If it still cannot do it, you get a clear message instead of a stray command"
-   ]
-  },
-  {
-   "version": "0.9.2",
-   "date": "2026-10-04",
-   "title": "The website is now a clean dashboard",
-   "notes": [
-    "The website no longer has chat. It is the Platform: profile, posts, projects, rules and guides. Chat, tools and big models live in the PC app",
-    "The website keeps exactly one small assistant (Qwen2.5 0.5B). There is no model list to pick from",
-    "A much cleaner header: one row with your name and settings",
-    "Connecting the website to a PC brings chat back, and the PC app is unchanged"
-   ]
-  },
-  {
-   "version": "0.9.1",
-   "date": "2026-10-04",
-   "title": "Moderator tools, Projects and a Platform dashboard",
-   "notes": [
-    "The Platform is now a dashboard with Home, Posts, Projects, Rules and (for moderators) a Moderator tab",
-    "Moderators can warn, edit, hide, remove posts and ban people for a set time or forever, with a reason. Every action is logged",
-    "New Projects tab: show what you made with up to 4 images. Projects stay up until you delete them",
-    "New Daily post on Home, set by moderators, plus community Rules",
-    "Warnings show on your Home with an I understand button"
-   ]
-  },
-  {
-   "version": "0.9.0",
-   "date": "2026-10-04",
-   "title": "Pholama Platform and sign in with GitHub",
-   "notes": [
-    "The site is now Pholama Platform: log in, pick your own Platform name and picture, and see 'Logged in as' in the header on PC and phone",
-    "New communities: General, Models, Games and API, Help and Showcase. Every post disappears after 3 hours, and you can react to posts",
-    "Moderation: report a post, three reports hide it, and moderators can hide posts and ban people. Links and secret keys are blocked in posts",
-    "Your last local AIs: the PC app shares only the names of the models you downloaded, once when it opens, when your PC is idle",
-    "The site now keeps one small chat assistant. It cannot use tools or files. Bigger models and tools live in the PC app",
-    "New: Continue with GitHub on the site and the PC app. No pasted token needed, and every GitHub write still asks you first",
-    "Use GitHub on both the site and the PC app with the same account to earn 250 credits, once per account",
-    "The site has an update log, API and key help and guides. A warning says the browser AI might stop working"
-   ]
-  },
-  {
-   "version": "0.8.1",
-   "date": "2026-10-04",
-   "title": "Picture reader can be switched on",
-   "notes": [
-    "The Picture reader now has a \"Use for pictures\" switch in Models. Before, you could download it but pictures were still refused",
-    "Downloading the reader turns it on. You can switch it off any time",
-    "The message shown when a picture is refused now says exactly what to do"
-   ]
-  },
-  {
-   "version": "0.8.0",
-   "date": "2026-10-04",
-   "title": "Duo, memory limits and the picture reader",
-   "notes": [
-    "New Duo switch in Models: a small second AI can write quick hints before your main AI answers. Off by default, switch it off any time. It is a speed option and does not make answers smarter",
-    "The picture reader (SmolVLM 256M) now shows in the Models list so you can download it",
-    "Memory limits: 5 memories on the website, 15 in the PC app, with a clear message when full",
-    "Phone support has ended because phones have too little storage. The website still works there"
-   ]
-  },
-  {
-   "version": "0.7.0",
-   "date": "2026-10-04",
-   "title": "Send files and pictures",
-   "notes": [
-    "New paperclip: attach text and code files (up to 4) and the model reads them. Drag a file onto the chat or paste a picture too",
-    "Send pictures with a tiny image reader (SmolVLM 256M, ~190 MB). It reads the picture into words, then your chat model answers",
-    "Recommended pair for phones: SmolVLM 256M + Qwen2.5 0.5B, about 0.7 GB in total",
-    "Models can now declare that they read pictures themselves"
-   ]
-  },
-  {
-   "version": "0.6.2",
-   "date": "2026-10-04",
-   "title": "Phone support is ending",
-   "notes": [
-    "Phone support ends today: Pholama is moving to the PC app, with bigger models, tools, web search and Roblox Studio",
-    "The phone site is now a small helper for daily chat and maths, with 7 models from 0.7 to 2.2 GB",
-    "Agent Max and credits are removed from the phone site",
-    "Images and Gemma 4B are not available on phones, so there is no Android app"
-   ]
-  },
-  {
-   "version": "0.6.1",
-   "date": "2026-10-04",
-   "title": "A new dashboard",
-   "notes": [
-    "Pholama now opens on a dashboard: newest version, what's new, newest models and your PC at a glance",
-    "The website and the PC app list the same 51 models (the website used to show only 7)",
-    "Chat is one tap away in the top bar",
-    "A release check makes sure the website and PC app always show the newest models and version"
-   ]
-  },
-  {
-   "version": "0.6.0",
-   "date": "2026-10-04",
-   "title": "Real tools and a local API",
-   "notes": [
-    "19 tools for the local AI, including safe file tools locked to one workspace folder",
-    "Every model is labelled Runs tools, Basic tools only or Chat only",
-    "Only models that really run tools are recommended (smallest: Llama 3.2 3B)",
-    "Ollama and OpenAI style local API for games and websites, with a docs page at /api/docs",
-    "New API guide and updated READMEs"
-   ]
-  },
-  {
-   "version": "0.5.4",
-   "date": "2026-10-03",
-   "title": "Studio builds on small models",
-   "notes": [
-    "Guided build writes files itself so small models can build Studio projects",
-    "No more looping: old chatter is removed from history",
-    "Page skeleton repaired in code; bad auto-fixes rolled back"
-   ]
-  },
-  {
-   "version": "0.5.3",
-   "date": "2026-10-03",
-   "title": "Safer file edits",
-   "notes": [
-    "Fixed edits that failed on Windows line endings",
-    "Edits now ignore indentation differences but keep your formatting"
-   ]
-  }
- ]
+  "latest": "0.9.39",
+  "releases": [
+    {
+      "version": "0.9.39",
+      "title": "Reliable PC updates, visible branding, and Pro plan fixes",
+      "notes": [
+        "PC apps check for updates shortly after launch and can install the newest release.",
+        "Header logos use the supplied Pholama mark reliably on the site and PC app.",
+        "Free and Pro plan status is clearer and expiry field handling is more tolerant."
+      ],
+      "date": "2026-10-06"
+    },
+    {
+      "version": "0.9.38",
+      "date": "2026-10-06",
+      "title": "Structured research plans and tool-run telemetry",
+      "notes": [
+        "Added a deterministic plan-first workflow for research, Studio edits and file changes: inspect, act, verify.",
+        "Local tool runs now emit completion status, duration and failure details for clearer PC chat and Studio diagnostics.",
+        "Research tasks are guided toward source discovery, primary-page inspection and evidence-based synthesis, inspired by the smolagents open deep research example.",
+        "Includes the v0.9.37 monochrome interface and supplied Pholama llama branding refresh."
+      ]
+    },
+    {
+      "version": "0.9.37",
+      "date": "2026-10-06",
+      "title": "New monochrome Pholama look and supplied llama icon",
+      "notes": [
+        "Updated the public site and PC app with a calm monochrome interface inspired by the clean, minimal local-AI aesthetic of Ollama.",
+        "Replaced the visible Pholama branding, model loaders and hero mark with the supplied white llama wearing sunglasses on a black tile.",
+        "Updated browser, PWA, maskable, Linux/Mac and Windows icon assets so the same mark is used everywhere.",
+        "Kept the latest v0.9.36 features and PC/site behavior intact while refreshing the visual layer."
+      ]
+    },
+    {
+      "version": "0.9.36",
+      "date": "2026-10-05",
+      "title": "Pholama Pro, and Agent Max is now a friend.",
+      "notes": [
+        "New: Pholama Pro. 100 Robux a month on Roblox gives you 15 Agent Max messages a day and 35 a month, 10 projects, 10 friends, more memories and 10,000 integration tokens. Open Settings > Plans to see Free next to Pro and to get your one-time code (it works for 30 minutes).",
+        "New: Agent Max is now a friend at the top of your friend list. Chat with it any time: 5 messages a day, or 10 with Pro. It cannot be removed, blocked or called, and a message is given back if Agent Max cannot answer.",
+        "Safer: Pro is checked by the database, so it cannot be switched on from the page. If the Pro check ever fails you simply keep the normal free limits."
+      ]
+    },
+    {
+      "version": "0.9.35",
+      "date": "2026-10-05",
+      "title": "Friends, private chat, calls, notifications, and pictures and videos on the website.",
+      "notes": [
+        "New: Friends on Pholama Platform. Send a friend request by Platform name, accept or decline, remove or block someone. Blocking stops their messages and calls and hides you from them.",
+        "New: private chat with friends, with pictures and videos. Only the two of you can open the files. Links are still not allowed, in messages or anywhere else.",
+        "New: voice calls between friends, with a ringing banner you can accept or decline. Calls may not connect on very strict networks.",
+        "New: a notification bell for friend requests, new messages and missed calls, with a soft sound you can turn off.",
+        "New: a Privacy tab where you switch on or off friend requests, private messages, calls, and notifications.",
+        "New: add a picture or video to a post, a reply, a support ticket or a build (pictures up to 5 MB, videos up to 25 MB; PNG, JPG, WebP, GIF, MP4, WebM). Ticket files can be seen only by you and the moderators.",
+        "Fixed: new visitors on the website no longer get the 'download an AI' box. It only opens in the PC app now.",
+        "Fixed: the 'kys' word filter never matched in posts and replies, and private details (who has calls off, who is friends with whom) could be looked up by any member. Both are closed.",
+        "Fixed: support tickets did not block links or secret keys. They do now.",
+        "Owner setup: run supabase/social.sql, supabase/media.sql and supabase/post_replies.sql once in the Supabase SQL editor. Until then the new tabs say they are not set up yet."
+      ]
+    },
+    {
+      "version": "0.9.34",
+      "date": "2026-10-05",
+      "title": "Fixed the sunglasses glitch in the opening animation.",
+      "notes": [
+        "Fixed: in the opening logo animation, the sunglasses used to show as a flat white or black block and then snap into place. They now drop onto the face and land smoothly.",
+        "The same fix applies to the short version shown after an update, and it looks right on both the light and the dark theme."
+      ]
+    },
+    {
+      "version": "0.9.33",
+      "date": "2026-10-05",
+      "title": "New Pholama logo and an opening animation.",
+      "notes": [
+        "New llama-with-sunglasses logo everywhere: the app icon, your Desktop and Start Menu shortcut, the browser tab, and the phone home-screen icon.",
+        "A short logo animation plays when you open Pholama or the website: dots gather, the llama rises, the sunglasses drop on, and the name fades in. Click or press Escape to skip it.",
+        "The same llama now plays on the update screen while Pholama installs a new version, and the progress ring still shows how far along it is.",
+        "After an update restart you get a shorter version. People who turn on Reduce motion see the finished logo with no movement.",
+        "On Windows the Desktop icon can keep the old picture for a little while until Windows refreshes its icon cache. Signing out and in, or restarting Explorer, fixes it."
+      ]
+    },
+    {
+      "version": "0.9.32",
+      "date": "2026-10-05",
+      "title": "Live Activity card: watch the AI think and edit, right in the chat.",
+      "notes": [
+        "New: while the AI works in Studio, a Live Activity card appears in the chat. It shows what the AI is doing right now (Thinking, Reading a file, Editing a file, Testing), the thought it is on, and a list of the files it touches, each ticked off when it is done.",
+        "When the job ends the card stays as a short summary such as Changed 2 files. If the AI only answered a question, the card quietly disappears.",
+        "File names are always shown as plain text, so a strangely named file can never run anything in the page."
+      ]
+    },
+    {
+      "version": "0.9.31",
+      "date": "2026-10-05",
+      "title": "Cheaper Studio: chat 1, task 3, big task 4. Your companion wanders and codes.",
+      "notes": [
+        "Changed: Studio credits now depend on the size of the job. A chat or a question costs 1, a normal build or edit (a medium task) costs 3, and a big task costs 4. A big task is a whole app, game or site, a long request, a numbered list of four or more jobs, or a request that touches three or more files. The server decides this from your real message, so it cannot be set lower from the page.",
+        "Changed: Agent Max in Studio used to add 20 credits on top (23 per message). It now costs the same as any other model. It still uses its own daily and monthly Max messages, and your own model still takes over for free when Max runs out.",
+        "New: the Studio companion now lives. It wanders around the screen on its own, faces the way it walks, and naps when nothing is happening. While the AI is building it sits down at a tiny laptop and types code, like a mini Codex, then goes back to wandering when the work is done. The laptop screen is only for show and never touches your files.",
+        "The companion stands still while you drag it or while its menu is open, and it holds still if your system asks for reduced motion."
+      ]
+    },
+    {
+      "version": "0.9.30",
+      "date": "2026-10-05",
+      "title": "Run Python, C++, Rust and more. Big chat windows. Choose what powers Agent Max. Phone models are gone.",
+      "notes": [
+        "New: your AI can now write and run programs. Python, C++, C, Rust, Go, Java, JavaScript, TypeScript, C#, Ruby, PHP, Lua, Bash, PowerShell, Kotlin, Swift, Dart, R and Zig. You install the languages you want; Pholama finds them. If one is missing the AI tells you exactly what to install instead of making up a result. Settings > Usage > Programming languages shows what was found, with a Check again button",
+        "Programs run only inside the Pholama workspace folder, stop after 20 seconds by default (up to 120), and their output is cut at 8000 characters. A file name can never inject a command",
+        "New: big chat windows on the Platform. Open a support ticket or a post in a large window that refreshes by itself. Reporters and moderators chat in tickets, moderators keep Close, Reopen and the member tools inside the window. Posts get a reply chat (run supabase/post_replies.sql once in Supabase to switch replies on)",
+        "New: choose what powers Agent Max in Settings > Usage. The official cloud is the smartest and uses your daily and monthly messages. One of your own local AIs is free and unlimited but only as smart as that model. The chat box label and Studio follow your choice",
+        "Fixed: Agent Max in Studio could not really edit files. The cloud function ignored Studio's instructions, cut messages to 2000 characters and only knew the calculator, clock and site help. It now follows Studio's rules, has room for real code and still counts as one message (refunded on failure)",
+        "Removed: phone and in-browser models. The browser model tab, phone models in the model list, the phone cards on the dashboard and the phone wording in Agent Max's knowledge and the guides are gone. Phones can still use Agent Max, the Platform, or open your own PC app over your network"
+      ]
+    },
+    {
+      "version": "0.9.29",
+      "date": "2026-10-05",
+      "title": "Agent Max in Studio no longer says the daily limit is reached when it is not",
+      "notes": [
+        "Fixed: Studio said 'Agent Max reached its daily limit' while the counter showed 2 of 10. Studio always told the cloud this PC had a local AI that runs tools, which lowers the daily allowance to 1. It now sends the real answer, the same one the chat page uses, so you get the full 10 a day unless a tool-capable local model is really installed",
+        "Fixed: using Agent Max in Studio with Thinking on no longer spends a second message on a hidden thinking pass. Max already reasons inside its own answer, so one Studio step costs one of your daily messages, not two"
+      ]
+    },
+    {
+      "version": "0.9.28",
+      "date": "2026-10-05",
+      "title": "New versions really arrive within about a minute, and an open page reloads itself",
+      "notes": [
+        "Fixed: new commits took up to 5 minutes to show up. GitHub keeps the version file cached for 5 minutes, so checking it every minute could not help. Pholama now asks GitHub for the newest commit itself (cached 1 minute) and reads the version from that exact commit",
+        "The check spaces itself out (about every 75 seconds) and slows down by itself if GitHub's hourly allowance runs low, then goes back to the normal route. It never gets your PC blocked",
+        "Fixed: after an automatic update the server restarted but an already open page (and Studio) kept running the old code. The page now notices the new version and reloads itself, but waits if Studio is working, has unsaved edits, or you are typing a message",
+        "Agent Max now tries dots-3-note-preview (free), then Nemotron 3.5 Lightning (free), then gpt-oss-20b on OpenRouter, and Groq with three keys as the last safety net. If one fails it quietly moves to the next; you never see which model failed or why, only a short generic message if every one fails"
+      ]
+    },
+    {
+      "version": "0.9.27",
+      "date": "2026-10-05",
+      "title": "Pick plugins with @; find code across a Studio project",
+      "notes": [
+        "Type @ in chat to see built-in and custom plugins, then click one or select it with the arrow keys. Custom suggestions use the exact @x_tool name the AI sees.",
+        "Fixed: @x_<your_tool> now resolves to the saved plugin name, even when its switch is off. Explicit no-argument calls run directly; complete key=value arguments are routed directly; missing required values are not guessed or sent empty.",
+        "Custom-plugin instructions now explain the arguments and results more clearly. Data-changing calls still require Allow, including a tool explicitly enabled for one mentioned request.",
+        "Studio now searches all project files, shows matching file and line numbers, and jumps to a result. Press Ctrl+Shift+F in the editor to focus project search."
+      ]
+    },
+    {
+      "version": "0.9.26",
+      "date": "2026-10-05",
+      "title": "Update notices appear automatically",
+      "notes": [
+        "When a newer version is found, Pholama now shows an update banner automatically instead of making you open Settings and press Check now",
+        "The notice checks in with the app's one-minute update refresh; with automatic installation off, Install update starts it directly, while a downloaded update offers Restart now",
+        "Returning to an open Pholama tab refreshes update status immediately"
+      ]
+    },
+    {
+      "version": "0.9.25",
+      "date": "2026-10-04",
+      "title": "Studio can improve your real project, tools can research an API, updates check every minute",
+      "notes": [
+        "Fixed: in Studio, 'improve it' or 'ok start' on a project that already has files now really changes them. Before, the AI talked, or copied an example from its own prompt and made a file called 'bro'",
+        "Pholama shows the AI your real files, asks for the complete updated version, and refuses answers that lose code, leave 'rest of the code' placeholders, or break the page. If the result has more problems than before, your files are put back exactly",
+        "The AI can only change files it was shown, and never a file outside your project",
+        "New in Tools: 'What can this key do?'. Type a service name and the AI reads its API docs and suggests tools you can tick. Only the service name is searched. Your key is never searched and the AI never sees it",
+        "Updates are now checked every minute (it was every 5 minutes, on both the server and the page)"
+      ]
+    },
+    {
+      "version": "0.9.24",
+      "date": "2026-10-04",
+      "title": "Studio no longer says it added things it did not add",
+      "notes": [
+        "Fixed: the Studio AI sometimes said it added a timer or changed your page when it had not touched any file",
+        "If the AI claims an edit but no file was really written, Pholama now replaces that claim with an honest answer and tells you how to ask again",
+        "Real edits are never blocked: a claim is kept whenever a file was actually written, including the guided build paths",
+        "Offers and questions like 'Want me to add a timer?' are left alone",
+        "@plugin mentions and the Updating animation from 0.9.23 are included"
+      ]
+    },
+    {
+      "version": "0.9.23",
+      "date": "2026-10-04",
+      "title": "@plugin mentions, and the update animation is back",
+      "notes": [
+        "Type @github, @search, @tools, @skills, @mcp or @platform (or @ and the name of a tool you made) and that plugin is used for that message, even if its switch is off",
+        "The AI is told which plugin you meant, so it no longer says it cannot access your files on GitHub",
+        "@terminal is never turned on by a mention, and models that cannot run tools are not forced to. Email addresses like me@github.com are ignored",
+        "Automatic updates now play the Updating animation before the page reloads. They used to reload with no animation at all",
+        "The What's new card is tried again if the release notes are slow to load, instead of being lost"
+      ]
+    },
+    {
+      "version": "0.9.22",
+      "date": "2026-10-04",
+      "title": "Settings is organised, and the AI can create tools for you",
+      "notes": [
+        "Settings > Tools is now split into groups: Features, Plugins and skills, My tools, MCP, and Updates and log. Only one shows at a time, and Pholama remembers your last one",
+        "New: Create a tool with AI. Say what you want, paste the API key, and the AI writes the tool. You check it, then save it",
+        "The AI never sees your API key. It is saved on your PC first and the AI is only told the key's name",
+        "Every tool is now a card with a picture, a title and a description. You can rename a tool, change its description and give it a picture or remove it",
+        "Pictures only accept png, jpeg, webp, gif or an https link. SVG is refused because it can carry script",
+        "Agent Max now has a third backup key: if the first two are busy or rejected, the third one answers"
+      ]
+    },
+    {
+      "version": "0.9.21",
+      "date": "2026-10-04",
+      "title": "Web answers, videos, pictures and your own tools",
+      "notes": [
+        "Ask a plain question (who, when, how tall, how far) and the AI looks it up on the web first. It answers only when a result clearly supports it, says which website it came from, and says it could not confirm it otherwise",
+        "Ask for a video and the AI finds a real YouTube video and plays it in the chat. Ask for a picture and it shows a real one",
+        "New My tools panel in Plugins: make a tool that lets the AI use any web service, like Supabase or Discord. Or just ask the AI to make one",
+        "Your keys stay on this PC and the AI never sees them. A tool can only reach the internet, never your own network. Anything that changes data asks you to Allow first",
+        "Fix: Studio could not load (\"invalid regular expression flag\"). A broken pattern in the Studio file is fixed, and a new test now checks every file so it cannot happen again",
+        "A second Groq key can now take over when the first is busy"
+      ]
+    },
+    {
+      "version": "0.9.20",
+      "date": "2026-10-04",
+      "title": "Updates work in the background; Studio and model integrations grow",
+      "notes": [
+        "Check now installs an available update immediately. The server restarts only after its old listener exits, and an interrupted browser connection now waits for the replacement version instead of reporting a false failure.",
+        "Automatic checks run every five minutes while Pholama is open and every five hours while it is closed (when the PC is on and the user is signed in). The app tab reloads itself after a server update; existing installs set up the background task on launch.",
+        "Studio now provides a personal + Script action, marks new AI-created files for review, and links a new JavaScript file into the preview when possible. Local-model guided builds use more reliable multi-file HTML/CSS/JavaScript output and check for missing project files.",
+        "The optional Studio companion is draggable, remembers its place, and has wave, yay, love, dance, nap and thinking reactions.",
+        "Added Alibaba Cloud Model Studio/Qwen with International, US and China endpoints. Added native Ollama passthrough for chat, generate, models, embeddings and local model management (pull, create, copy and delete)."
+      ]
+    },
+    {
+      "version": "0.9.19",
+      "date": "2026-10-04",
+      "title": "Studio feels more like a local coding workbench",
+      "notes": [
+        "Studio now has a live Activity panel with AI file edits, checks, failures and command outcomes, while the PC Chat edit log remains available for the full history.",
+        "Local models can use more tool-call formats reliably, including function tags and fenced JSON, and Studio gives them a diagnose tool plus stronger duplicate-ID and project checks.",
+        "Preview warnings and runtime errors are included in the next Studio request so the local AI can debug what is actually running instead of guessing.",
+        "Added an optional local Pholama companion in Studio Settings: it follows the cursor and can be petted, stays off by default, and respects reduced-motion settings.",
+        "Added a one-click Diagnose action and clearer workbench guidance for inspect, edit, test and fix loops."
+      ]
+    },
+    {
+      "version": "0.9.18",
+      "date": "2026-10-04",
+      "title": "PC updates restart cleanly and compact models are easier to find",
+      "notes": [
+        "The public website no longer exposes the browser model manager; model downloads and model management stay in the PC app.",
+        "Turn on automatic updates in PC Settings and Pholama downloads, closes, and reopens on the new version so the updated Studio is active.",
+        "Added an Under 3 GB filter and clearer descriptions for capable compact models, including Qwen3 4B, Phi-4 Mini and Qwen2.5 Coder 3B."
+      ]
+    },
+    {
+      "version": "0.9.17",
+      "date": "2026-10-04",
+      "title": "New local-first Pholama mark",
+      "notes": [
+        "Reworked the Pholama icon into a simpler, more recognizable llama silhouette that stays legible from a browser tab to a desktop shortcut",
+        "Used the same source mark across the public site, PC app, PWA icons and Windows installer icon",
+        "Added a small mint eye accent to distinguish Pholama while keeping the charcoal and warm-white local-first palette"
+      ]
+    },
+    {
+      "version": "0.9.15",
+      "date": "2026-10-04",
+      "title": "Animated Studio updates",
+      "notes": [
+        "When a new version is ready, a banner slides in from the top with the version and what it brings. Press Update now, or close it to do it later",
+        "Updating now shows a full screen scene: a progress ring and four steps (saving your chats, closing the old version, starting the new one, loading it) that tick off one by one",
+        "The first time you open a new version, a What's new card pops up with confetti and lists the new features one by one. It shows once, and never on a brand new install",
+        "Works in light and dark, fits a phone screen, and calms down if your system is set to reduce motion",
+        "If the update does not come back, the scene says so instead of hanging"
+      ]
+    },
+    {
+      "version": "0.9.14",
+      "date": "2026-10-04",
+      "title": "Studio shows the AI editing live",
+      "notes": [
+        "New Studio animation. While the AI works, the editor glows with a sweeping light and a pill at the bottom says what it is doing: Editing index.html, Reading, Checking the code for mistakes",
+        "When the change lands, the lines that are new or changed flash green and fade, the editor scrolls to the first change, the file's tab pulses, and the preview glows as it reloads",
+        "Only real changes light up. Adding one line at the top does not light up the whole file",
+        "It never gets in your way: you can keep clicking and typing while it plays, and it switches itself off if your system is set to reduce motion (the status pill still shows)",
+        "Works in both the light and dark theme"
+      ]
+    },
+    {
+      "version": "0.9.13",
+      "date": "2026-10-04",
+      "title": "Studio readable again, website downloads ended, Connect ChatGPT removed",
+      "notes": [
+        "Studio on the PC is readable again. The last fix forced white text onto a light background, so parts of Studio were invisible. Studio now uses the normal light or dark theme colours, and every panel was measured in both themes",
+        "Model downloads from the website have ended. The website no longer downloads models to your phone or browser. Chat there uses the cloud assistant. Models on your own computer come from the PC app",
+        "Mobile support has fully ended",
+        "Removed the Connect ChatGPT card and the ChatGPT connection it switched on, so your PC no longer has that door. Using your own ChatGPT, Gemini or Groq key inside Pholama is not affected",
+        "Removed the credit line at the bottom of the website"
+      ]
+    },
+    {
+      "version": "0.9.16",
+      "date": "2026-10-04",
+      "title": "Studio graphite contrast refresh",
+      "notes": [
+        "Rebalanced the PC Studio surfaces so the editor, output log, AI panel and controls are visible instead of collapsing into near-black",
+        "Kept the quiet monochrome mascot and restrained product chrome while improving hierarchy and focus states"
+      ]
+    },
+    {
+      "version": "0.9.15",
+      "date": "2026-10-04",
+      "title": "Studio contrast and mascot polish",
+      "notes": [
+        "Raised contrast across the PC Studio editor, preview, output log and AI panel so text remains readable in dark mode",
+        "Kept the monochrome, local-first mascot treatment consistent across the PC app and public site"
+      ]
+    },
+    {
+      "version": "0.9.14",
+      "date": "2026-10-04",
+      "title": "Studio readability refresh",
+      "notes": [
+        "Improved contrast across the PC Studio editor, preview controls, output log and AI workspace",
+        "Updated the release so the PC updater can install the Studio improvements"
+      ]
+    },
+    {
+      "version": "0.9.13",
+      "date": "2026-10-04",
+      "title": "New Pholama mascot and refreshed icons",
+      "notes": [
+        "Replaced the old logo across the PC app and public site with a white profile llama wearing sunglasses on a dark tile",
+        "Updated the shared source SVG used by the browser icons and site branding"
+      ]
+    },
+    {
+      "version": "0.9.12",
+      "date": "2026-10-04",
+      "title": "Fix live site and Studio updates",
+      "notes": [
+        "The PC updater now detects this release instead of reporting an older install as current",
+        "The website and PC Studio use a new cache generation so updated files and branding are picked up after deployment"
+      ]
+    },
+    {
+      "version": "0.9.11",
+      "date": "2026-10-04",
+      "title": "Gemini and ChatGPT: retry when the company is busy",
+      "notes": [
+        "When Gemini, ChatGPT or another company answers that it is overloaded or down (HTTP 500, 502, 503 or 504), Pholama now waits a moment and tries again up to 3 more times before giving up. Most of these pass within seconds",
+        "If it still fails, the message now says your key and model are fine, shows the company's own reason, and suggests Change model. Pressing Stop while it waits cancels at once"
+      ]
+    },
+    {
+      "version": "0.9.10",
+      "date": "2026-10-04",
+      "title": "Fix: ChatGPT and Gemini keys",
+      "notes": [
+        "Fixed: ChatGPT and Gemini keys did not work. Gemini's old default model (gemini-2.0-flash) was shut down by Google on June 1, 2026, so a correct key still failed. Model names change often, so Pholama no longer trusts a fixed name",
+        "A key is now checked with the company the moment you add it. A wrong key is refused with a plain reason and is not saved. A correct key asks the company which models it can use and picks one that really exists, and tells you if it had to change your choice",
+        "New Change model button on every saved key. It lists only the chat models your key can use right now (no embedding, voice or image models). If a model is retired later, chat says so in plain words instead of showing raw error text",
+        "Newer ChatGPT models that refuse some settings (max_tokens or a custom temperature) now work: Pholama drops or renames just that setting and tries again",
+        "Updated starting models: ChatGPT gpt-5-mini, Gemini gemini-3.8-flash, OpenRouter openai/gpt-5-mini, Grok grok-4"
+      ]
+    },
+    {
+      "version": "0.9.9",
+      "date": "2026-10-04",
+      "title": "Connect ChatGPT to Pholama",
+      "notes": [
+        "Connect ChatGPT: Pholama can now be an MCP server, so ChatGPT can ask your PC for the newest Pholama news, a web search, your installed models and your credits left. These four tools are read-only. ChatGPT cannot see or change your files, run commands, use GitHub or read your keys. It is off until you turn it on in Models, and it works through Tailscale Funnel",
+        "A key is always needed for this connection, even from your own PC, and too many wrong keys get locked out. Remove the key and it stops at once. The steps are in docs-md/CHATGPT.md",
+        "Safer tunnels: requests that come through Tailscale are now treated as outside requests everywhere, so they can never be mistaken for the PC itself"
+      ]
+    },
+    {
+      "version": "0.9.8",
+      "date": "2026-10-04",
+      "title": "Your own AI keys, Agent Max in Studio, 6 more models, and a search fix",
+      "notes": [
+        "Your own AI keys: use ChatGPT, Gemini, Groq, OpenRouter, Mistral, DeepSeek, Together, Grok or any OpenAI-style address with your own account. Add a key in Models, then pick it at the top. It works in Chat and in Studio with all the tools. The key stays on this PC in a private file, is never shown again (only the last 4 characters), and is only ever sent to the company it belongs to. You pay that company directly",
+        "Keys are PC only: a website can never read, add or remove them, and a custom address that points into your home network is refused. Known companies get the full tool set. A custom address gets simple tools only, because Pholama cannot know what is behind it",
+        "Agent Max now works in Studio. Max does the thinking and this PC does the file work. It costs more: 20 extra credits per message on top of the normal Studio price, and up to 8 Max messages from your daily and monthly allowance. You are told the price first. If Max runs out, your own model on this PC takes over for free",
+        "Fixed: 'search me a image of a cat' crashed with \"Cannot access 'searchRan' before initialization\", and searched the wrong words. It now searches 'cat image'",
+        "6 new models about the size of Llama 3.2 3B: Hermes 3 (Llama 3.2) 3B, Llama 3.2 3B high quality, Granite 3.1 3B, Dolphin 3.0 3B, Falcon3 3B and EXAONE 3.5 2.4B. Only ones proven with tools are marked Runs tools"
+      ]
+    },
+    {
+      "version": "0.9.7",
+      "date": "2026-10-04",
+      "title": "Fixed tool calls written as text, and a live edit log",
+      "notes": [
+        "Fixed: some models (including tool-capable Llama) typed a tool call as plain text, like <web_search {\"query\": ...}>, and then made up an answer. Pholama now recognises that form, plus function style, Mistral and Llama forms. The search really runs, the raw text is never shown, and the answer comes from the real result. Only real tool names are matched, so normal text and HTML are untouched",
+        "The edit log is now live: new entries appear by themselves, with no need to press Refresh. It reconnects if the link drops and only works on the PC itself",
+        "Every file edit the AI makes in Studio shows up live as Working, then Done with how many lines were added and removed, including the quick one-line edits",
+        "Studio chat now shows the model's thinking live as it happens"
+      ]
+    },
+    {
+      "version": "0.9.6",
+      "date": "2026-10-04",
+      "title": "Plugins, skills, the Pholama Platform plugin, a working credit limit, and 5 more models",
+      "notes": [
+        "Plugins: switch Live search, Pholama Platform, GitHub, Files and tools, Skills, MCP and the Terminal on or off from one list. An off plugin is not given to the AI at all. A self-check reports anything broken and ignores it, so chat keeps working",
+        "New plugin, Pholama Platform: the AI can read the newest community posts, the daily post, projects, the rules and the app updates. It is read only, it uses your own login so it sees only what you can see, and it can never post, edit or moderate",
+        "Skills: a skill is a saved recipe the AI follows. Write one yourself, press Write it with the AI, or just tell the AI in chat to make one. Skills can be switched off or deleted, and a skill can never change the AI's rules",
+        "When your integration credits run out, Pholama now says exactly how long until the restock (never NaN), and search, web pages, GitHub, Platform, MCP, thinking and memory really stop. Plain chat on your own model stays free",
+        "Moderators: help now lists every command, with new me and mods commands. An owner can give credits to anyone, including themselves, with no limit. Normal moderators keep their limits. Gifts reach the app within 2 minutes, or press Collect now",
+        "The AI no longer invents search results: a reply that says it found something when no search ran is replaced with an honest answer, and a bare search such as ok start searching uses what you were just talking about",
+        "A normal request refused as too complex (for example a Lua simulator game) is asked again once, firmly, so you get a real first version. Harmful requests are never pushed",
+        "Every tool now has a 45 second limit and a size cap, so a slow site or a stuck server can no longer freeze a chat",
+        "5 more models under 5 GB: Qwen3 4B Instruct 2507, Qwen3 4B Thinking 2507, Granite 4.0 H Tiny (all run tools), Qwen2.5 Coder 3B (simple tools) and Gemma 3n E2B (chat)"
+      ]
+    },
+    {
+      "version": "0.9.5",
+      "date": "2026-10-04",
+      "title": "Support tickets, moderator credit gifts, report rewards, 7 newer models, and gentler on low memory",
+      "notes": [
+        "Support: open a ticket from the Platform. Only moderators can reply. Moderators can close tickets, give integration credits, remove warnings and unban, all from an inbox without typing commands",
+        "Report a post that a moderator then removes and you earn 100 integration credits (max 500 a day, once per post, never for your own post). Moderator gifts and report rewards are collected together the next time you open Pholama on your PC",
+        "7 newer models: Qwen3.5 0.8B, 2B, 4B, 9B, 27B and 35B-A3B, plus Gemma 4 E4B. 4B and up run tools. The recommended model now grows with your memory (Qwen3.5 4B from 6 GB, 9B from 12 GB) instead of always being a 2024 model",
+        "Low memory: under 3 GB free, Pholama runs gently (smaller chat memory, compressed cache, fewer threads, short rests). Under 1.5 GB free it unloads the AI to give the memory back and loads it again on your next message. It never cuts off a reply",
+        "Pictures, pasted code and Studio messages now use integration credits (5 per picture, 2 per 1,000 characters of code up to 30, 3 per Studio message). Chat on your own model stays free, even at zero credits",
+        "File tools: a missing \"content\" no longer silently empties a file, Windows device names (CON, NUL, COM1...) are refused, and deleting a folder says so clearly"
+      ]
+    },
+    {
+      "version": "0.9.4",
+      "date": "2026-10-04",
+      "title": "Phone never downloads models if your PC is linked, and Pholama sleeps after a day",
+      "notes": [
+        "Signed in with an account that already has Pholama on a PC? The phone and the website no longer download any model. Chat goes through your PC. Models already on the device keep working, and if the app cannot tell (offline) it never blocks chat",
+        "After one day with nobody using an AI, Pholama shuts every local AI down so nothing sits in your memory. Run  pholama awake  to wake it. An open tab refreshing in the background does not count as use",
+        "Closing Pholama frees the memory every time, even when it is force-closed (End task) or crashes: a tiny watcher stops the AI engine. It never touches other programs, and never the engine of a restarted Pholama",
+        "New command: pholama awake"
+      ]
+    },
+    {
+      "version": "0.9.3",
+      "date": "2026-10-04",
+      "title": "The AI now retries when a command fails",
+      "notes": [
+        "Fixed: when the AI wrote a tool command wrongly, the raw command showed up in the chat and nothing happened. It is now hidden, and the AI is asked to write it again, up to 2 times",
+        "Fixed: when a tool failed (for example a file was not found), the AI gave up at once. It now reads the error and tries again, up to 2 times, then explains in plain words",
+        "Fixed: commands written inside the thinking notes can no longer appear on screen",
+        "If it still cannot do it, you get a clear message instead of a stray command"
+      ]
+    },
+    {
+      "version": "0.9.2",
+      "date": "2026-10-04",
+      "title": "The website is now a clean dashboard",
+      "notes": [
+        "The website no longer has chat. It is the Platform: profile, posts, projects, rules and guides. Chat, tools and big models live in the PC app",
+        "The website keeps exactly one small assistant (Qwen2.5 0.5B). There is no model list to pick from",
+        "A much cleaner header: one row with your name and settings",
+        "Connecting the website to a PC brings chat back, and the PC app is unchanged"
+      ]
+    },
+    {
+      "version": "0.9.1",
+      "date": "2026-10-04",
+      "title": "Moderator tools, Projects and a Platform dashboard",
+      "notes": [
+        "The Platform is now a dashboard with Home, Posts, Projects, Rules and (for moderators) a Moderator tab",
+        "Moderators can warn, edit, hide, remove posts and ban people for a set time or forever, with a reason. Every action is logged",
+        "New Projects tab: show what you made with up to 4 images. Projects stay up until you delete them",
+        "New Daily post on Home, set by moderators, plus community Rules",
+        "Warnings show on your Home with an I understand button"
+      ]
+    },
+    {
+      "version": "0.9.0",
+      "date": "2026-10-04",
+      "title": "Pholama Platform and sign in with GitHub",
+      "notes": [
+        "The site is now Pholama Platform: log in, pick your own Platform name and picture, and see 'Logged in as' in the header on PC and phone",
+        "New communities: General, Models, Games and API, Help and Showcase. Every post disappears after 3 hours, and you can react to posts",
+        "Moderation: report a post, three reports hide it, and moderators can hide posts and ban people. Links and secret keys are blocked in posts",
+        "Your last local AIs: the PC app shares only the names of the models you downloaded, once when it opens, when your PC is idle",
+        "The site now keeps one small chat assistant. It cannot use tools or files. Bigger models and tools live in the PC app",
+        "New: Continue with GitHub on the site and the PC app. No pasted token needed, and every GitHub write still asks you first",
+        "Use GitHub on both the site and the PC app with the same account to earn 250 credits, once per account",
+        "The site has an update log, API and key help and guides. A warning says the browser AI might stop working"
+      ]
+    },
+    {
+      "version": "0.8.1",
+      "date": "2026-10-04",
+      "title": "Picture reader can be switched on",
+      "notes": [
+        "The Picture reader now has a \"Use for pictures\" switch in Models. Before, you could download it but pictures were still refused",
+        "Downloading the reader turns it on. You can switch it off any time",
+        "The message shown when a picture is refused now says exactly what to do"
+      ]
+    },
+    {
+      "version": "0.8.0",
+      "date": "2026-10-04",
+      "title": "Duo, memory limits and the picture reader",
+      "notes": [
+        "New Duo switch in Models: a small second AI can write quick hints before your main AI answers. Off by default, switch it off any time. It is a speed option and does not make answers smarter",
+        "The picture reader (SmolVLM 256M) now shows in the Models list so you can download it",
+        "Memory limits: 5 memories on the website, 15 in the PC app, with a clear message when full",
+        "Phone support has ended because phones have too little storage. The website still works there"
+      ]
+    },
+    {
+      "version": "0.7.0",
+      "date": "2026-10-04",
+      "title": "Send files and pictures",
+      "notes": [
+        "New paperclip: attach text and code files (up to 4) and the model reads them. Drag a file onto the chat or paste a picture too",
+        "Send pictures with a tiny image reader (SmolVLM 256M, ~190 MB). It reads the picture into words, then your chat model answers",
+        "Recommended pair for phones: SmolVLM 256M + Qwen2.5 0.5B, about 0.7 GB in total",
+        "Models can now declare that they read pictures themselves"
+      ]
+    },
+    {
+      "version": "0.6.2",
+      "date": "2026-10-04",
+      "title": "Phone support is ending",
+      "notes": [
+        "Phone support ends today: Pholama is moving to the PC app, with bigger models, tools, web search and Roblox Studio",
+        "The phone site is now a small helper for daily chat and maths, with 7 models from 0.7 to 2.2 GB",
+        "Agent Max and credits are removed from the phone site",
+        "Images and Gemma 4B are not available on phones, so there is no Android app"
+      ]
+    },
+    {
+      "version": "0.6.1",
+      "date": "2026-10-04",
+      "title": "A new dashboard",
+      "notes": [
+        "Pholama now opens on a dashboard: newest version, what's new, newest models and your PC at a glance",
+        "The website and the PC app list the same 51 models (the website used to show only 7)",
+        "Chat is one tap away in the top bar",
+        "A release check makes sure the website and PC app always show the newest models and version"
+      ]
+    },
+    {
+      "version": "0.6.0",
+      "date": "2026-10-04",
+      "title": "Real tools and a local API",
+      "notes": [
+        "19 tools for the local AI, including safe file tools locked to one workspace folder",
+        "Every model is labelled Runs tools, Basic tools only or Chat only",
+        "Only models that really run tools are recommended (smallest: Llama 3.2 3B)",
+        "Ollama and OpenAI style local API for games and websites, with a docs page at /api/docs",
+        "New API guide and updated READMEs"
+      ]
+    },
+    {
+      "version": "0.5.4",
+      "date": "2026-10-03",
+      "title": "Studio builds on small models",
+      "notes": [
+        "Guided build writes files itself so small models can build Studio projects",
+        "No more looping: old chatter is removed from history",
+        "Page skeleton repaired in code; bad auto-fixes rolled back"
+      ]
+    },
+    {
+      "version": "0.5.3",
+      "date": "2026-10-03",
+      "title": "Safer file edits",
+      "notes": [
+        "Fixed edits that failed on Windows line endings",
+        "Edits now ignore indentation differences but keep your formatting"
+      ]
+    }
+  ]
 }

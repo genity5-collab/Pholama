@@ -3,7 +3,7 @@
 *{box-sizing:border-box}html,body{height:100%;margin:0}
 body{background:var(--bg);color:var(--fg);font:16px/1.55 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;display:flex;flex-direction:column;-webkit-font-smoothing:antialiased}
 header{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:10px 14px;padding-top:max(10px,env(safe-area-inset-top));position:sticky;top:0;background:var(--bg);z-index:5}
-.brand{display:flex;align-items:center;gap:8px;font-weight:650;font-size:18px;letter-spacing:-.01em}.brand svg{display:none}.brand::before{content:"";width:28px;height:28px;display:block;background:url("icon.svg") center/contain no-repeat;border-radius:8px;box-shadow:0 0 20px var(--glow)}
+.brand{display:flex;align-items:center;gap:8px;font-weight:650;font-size:18px;letter-spacing:-.01em}.brand svg{display:none}.brand::before{display:none!important}
 .sp{flex:1}
 select,button,textarea,input{font:inherit;color:inherit}
 select,button{background:transparent;border:1px solid var(--line);border-radius:999px;padding:7px 14px;cursor:pointer;min-height:36px;transition:background .15s,border-color .15s}
@@ -64,7 +64,7 @@ input[type=text]:focus,input[type=password]:focus{border-color:var(--mut)}
 /* Pholama studio polish: quiet chrome, clear state, and a stronger local-first identity. */
 body{background-image:radial-gradient(circle at 50% -20%,color-mix(in srgb,var(--acc) 9%,transparent),transparent 38%)}
 header{border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);backdrop-filter:blur(18px)}
-.brand{font-weight:750;letter-spacing:-.035em}.brand::before{width:32px;height:32px;border-radius:10px;box-shadow:0 0 0 1px var(--line),0 8px 24px var(--glow)}
+.brand{font-weight:750;letter-spacing:-.035em}.brand::before{display:none!important}
 .viewsw{box-shadow:0 8px 24px rgba(0,0,0,.12)}
 #hero{margin-top:7vh;max-width:680px}.hero-kicker{display:inline-flex;align-items:center;gap:7px;color:var(--ok);font-size:12px;font-weight:750;letter-spacing:.1em;text-transform:uppercase}.hero-kicker::before{content:"";width:7px;height:7px;border-radius:50%;background:currentColor;box-shadow:0 0 12px currentColor}
 #hero h1{font-size:clamp(28px,5vw,42px);line-height:1.08;letter-spacing:-.055em}#hero p{max-width:520px;margin-left:auto;margin-right:auto}
@@ -94,7 +94,7 @@ header{border-bottom:1px solid color-mix(in srgb,var(--line) 70%,transparent);ba
   header .sp{display:none}.brand{margin-right:auto}.brand span{font-size:17px}
   .s-tabs{border-radius:14px;flex-wrap:wrap;justify-content:flex-start}
 }
-@media (max-width:430px){.brand span{display:none}.brand::before{width:30px;height:30px}
+@media (max-width:430px){.brand span{display:none}.brand::before{display:none!important}
   header button{padding:6px 11px;font-size:14px;min-height:36px}
   #cr{order:1;min-width:0}#cr::before{content:'\26A1\FE0E ';opacity:.7}#mgr,#settingsBtn{order:1}
   #model{order:2;flex:1 1 100%;max-width:100%;min-height:36px}
@@ -515,3 +515,5 @@ button,select{border-color:var(--line);border-radius:10px}button:hover,select:ho
 /* Keep the same supplied mark in model rows and Studio companion surfaces. */
 .row .llama svg{display:none}.row .llama{background:#000;border-radius:7px;overflow:hidden}.row .llama::before{content:"";display:block;width:100%;height:100%;background:url("icon-512.png") center/cover no-repeat}
 @media(max-width:640px){header{padding-left:12px;padding-right:12px}.brand-mark{width:30px;height:30px}}
+
+.pl-badge{display:inline-flex;align-items:center;padding:4px 8px;border-radius:999px;font-size:11px;font-weight:800;letter-spacing:.08em;margin-right:6px}.pl-badge.pro{background:#111;color:#fff}.pl-badge.free{background:var(--card2);color:var(--mut);border:1px solid var(--line)}
