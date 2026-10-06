@@ -1,5 +1,5 @@
 // Pholama Platform: friends, private chat, calls, notifications and pictures/videos.
-// This file only TALKS to Supabase. The database rules in supabase/social.sql and supabase/media.sql are what actually
+// This file only TALKS to Supabase. The database rules are what actually
 // enforce who can do what, so a changed page cannot read someone's messages, ring a friend who turned calls off, or attach a link.
 
 // ---------- pure helpers (tested without a browser) ----------

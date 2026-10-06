@@ -14,6 +14,10 @@ ok('tools tag only on good', cat.every(m => (m.caps.includes('tools')) === (m.to
 ok('Tool running list = good', cat.every(m => m.categories.includes('tools') === (m.toolTier === 'good')));
 ok('no model under 3B is "good"', cat.filter(m => m.toolTier === 'good').every(m => m.sizeGB >= 1.8));
 ok('tiny models are not good', cat.filter(m => m.sizeGB < 1.5).every(m => m.toolTier !== 'good'));
+{ const q = cat.find(m => m.id === 'qwen3-4b');
+  ok('Qwen3 4B is in the catalog from the official Qwen repo', !!q && /^https:\/\/huggingface\.co\/Qwen\/Qwen3-4B-GGUF\/resolve\/main\/Qwen3-4B-Q4_K_M\.gguf$/.test(q.url) && q.file === 'Qwen3-4B-Q4_K_M.gguf');
+  ok('Qwen3 4B has the exact size, a licence, a RAM need and a tool tier', q && q.bytes === 2497280256 && q.sizeGB === 2.33 && q.license === 'Apache-2.0' && q.minRamGB === 5 && q.toolTier === 'good' && q.caps.includes('tools'));
+  ok('Qwen3 4B pulls with a command that matches its id', q && q.command === 'pholama pull qwen3-4b'); }
 ok('known tool models are good', ['qwen2.5-7b', 'qwen3-8b', 'llama3.1-8b', 'hermes3-8b'].every(id => cat.find(m => m.id === id).toolTier === 'good'));
 ok('known weak models have no tools', ['smollm2-135m', 'tinyllama-1.1b', 'gemma3-1b'].every(id => cat.find(m => m.id === id).toolTier === 'none'));
 ok('ids unique', new Set(cat.map(m => m.id)).size === cat.length);
@@ -194,7 +198,7 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
 (async () => {
   const r = await a.buildTools({ search: true, tools: true, terminal: true });
   const names = r.tools.map(x => x.name);
-  ok('agent has 23 tools (19 + show_video and show_image + run_code and check_languages)', names.length === 23 && names.includes('show_video') && names.includes('show_image') && names.includes('run_code') && names.includes('check_languages'), names.length);
+  ok('agent has 26 tools (23 + search_code, edit_code and run_tests)', names.length === 26 && names.includes('search_code') && names.includes('edit_code') && names.includes('run_tests') && names.includes('show_video') && names.includes('show_image') && names.includes('run_code') && names.includes('check_languages'), names.length);
   ok('create_plugin is only offered when Skills is on', !names.includes('create_plugin'));
   { const sk = await a.buildTools({ skills: true }); ok('with Skills on the AI can make tools', sk.tools.some(x => x.name === 'create_plugin')); const off = await a.buildTools({ search: false }); ok('with search off there are no media tools', !off.tools.some(x => x.name === 'show_video')); }
   ok('agent has file tools', ['read_file', 'write_file', 'edit_file', 'list_files'].every(n => names.includes(n)));

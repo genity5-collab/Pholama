@@ -71,11 +71,13 @@ export function createStudio(env) {
   mount.innerHTML = `
   <div class="st-bar">
     <select id="stProj" title="Project"></select>
-    <button id="stNew">New</button><button id="stDel" title="Delete this project">Delete</button><button id="stRefresh" title="Pull the latest files from the local Pholama server">Refresh files</button><button id="stActivity" title="Show AI edits, checks and commands">Activity</button><button id="stSettings" title="Studio settings">Settings</button>
+    <button id="stNew">New</button><button id="stDel" title="Delete this project">Delete</button><button id="stRefresh" title="Pull the latest files from the local Pholama server">Refresh files</button><button id="stActivity" title="Show AI edits, checks and commands">Activity</button><button id="stHistory" title="Version history: go back to an earlier version of this project">History</button><button id="stSetup" title="What the AI tools need on this PC, and how big it is">Setup</button><button id="stSettings" title="Studio settings">Settings</button>
     <span class="sp"></span>
     <button id="stPublish" class="p" title="Put this project on GitHub">Publish</button>
   </div>
   <div id="stActivityPanel" class="st-activity" hidden><div class="st-panelhead"><b>Activity</b><span class="sp"></span><button id="stActivityRefresh">Refresh</button></div><div id="stActivityList" class="st-activitylist">Loading...</div></div>
+  <div id="stHistoryPanel" class="st-activity st-history" hidden><div class="st-panelhead"><b>Version history</b><span class="sp"></span><button id="stHistorySave" title="Save the project as it is now">Save version</button><button id="stHistoryClose">Close</button></div><div id="stHistoryList" class="st-activitylist">Loading...</div></div>
+  <div id="stSetupPanel" class="st-activity st-setup" hidden><div class="st-panelhead"><b>Setup</b><span class="sp"></span><button id="stSetupRefresh">Refresh</button><button id="stSetupClose">Close</button></div><div id="stSetupBody" class="st-activitylist">Loading...</div></div>
   <div id="stSettingsPanel" class="st-settings" hidden><div class="st-panelhead"><b>Studio settings</b><span class="sp"></span><button id="stSettingsClose">Close</button></div><label class="st-setting"><input id="stCompanion" type="checkbox"><span><b>Pholama companion</b><small>Turn it on, drag it anywhere, then click for reactions. It never reads the page or sends anything.</small></span></label><div class="sys">The companion is off by default and can be turned off at any time.</div></div>
   <div class="st-main">
     <div class="st-left">
@@ -96,16 +98,73 @@ export function createStudio(env) {
     <div id="stAiLog" class="st-ailog"></div>
     <div class="st-aibox"><textarea id="stAsk" rows="2" placeholder="Ask the AI to build, fix or explain anything..."></textarea><button id="stDiagnose" title="Check the project and explain the next fix">Diagnose</button><button id="stSend" class="p">Send</button></div>
   </div>`;
-  for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stActivity', 'stSettings', 'stActivityPanel', 'stActivityRefresh', 'stActivityList', 'stSettingsPanel', 'stSettingsClose', 'stCompanion', 'stPublish', 'stFind', 'stFindCount', 'stFindResults', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stNewScript', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stDiagnose', 'stSend']) el[id] = mount.querySelector('#' + id);
+  for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stActivity', 'stSettings', 'stActivityPanel', 'stActivityRefresh', 'stActivityList', 'stHistory', 'stHistoryPanel', 'stHistorySave', 'stHistoryClose', 'stHistoryList', 'stSetup', 'stSetupPanel', 'stSetupRefresh', 'stSetupClose', 'stSetupBody', 'stSettingsPanel', 'stSettingsClose', 'stCompanion', 'stPublish', 'stFind', 'stFindCount', 'stFindResults', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stNewScript', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stDiagnose', 'stSend']) el[id] = mount.querySelector('#' + id);
   const live = createLiveCard(el.stAiLog);   // the Live Activity card: what the AI thinks and which files it touches, right in the chat
   const fx = createFx({ host: el.stCode.parentElement, code: el.stCode, tabs: el.stTabs, frame: el.stFrame });   // the 'AI is editing' animation
   const activityTitle = e => e.kind === 'file' ? ((e.status === 'working' ? 'Working on ' : e.status === 'failed' ? 'Failed: ' : 'Changed ') + (e.path || 'a file')) : e.kind === 'command' ? (e.status === 'ok' ? 'Command finished' : e.status === 'proposed' ? 'Command waiting for approval' : 'Command ' + (e.status || 'updated')) : (e.text || e.status || e.kind || 'Activity');
   const paintActivity = () => { const box = el.stActivityList; if (!box) return; box.textContent = ''; if (!S.activity.length) { box.textContent = 'No Studio activity yet.'; return; } for (const e of S.activity.slice(0, 80)) { const d = document.createElement('details'); d.className = 'st-activityrow ' + (e.status === 'failed' || e.status === 'error' ? 'bad' : e.status === 'working' || e.status === 'proposed' ? 'wait' : 'good'); const s = document.createElement('summary'); const time = e.t ? new Date(e.t).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : ''; s.textContent = (e.status || 'event') + ' · ' + activityTitle(e) + (time ? ' · ' + time : ''); d.appendChild(s); const body = document.createElement('div'); body.className = 'st-activitybody'; const bits = []; if (e.project) bits.push('Project: ' + e.project); if (e.added != null || e.removed != null) bits.push('Lines: +' + (e.added || 0) + ' / -' + (e.removed || 0)); if (e.error) bits.push('Error: ' + e.error); if (e.cmd) bits.push(e.cmd); body.textContent = bits.join('\n') || 'No additional details.'; d.appendChild(body); box.appendChild(d); } };
   const loadActivity = async () => { try { const j = await jget('api/editlog?n=160'); S.activity = j.entries || []; paintActivity(); } catch (e) { if (el.stActivityList) el.stActivityList.textContent = 'Activity is unavailable: ' + e.message; } };
   const openPanel = (panel, other) => { panel.hidden = !panel.hidden; if (!panel.hidden && other) other.hidden = true; };
-  el.stActivity.onclick = () => { openPanel(el.stActivityPanel, el.stSettingsPanel); if (!el.stActivityPanel.hidden) loadActivity(); };
+  el.stActivity.onclick = () => { el.stHistoryPanel.hidden = true; openPanel(el.stActivityPanel, el.stSettingsPanel); if (!el.stActivityPanel.hidden) loadActivity(); };
   el.stActivityRefresh.onclick = loadActivity;
-  el.stSettings.onclick = () => openPanel(el.stSettingsPanel, el.stActivityPanel);
+  // ---- Setup: what the tool-calling runtime needs (engine, Python), its size against 1 GB, and a live bar while Python installs ----
+  let setupTimer = null;
+  const fmtMb = n => n >= 1024 ? (n / 1024).toFixed(2) + ' GB' : Math.round(n) + ' MB';
+  const paintSetup = d => {
+    const box = el.stSetupBody; box.textContent = '';
+    const head = document.createElement('div'); head.className = 'st-setuphead'; head.textContent = 'Runtime ' + fmtMb(d.totalMb) + ' of ' + fmtMb(d.budgetMb) + (d.underBudget ? ' (under 1 GB)' : ' (over 1 GB)') + (d.missing.length ? '  -  still to download ' + fmtMb(d.downloadMb) : '  -  everything is installed'); box.appendChild(head);
+    const meter = document.createElement('div'); meter.className = 'st-meter'; const fill = document.createElement('i'); fill.style.width = Math.min(100, Math.round(d.totalMb / d.budgetMb * 100)) + '%'; meter.appendChild(fill); box.appendChild(meter);
+    for (const it of d.items) {
+      const row = document.createElement('div'); row.className = 'st-setuprow' + (it.installed ? ' ok' : '');
+      const t = document.createElement('span'); t.textContent = (it.installed ? 'Installed  ' : 'Missing  ') + it.name + '  (' + fmtMb(it.mb) + ')'; row.appendChild(t);
+      if (it.note) { const sm = document.createElement('small'); sm.textContent = it.note; row.appendChild(sm); }
+      if (!it.installed && it.id === 'python' && d.windows) { const b = document.createElement('button'); b.textContent = 'Install Python'; b.onclick = async () => { b.disabled = true; try { await jsend('api/setup/python', 'POST', {}); watchSetup(); } catch (e) { say('Could not start: ' + e.message); b.disabled = false; } }; row.appendChild(b); }
+      if (!it.installed && it.id === 'engine') { const b = document.createElement('button'); b.textContent = 'Install engine'; b.onclick = async () => { b.disabled = true; try { await jsend('api/install-llama', 'POST', {}); watchSetup(); } catch (e) { say('Could not start: ' + e.message); b.disabled = false; } }; row.appendChild(b); }
+      box.appendChild(row);
+    }
+    const py = d.python || {}; if (py.status === 'installing' || py.status === 'error') { const bar = document.createElement('div'); bar.className = 'st-setupprog'; bar.textContent = py.status === 'error' ? 'Python: ' + py.error : py.step + (py.total ? '  ' + Math.round(py.done / py.total * 100) + '%' : ''); box.appendChild(bar); }
+    const note = document.createElement('div'); note.className = 'st-setupnote'; note.textContent = d.modelNote; box.appendChild(note);
+  };
+  const loadSetup = async () => { try { const d = await jget('api/setup'); paintSetup(d); const busy = (d.python && d.python.status === 'installing') || (d.engine && d.engine.status === 'installing'); if (!busy) { clearInterval(setupTimer); setupTimer = null; } return d; } catch (e) { el.stSetupBody.textContent = e.message; } };
+  const watchSetup = () => { if (!setupTimer) setupTimer = setInterval(loadSetup, 700); loadSetup(); };
+  el.stSetup.onclick = () => { el.stHistoryPanel.hidden = true; el.stActivityPanel.hidden = true; el.stSettingsPanel.hidden = true; el.stSetupPanel.hidden = !el.stSetupPanel.hidden; if (!el.stSetupPanel.hidden) loadSetup(); else { clearInterval(setupTimer); setupTimer = null; } };
+  el.stSetupClose.onclick = () => { el.stSetupPanel.hidden = true; clearInterval(setupTimer); setupTimer = null; };
+  el.stSetupRefresh.onclick = loadSetup;
+  // ---- version history: the project as it was before each AI edit; see what changed and go back ----
+  const histBase = () => 'api/studio/projects/' + encodeURIComponent(S.project) + '/history';
+  const ago = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
+  const paintDiff = (box, changes) => {
+    box.textContent = ''; if (!changes.length) { box.textContent = 'No differences: this is the same as now.'; return; }
+    for (const c of changes) {
+      const h = document.createElement('div'); h.className = 'st-diffhead'; h.textContent = c.file + '  (' + c.status + ', +' + c.added + ' -' + c.removed + ')'; box.appendChild(h);
+      for (const hk of c.hunks || []) { if (hk.type === 'too-big') { const d = document.createElement('div'); d.className = 'st-diffline'; d.textContent = 'File is too big to show line by line.'; box.appendChild(d); continue; }
+        for (const l of hk.lines) { const d = document.createElement('div'); d.className = 'st-diffline ' + (l.t === '+' ? 'add' : l.t === '-' ? 'del' : ''); d.textContent = (l.t === ' ' ? '  ' : l.t + ' ') + l.s; box.appendChild(d); } }   // textContent only: file text is never HTML
+    }
+  };
+  const paintHistory = list => {
+    const box = el.stHistoryList; box.textContent = '';
+    if (!S.project) { box.textContent = 'Open a project first.'; return; }
+    if (!list.length) { box.textContent = 'No saved versions yet. One is saved automatically right before the AI changes your files, or press Save version.'; return; }
+    for (const c of list) {
+      const row = document.createElement('div'); row.className = 'st-histrow';
+      const t = document.createElement('div'); t.className = 'st-histtitle'; t.textContent = c.label + '  -  ' + ago(c.at) + '  -  ' + c.fileCount + ' files' + (c.by === 'ai' ? '  (before AI edit)' : c.by === 'restore' ? '  (before a restore)' : ''); row.appendChild(t);
+      const acts = document.createElement('div'); acts.className = 'st-histacts';
+      const diffBox = document.createElement('div'); diffBox.className = 'st-diff'; diffBox.hidden = true;
+      const bDiff = document.createElement('button'); bDiff.textContent = 'See changes'; bDiff.onclick = async () => { if (!diffBox.hidden) { diffBox.hidden = true; return; } try { diffBox.hidden = false; diffBox.textContent = 'Loading...'; paintDiff(diffBox, (await jget(histBase() + '/' + c.id + '/diff')).changes); } catch (e) { diffBox.textContent = e.message; } };
+      const bRes = document.createElement('button'); bRes.textContent = 'Restore'; bRes.onclick = async () => {
+        if (S.dirty.size && !confirm('You have unsaved edits in the editor. They will be lost. Continue?')) return;
+        if (!confirm('Go back to "' + c.label + '"? Your current version is saved first, so you can undo this.')) return;
+        try { await jsend(histBase() + '/' + c.id + '/restore', 'POST', {}); await openProject(S.project); await loadHistory(); say('Restored "' + c.label + '". The version from before is saved in History.'); } catch (e) { say('Could not restore: ' + e.message); }
+      };
+      const bDel = document.createElement('button'); bDel.textContent = 'Delete'; bDel.onclick = async () => { if (!confirm('Delete this saved version?')) return; try { await jsend(histBase() + '/' + c.id, 'DELETE', {}); await loadHistory(); } catch (e) { say('Could not delete: ' + e.message); } };
+      acts.append(bDiff, bRes, bDel); row.append(acts, diffBox); box.appendChild(row);
+    }
+  };
+  const loadHistory = async () => { try { if (!S.project) return paintHistory([]); paintHistory((await jget(histBase())).checkpoints || []); } catch (e) { el.stHistoryList.textContent = e.message; } };
+  el.stHistory.onclick = () => { el.stSetupPanel.hidden = true; el.stSettingsPanel.hidden = true; el.stActivityPanel.hidden = true; el.stHistoryPanel.hidden = !el.stHistoryPanel.hidden; if (!el.stHistoryPanel.hidden) loadHistory(); };
+  el.stHistoryClose.onclick = () => { el.stHistoryPanel.hidden = true; };
+  el.stHistorySave.onclick = async () => { if (!S.project) return; const label = prompt('Name this version (for example: before the new menu)', 'My version'); if (label === null) return; try { const r = await jsend(histBase(), 'POST', { label: label.trim() || 'My version', force: true }); say(r.unchanged ? 'Nothing changed since the last saved version.' : 'Saved the version "' + (r.checkpoint ? r.checkpoint.label : label) + '".'); await loadHistory(); } catch (e) { say('Could not save the version: ' + e.message); } };
+  el.stSettings.onclick = () => { el.stHistoryPanel.hidden = true; openPanel(el.stSettingsPanel, el.stActivityPanel); };
   el.stSettingsClose.onclick = () => { el.stSettingsPanel.hidden = true; };
   const companionKey = 'pholama_studio_companion';
   const companionOn = () => { try { return localStorage.getItem(companionKey) === 'on'; } catch { return false; } };

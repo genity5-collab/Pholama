@@ -1,6 +1,21 @@
 {
- "latest": "0.9.36",
+ "latest": "0.9.37",
  "releases": [
+  {
+   "version": "0.9.37",
+   "date": "2026-10-06",
+   "title": "Updates are your choice, and Pholama sets itself up.",
+   "notes": [
+    "New: updates are optional. Pholama tells you what is new before you install it, and shows a live download bar. An older version keeps working, it just does not get the newer features. Automatic updates are now off until you turn them on (if you already chose, your choice stays).",
+    "New: Pholama sets itself up the first time it runs on Windows. It installs the model engine and a small Python (about 30 MB together) on its own. Your models are never chosen for you and never counted. Everything Pholama needs stays well under 1 GB.",
+    "New model: Qwen3 4B, the original from Qwen. It can think step by step or answer straight away, and it uses tools. 2.3 GB, so it fits a PC with 5 GB of RAM.",
+    "New: Studio > Setup shows what the AI tools need, how big each part is, and lets you install the engine or Python with a live progress bar. The AI's Python tool uses it right away.",
+    "New: Studio > History. Before the AI edits your project it saves a copy, so you can see what changed in colour and go back, and undo the restore too.",
+    "Safer: every tool the AI can use now has a permission level. Deleting files and running tests wait for your Allow, and the AI cannot call tools without limit.",
+    "Fixed: the companion icon was hard to see on dark pages. It now has a light ring and backing.",
+    "Pholama for PC is made for Windows."
+   ]
+  },
   {
    "version": "0.9.36",
    "date": "2026-10-05",
@@ -24,8 +39,7 @@
     "New: add a picture or video to a post, a reply, a support ticket or a build (pictures up to 5 MB, videos up to 25 MB; PNG, JPG, WebP, GIF, MP4, WebM). Ticket files can be seen only by you and the moderators.",
     "Fixed: new visitors on the website no longer get the 'download an AI' box. It only opens in the PC app now.",
     "Fixed: the 'kys' word filter never matched in posts and replies, and private details (who has calls off, who is friends with whom) could be looked up by any member. Both are closed.",
-    "Fixed: support tickets did not block links or secret keys. They do now.",
-    "Owner setup: run supabase/social.sql, supabase/media.sql and supabase/post_replies.sql once in the Supabase SQL editor. Until then the new tabs say they are not set up yet."
+    "Fixed: support tickets did not block links or secret keys. They do now."
    ]
   },
   {
@@ -77,7 +91,7 @@
    "notes": [
     "New: your AI can now write and run programs. Python, C++, C, Rust, Go, Java, JavaScript, TypeScript, C#, Ruby, PHP, Lua, Bash, PowerShell, Kotlin, Swift, Dart, R and Zig. You install the languages you want; Pholama finds them. If one is missing the AI tells you exactly what to install instead of making up a result. Settings > Usage > Programming languages shows what was found, with a Check again button",
     "Programs run only inside the Pholama workspace folder, stop after 20 seconds by default (up to 120), and their output is cut at 8000 characters. A file name can never inject a command",
-    "New: big chat windows on the Platform. Open a support ticket or a post in a large window that refreshes by itself. Reporters and moderators chat in tickets, moderators keep Close, Reopen and the member tools inside the window. Posts get a reply chat (run supabase/post_replies.sql once in Supabase to switch replies on)",
+    "New: big chat windows on the Platform. Open a support ticket or a post in a large window that refreshes by itself. Reporters and moderators chat in tickets, moderators keep Close, Reopen and the member tools inside the window. Posts get a reply chat",
     "New: choose what powers Agent Max in Settings > Usage. The official cloud is the smartest and uses your daily and monthly messages. One of your own local AIs is free and unlimited but only as smart as that model. The chat box label and Studio follow your choice",
     "Fixed: Agent Max in Studio could not really edit files. The cloud function ignored Studio's instructions, cut messages to 2000 characters and only knew the calculator, clock and site help. It now follows Studio's rules, has room for real code and still counts as one message (refunded on failure)",
     "Removed: phone and in-browser models. The browser model tab, phone models in the model list, the phone cards on the dashboard and the phone wording in Agent Max's knowledge and the guides are gone. Phones can still use Agent Max, the Platform, or open your own PC app over your network"

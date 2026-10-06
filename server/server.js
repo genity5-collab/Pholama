@@ -198,6 +198,7 @@ async function deleteModel(m) {
 
 // ---------- llama.cpp auto-install ----------
 const inst = { status: 'idle', error: null, step: '', done: 0, total: 0, speed: 0 };
+const pyInst = { status: 'idle', error: null, step: '', done: 0, total: 0 };
 let instAbort = null;
 function assetPattern(h) {
   const arm = os.arch() === 'arm64';
@@ -402,7 +403,7 @@ async function chat(req, res, b) {
     const { tools } = await agent.buildTools({ ...allow, memory: memOn, inStudio, mentionTools });
     if (inStudio && !canTools) log('error', 'This model cannot use tools, so it cannot build in Studio. Pick a model tagged "tools" (Qwen3 0.6B is the smallest).');
     const visited = agent.sources.makeCollector(12); let sentSrc = 0;
-    const tctx = { sources: visited, pholamaToken: String(req.headers['x-pholama-token'] || '').slice(0, 4000), ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), mentionTools, onPending: p => line({ approve: p }), onMedia: m => line({ media: m }) };
+    const tctx = { toolCalls: 0, maxToolCalls: Math.max(1, Math.min(40, +(b.maxToolCalls) || 12)), userId: String(req.headers['x-pholama-token'] || req.socket.remoteAddress || 'anon').slice(-24), policy: { approveDestructive: b.approveDestructive !== false, approveWrites: b.approveWrites === true }, sources: visited, pholamaToken: String(req.headers['x-pholama-token'] || '').slice(0, 4000), ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), mentionTools, onPending: p => line({ approve: p }), onMedia: m => line({ media: m }) };
     if (tools.length) log('step', `${tools.length} tools ready: ${tools.map(t => t.name).join(', ')}`);
     const effort = ['long', 'max'].includes(b.effort) ? b.effort : 'normal';
     // Price this message from the two levels, then take the credits BEFORE answering so the counter visibly drops.
@@ -896,6 +897,13 @@ const server = http.createServer(async (req, res) => {
         if (seg[0] === 'projects' && seg[1] && seg[2] === 'copy' && req.method === 'POST') { const b = await body(req); return json(res, 200, { ok: true, text: sp.copy(seg[1], b.from, b.to) }); }
         if (seg[0] === 'projects' && seg[1] && seg[2] === 'image' && req.method === 'PUT') { let b = {}; try { b = JSON.parse(await rawBody(req, 1.6 * 1024 * 1024) || '{}'); } catch (e) { return json(res, 413, { error: 'That picture is too big to upload (max 1 MB).' }); } return json(res, 200, sp.saveImage(seg[1], b.file, b.data)); }
         if (seg[0] === 'projects' && seg[1] && seg[2] === 'image' && req.method === 'GET') return json(res, 200, sp.readImage(seg[1], new URL(req.url, 'http://x').searchParams.get('file')));
+        // ---- version history (studiohistory.js): checkpoints, diff, restore ----
+        const hist = require('./studiohistory');
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'history' && !seg[3] && req.method === 'GET') return json(res, 200, { checkpoints: hist.list(stu, seg[1]) });
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'history' && !seg[3] && req.method === 'POST') { const b = await body(req); const c = hist.save(stu, seg[1], String(b.label || 'Checkpoint').slice(0, 100), { by: 'user', force: b.force === true }); return json(res, 200, c ? { ok: true, checkpoint: c } : { ok: true, unchanged: true }); }
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'history' && seg[3] && seg[4] === 'diff' && req.method === 'GET') return json(res, 200, { changes: hist.compare(stu, seg[1], seg[3], new URL(req.url, 'http://x').searchParams.get('to') || undefined) });
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'history' && seg[3] && seg[4] === 'restore' && req.method === 'POST') return json(res, 200, hist.restore(stu, seg[1], seg[3]));
+        if (seg[0] === 'projects' && seg[1] && seg[2] === 'history' && seg[3] && !seg[4] && req.method === 'DELETE') return json(res, 200, hist.remove(stu, seg[1], seg[3]));
         return json(res, 404, { error: 'unknown studio route' });
       } catch (e) { return json(res, 400, { error: e.message }); }
     }
@@ -1044,6 +1052,20 @@ const server = http.createServer(async (req, res) => {
       return proxyOllama(res, route, req.method, payload);
     }
     if (p === '/api/pull' && req.method === 'POST') { const b = await body(req), external = nativeOllamaName(b.name || b.model || b.id); if (external) { if (req.who !== 'local') return json(res, 403, { error: 'Only this PC can download Ollama models.' }); return proxyOllama(res, '/api/pull', 'POST', { ...b, name: external }); } const m = CATALOG.find(x => x.id === b.id); if (!m) return json(res, 404, { error: 'unknown model' }); if (!dl[m.id] || dl[m.id].status !== 'downloading') download(m); return json(res, 200, { ok: true }); }
+    // ---- Setup (Windows): what the tool-calling runtime needs, with sizes against a 1 GB budget; models are the user's own choice ----
+    if (p === '/api/setup' && req.method === 'GET') {
+      const setup = require('./setup'), h = hardware(); let models = []; try { models = recommend(h).map(m => ({ id: m.id, downloaded: !!m.downloaded })); } catch {}
+      const rep = setup.report({ hardware: h, llamaServer: !!findLlamaServer(), ollama: await ollamaUp(), python: setup.detectPython(), models, nodePrivate: true });
+      return json(res, 200, { ...rep, text: setup.describe(rep), windows: process.platform === 'win32', python: pyInst, engine: inst });
+    }
+    if (p === '/api/setup/python' && req.method === 'POST') {
+      if (process.platform !== 'win32') return json(res, 400, { error: 'The built-in Python is for Windows. On this system install Python with your package manager.' });
+      if (pyInst.status === 'installing') return json(res, 200, { ok: true, already: true });
+      Object.assign(pyInst, { status: 'installing', error: null, step: 'Starting...', done: 0, total: 0 });
+      require('./setup').installPython((t, d, tt) => Object.assign(pyInst, { step: t, done: d, total: tt })).then(() => Object.assign(pyInst, { status: 'done', step: 'Python is ready.' })).catch(e => Object.assign(pyInst, { status: 'error', error: e.message }));
+      return json(res, 200, { ok: true });
+    }
+    if (p === '/api/setup/python/status') return json(res, 200, pyInst);
     if (p === '/api/install-llama' && req.method === 'POST') { installLlama(); return json(res, 200, { ok: true }); }
     if (p === '/api/install-llama/status') return json(res, 200, inst);
     if (p === '/api/install-llama/stop' && req.method === 'POST') { stopInstall(); return json(res, 200, { ok: true }); }
@@ -1125,9 +1147,31 @@ function restartSelf() {
 }
 try { require('./update').setRestartHandler(() => { if (process.env.PHOLAMA_TEST_NO_RESTART === '1') return; restartSelf(); }); } catch {}
 
+// Pholama for PC is made for Windows. On another system it still starts (so it can be tested), but says plainly what to expect.
+if (process.platform !== 'win32' && process.env.PHOLAMA_QUIET_OS !== '1' && !process.env.PHOLAMA_HOME) console.log('  Note: Pholama for PC is made for Windows. It may start here, but automatic setup (model engine, Python) and updates are only supported on Windows.');
 server.listen(PORT, HOST, () => {
   const h = hardware();
   console.log(`\n  Pholama running\n  Chat UI:  http://localhost:${PORT}\n  RAM: ${h.ramGB} GB${h.gpu ? '  GPU: ' + h.gpu + (h.vramGB ? ' (' + h.vramGB + ' GB)' : '') : ''}\n  Models folder: ${MODELS_DIR}\n`);
+  // A fresh download gets what the tool-calling runtime needs (the model engine and Python) by itself, in the background. Never a model.
+  // "Done" is written only when BOTH are really installed. A failed try (no internet, blocked download) is retried on the next starts, at most 3 times,
+  // so it never loops forever. Removing Python later is not undone once it succeeded. PHOLAMA_NO_AUTOSETUP=1 turns all of this off.
+  try {
+    const setupFile = path.join(os.homedir(), '.pholama', 'setup-done.json');
+    const prior = (() => { try { return JSON.parse(fs.readFileSync(setupFile, 'utf8')); } catch { return null; } })();
+    if (require('./setup').shouldAutoSetup(process.platform, process.env, prior)) setTimeout(async () => {
+      const setup = require('./setup'), tries = ((prior && prior.tries) || 0) + 1;
+      const mark = o => { try { fs.mkdirSync(path.dirname(setupFile), { recursive: true }); fs.writeFileSync(setupFile, JSON.stringify({ at: Date.now(), tries, ...o })); } catch {} };
+      try {
+        if (!findLlamaServer() && !(await ollamaUp())) {
+          installLlama(); await new Promise(r => setTimeout(r, 300));
+          while (inst.status === 'installing') await new Promise(r => setTimeout(r, 1000));
+          if (!findLlamaServer()) throw new Error(inst.error || 'The model engine did not install.');
+        }
+        if (!setup.detectPython().installed) { Object.assign(pyInst, { status: 'installing', error: null, step: 'Starting...', done: 0, total: 0 }); await setup.installPython((t, d, tt) => Object.assign(pyInst, { step: t, done: d, total: tt })); Object.assign(pyInst, { status: 'done', step: 'Python is ready.' }); }
+        mark({ ok: true });
+      } catch (e) { Object.assign(pyInst, { status: 'error', error: e.message }); mark({ ok: false, error: String(e.message).slice(0, 160) }); }
+    }, 8000).unref();
+  } catch {}
   try { require('./update').startBackground(+process.env.PHOLAMA_UPDATE_EVERY_MIN > 0 ? +process.env.PHOLAMA_UPDATE_EVERY_MIN / 60 : 1.25 / 60); } catch {}   // about every minute: 75 s keeps GitHub's 60-requests-an-hour allowance safe (see server/freshcheck.js)
   if (process.env.PHOLAMA_NO_SCHEDULE !== '1' && process.env.PHOLAMA_NO_AUTOUPDATE !== '1') setTimeout(() => { try { require('./update-scheduler').ensure(); } catch (e) { console.log('  Could not set up closed-app updates: ' + String(e.message || e).slice(0, 140) + '. You can retry with pholama schedule-updates.'); } }, 1500).unref();
   if (HOST !== '127.0.0.1') console.log('  Reachable on your network. Open http://<this-PC-IP>:' + PORT + ' on your phone.\n');

@@ -106,6 +106,39 @@ const TOOLS = {
     if (hi < lo) throw new Error('"max" must be at least "min"');
     return Array.from({ length: n }, () => lo + Math.floor(Math.random() * (hi - lo + 1))).join(', ');
   } },
+  search_code: { desc: 'Find text or a pattern inside the code files of the workspace. Shows file, line number and the line. args: {"query": string (plain text to find), "path": string (optional folder), "pattern": string (optional file name filter, like ".js")}', run(a) {
+    const q = String(a.query == null ? '' : a.query); if (!q) throw new Error('"query" is missing');
+    const d = safe(a.path || ''); if (!fs.existsSync(d)) throw new Error('folder not found');
+    const ext = a.pattern ? String(a.pattern).toLowerCase() : '';
+    const files = []; if (fs.statSync(d).isFile()) files.push({ p: d, dir: false }); else walk(d, files);
+    const low = q.toLowerCase(), hits = [];
+    for (const f of files) {
+      if (f.dir || (ext && !f.p.toLowerCase().endsWith(ext))) continue;
+      let st; try { st = fs.statSync(f.p); } catch { continue; } if (st.size > 400000) continue;
+      let buf; try { buf = fs.readFileSync(f.p); } catch { continue; } if (!isText(buf)) continue;
+      const lines = buf.toString('utf8').split('\n');
+      for (let i = 0; i < lines.length && hits.length < 60; i++) if (lines[i].toLowerCase().includes(low)) hits.push(rel(f.p) + ':' + (i + 1) + ': ' + lines[i].trim().slice(0, 160));
+      if (hits.length >= 60) break;
+    }
+    return hits.length ? hits.join('\n') + (hits.length >= 60 ? '\n(cut at 60 matches)' : '') : 'No matches for "' + q.slice(0, 80) + '".';
+  } },
+  edit_code: { desc: 'Change code: replace exact text in ONE workspace file. Same as edit_file. args: {"path": string, "find": string, "replace": string}', run(a) { return TOOLS.edit_file.run(a); } },
+  run_tests: { desc: 'Run the tests of the workspace project and show the result. It only uses a fixed test runner (npm test, node --test, or pytest), never a command you choose. args: {"path": string (optional folder, default the top)}', run(a) {
+    const cp = require('child_process'), dir = safe(a.path || '');
+    if (!fs.existsSync(dir) || !fs.statSync(dir).isDirectory()) throw new Error('folder not found');
+    let cmd = null, argv = [];
+    const pj = path.join(dir, 'package.json');
+    if (fs.existsSync(pj)) { let j = {}; try { j = JSON.parse(fs.readFileSync(pj, 'utf8')); } catch {} if (j.scripts && j.scripts.test && !/no test specified/.test(j.scripts.test)) { cmd = process.platform === 'win32' ? 'npm.cmd' : 'npm'; argv = ['test', '--silent']; } }
+    if (!cmd) { const names = []; try { for (const n of fs.readdirSync(dir)) if (/\.(test|spec)\.(c|m)?js$/.test(n) || /^test_.*\.js$/.test(n)) names.push(n); } catch {} if (names.length) { cmd = process.execPath; argv = ['--test']; } }
+    if (!cmd) { let has = false; try { has = fs.readdirSync(dir).some(n => /^test_.*\.py$|_test\.py$/.test(n)); } catch {} if (has) { cmd = process.platform === 'win32' ? 'python' : 'python3'; argv = ['-m', 'pytest', '-q']; } }
+    if (!cmd) return 'No tests found in ' + rel(dir) + '. Write a test file first (for example app.test.js, or test_app.py), then run_tests again.';
+    const env = { PATH: process.env.PATH || '', HOME: process.env.HOME || os.homedir(), USERPROFILE: process.env.USERPROFILE || '', SystemRoot: process.env.SystemRoot || '', TEMP: os.tmpdir(), TMPDIR: os.tmpdir(), CI: '1', NO_COLOR: '1' };   // no secrets from the server
+    const t0 = Date.now(), r = cp.spawnSync(cmd, argv, { cwd: dir, env, timeout: 50000, maxBuffer: 2000000, encoding: 'utf8', windowsHide: true, shell: false });
+    const out = ((r.stdout || '') + (r.stderr || '')).replace(/\x1b\[[0-9;]*m/g, '').trim(), ms = Date.now() - t0;
+    if (r.error && r.error.code === 'ETIMEDOUT') return 'The tests were stopped after 50 seconds (' + ms + ' ms).\n' + out.slice(-1500);
+    if (r.error) return 'Could not start the test runner (' + (r.error.code || r.error.message) + '). Is it installed?';
+    return (r.status === 0 ? 'TESTS PASSED' : 'TESTS FAILED (exit ' + r.status + ')') + ' in ' + ms + ' ms\n' + (out.length > 3000 ? '...' + out.slice(-3000) : out);
+  } },
   system_info: { desc: 'Show this PC\'s basic facts: system, memory, processor count, free disk is not shown. args: {}', run() {
     return `System: ${os.type()} ${os.release()} (${os.arch()}). Memory: ${(os.totalmem() / 1073741824).toFixed(1)} GB total, ${(os.freemem() / 1073741824).toFixed(1)} GB free. Processors: ${os.cpus().length}. Workspace folder: ${ROOT}`;
   } },

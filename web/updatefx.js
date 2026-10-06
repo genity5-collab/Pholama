@@ -27,18 +27,41 @@ export function progress(stepIndex, total = STEPS.length) { const i = Math.max(0
 // Keep at most 6 notes per release and trim very long ones so the card never overflows.
 export function tidyNotes(notes, max = 6, len = 140) { return (Array.isArray(notes) ? notes : []).filter(n => typeof n === 'string' && n.trim()).slice(0, max).map(n => n.length > len ? n.slice(0, len - 1).trimEnd() + '\u2026' : n); }
 
+// Live download progress, as plain data the page can draw: { show, percent, label }. Works with no total (shows a moving label only).
+export function progressView(p) {
+  if (!p || p.phase === 'idle' || !p.phase) return { show: false, percent: 0, label: '' };
+  const mb = n => (n / 1048576).toFixed(n >= 10485760 ? 0 : 1) + ' MB';
+  if (p.phase === 'error') return { show: true, percent: 0, label: 'Could not update: ' + String(p.step || 'try again'), error: true };
+  if (p.phase === 'done') return { show: true, percent: 100, label: p.step || 'Installed', done: true };
+  if (p.phase === 'installing') return { show: true, percent: 100, label: 'Installing...' };
+  const speed = p.speed > 0 ? ' at ' + mb(p.speed) + '/s' : '';
+  return { show: true, percent: Math.max(0, Math.min(100, p.percent || 0)), label: p.total > 0 ? `Downloading ${mb(p.done)} of ${mb(p.total)}${speed}` : `Downloading ${mb(p.done || 0)}${speed}` };
+}
+// The "what's new" lines shown BEFORE installing: plain text, trimmed, at most 6.
+export function incomingNotes(w) { return w && Array.isArray(w.notes) ? tidyNotes(w.notes, 6, 160) : []; }
+
 const reduced = () => typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
 const el = (tag, cls, html) => { const e = document.createElement(tag); if (cls) e.className = cls; if (html !== undefined) e.innerHTML = html; return e; };
 const esc = s => String(s).replace(/[&<>"]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 
 // ---- 1. the banner ----
-export function showBanner({ version, title, ready = false, onRestart, onInstall }) {
+export function showBanner({ version, title, ready = false, notes = [], onRestart, onInstall }) {
   let b = document.getElementById('updBanner');
   if (!b) { b = el('div', 'updb'); b.id = 'updBanner'; b.setAttribute('role', 'status'); document.body.appendChild(b); }
-  b.innerHTML = `<span class="updb-ico"><i></i></span><span class="updb-txt"><b>Version ${esc(version)} is ${ready ? 'ready' : 'available'}</b><small>${esc(title || 'New features are waiting')}</small></span><button class="p updb-go">${ready ? 'Restart now' : 'Install update'}</button><button class="updb-x" aria-label="Later">\u00d7</button>`;
+  b.innerHTML = `<span class="updb-ico"><i></i></span><span class="updb-txt"><b>Version ${esc(version)} is ${ready ? 'ready' : 'available'}</b><small>${esc(title || 'New features are waiting')}</small></span><button class="p updb-go">${ready ? 'Restart now' : 'Install update'}</button><button class="updb-x" aria-label="Later">\u00d7</button><div class="updb-more" hidden><ul class="updb-notes"></ul><div class="updb-bar" hidden><i></i></div><div class="updb-prog" aria-live="polite"></div></div>`;
+  const list = b.querySelector('.updb-notes'); for (const n of (Array.isArray(notes) ? notes : []).slice(0, 6)) { const li = document.createElement('li'); li.textContent = String(n); list.appendChild(li); }   // text only: a release note can never inject HTML
+  if (list.children.length) b.querySelector('.updb-more').hidden = false;
   b.classList.remove('out'); b.classList.add('in'); b.querySelector('.updb-go').onclick = e => { if (ready) onRestart && onRestart(); else onInstall && onInstall(e.currentTarget); };
   b.querySelector('.updb-x').onclick = () => { b.classList.add('out'); setTimeout(() => b.remove(), 400); };
   return b;
+}
+// Keep the banner's bar in step with the server's live progress. Safe to call any time; does nothing if there is no banner.
+export function updateBannerProgress(p) {
+  const b = document.getElementById('updBanner'); if (!b) return null;
+  const v = progressView(p), more = b.querySelector('.updb-more'), bar = b.querySelector('.updb-bar'), txt = b.querySelector('.updb-prog');
+  if (!v.show) { bar.hidden = true; txt.textContent = ''; return v; }
+  more.hidden = false; bar.hidden = false; bar.firstElementChild.style.width = v.percent + '%'; bar.classList.toggle('err', !!v.error); txt.textContent = v.label;
+  return v;
 }
 export function hideBanner() { const b = document.getElementById('updBanner'); if (b) { b.classList.add('out'); setTimeout(() => b.remove(), 400); } }
 

@@ -502,3 +502,35 @@ header{border-bottom:1px solid var(--line);backdrop-filter:blur(18px);background
 .pl-p{font-weight:700}
 .pl-how{margin:8px 0;padding-left:20px;line-height:1.5;font-size:13.5px}
 .pl-codebox{font:700 28px/1.2 ui-monospace,Menlo,Consolas,monospace;letter-spacing:.18em;text-align:center;padding:12px;margin:6px 0;border:1px dashed var(--line);border-radius:12px;user-select:all}
+/* the companion icon is a black square: on a dark page it vanished. A light ring and a light halo keep it visible on both themes. */
+.st-companion{background:color-mix(in srgb,var(--fg) 14%,var(--card))}.st-companion img{border-radius:12px;box-shadow:0 0 0 1.5px color-mix(in srgb,var(--fg) 55%,transparent),0 0 14px color-mix(in srgb,var(--acc) 45%,transparent)}
+
+/* Studio version history: a list of saved versions, with a colour diff and a restore button */
+.st-history{max-height:min(60vh,520px);overflow:auto}
+.st-histrow{border:1px solid var(--line);border-radius:12px;padding:10px 12px;margin:8px 0;background:var(--card)}
+.st-histtitle{font-size:14px;font-weight:600;overflow-wrap:anywhere}
+.st-histacts{display:flex;gap:8px;flex-wrap:wrap;margin-top:8px}
+.st-histacts button{min-height:34px;padding:4px 12px}
+.st-diff{margin-top:8px;border:1px solid var(--line);border-radius:10px;background:var(--bg);max-height:300px;overflow:auto;font:12px/1.5 ui-monospace,SFMono-Regular,Menlo,Consolas,monospace}
+.st-diffhead{position:sticky;top:0;padding:5px 10px;background:var(--card2);font-weight:600;border-bottom:1px solid var(--line)}
+.st-diffline{padding:0 10px;white-space:pre-wrap;overflow-wrap:anywhere}
+.st-diffline.add{background:color-mix(in srgb,var(--ok) 20%,transparent)}
+.st-diffline.del{background:color-mix(in srgb,var(--err) 20%,transparent)}
+
+/* update banner: what's new before installing, and a live download bar */
+.updb-more{flex-basis:100%;margin-top:8px}.updb-more[hidden]{display:none}
+.updb-notes{margin:0 0 8px;padding-left:18px;font-size:13px;line-height:1.5;color:var(--mut)}
+.updb-bar{height:8px;border-radius:999px;background:var(--card2);overflow:hidden}.updb-bar[hidden]{display:none}
+.updb-bar i{display:block;height:100%;width:0;background:var(--acc);border-radius:999px;transition:width .25s ease}
+.updb-bar.err i{background:var(--err)}
+.updb-prog{margin-top:6px;font-size:12px;color:var(--mut)}
+@media (prefers-reduced-motion:reduce){.updb-bar i{transition:none}}
+.updb{flex-wrap:wrap}
+
+/* Studio Setup panel */
+.st-setup{max-height:min(60vh,520px);overflow:auto}
+.st-setuphead{font-weight:600;margin-bottom:6px}
+.st-meter{height:8px;border-radius:999px;background:var(--card2);overflow:hidden;margin-bottom:10px}.st-meter i{display:block;height:100%;background:var(--acc);border-radius:999px}
+.st-setuprow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin:6px 0;background:var(--card)}
+.st-setuprow.ok span{color:var(--ok)}.st-setuprow small{flex-basis:100%;color:var(--mut)}.st-setuprow button{margin-left:auto;min-height:34px;padding:4px 12px}
+.st-setupprog,.st-setupnote{margin-top:8px;font-size:13px;color:var(--mut)}

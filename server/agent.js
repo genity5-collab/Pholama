@@ -8,6 +8,7 @@ const DAILY = +process.env.PHOLAMA_DAILY_CREDITS || 1000;
 
 // What each feature costs (credits). Plain local chat is always free.
 // Tools are free. Only thinking mode uses credits.
+const registry = require('./registry');
 const pendingTools = new Map();   // custom tools waiting for the user's Allow
 const COST = { search: 0, fetch: 0, calc: 0, time: 0, mcp: 0, thinking: 25, memory: 0, ghread: 0, ghwrite: 0, cmd: 0, studio: 0 };
 const github = require('./github');
@@ -397,10 +398,21 @@ function lineCounts(before, after) {
   return { added: Math.max(0, b.length - common), removed: Math.max(0, a.length - common) };
 }
 let editSeq = 0;
+// One checkpoint before the AI starts changing a project (not one per file). Saves only if something changed, at most every 30 s per project,
+// and can never stop an edit: a history problem is ignored.
+const lastCheckpoint = new Map();
+function autoCheckpoint(project, label) {
+  try {
+    const now = Date.now(); if (now - (lastCheckpoint.get(project) || 0) < 30000) return;
+    lastCheckpoint.set(project, now);
+    require('./studiohistory').save(studio, project, label || 'Before AI edit', { by: 'ai' });
+  } catch {}
+}
 function runStudioLogged(name, args) {
   if (!STUDIO_EDITS.test(name)) return studio.run(name, args);
   const a = args || {}, id = 'e' + Date.now().toString(36) + (editSeq++ % 1000), file = String(a.file || '').slice(0, 120), project = String(a.project || '').slice(0, 60);
   let before = null; try { before = studio.readFile(project, file); } catch { before = null; }
+  autoCheckpoint(project);
   const base = { kind: 'file', id, tool: name, path: file, project, by: 'ai' };
   try { power.logEntry({ ...base, status: 'working' }); } catch {}
   let out;
@@ -421,6 +433,7 @@ function loggedStudio(kind, project, file, ...rest) {
   const a = kind === 'patch' ? { project, file, find: rest[0], replace: rest[1] } : { project, file, content: rest[0] };
   const id = 'e' + Date.now().toString(36) + (editSeq++ % 1000), base = { kind: 'file', id, tool: name, path: String(file || '').slice(0, 120), project: String(project || '').slice(0, 60), by: 'ai' };
   let before = null; try { before = studio.readFile(project, file); } catch {}
+  autoCheckpoint(project);
   try { power.logEntry({ ...base, status: 'working' }); } catch {}
   let out;
   try { out = kind === 'patch' ? studio.patchFile(project, file, rest[0], rest[1]) : studio.writeFile(project, file, rest[0]); }
@@ -429,7 +442,20 @@ function loggedStudio(kind, project, file, ...rest) {
   return out;
 }
 const TOOL_LIMIT_MS = +process.env.PHOLAMA_TOOL_LIMIT_MS || 45000, TOOL_MAX_CHARS = 20000;
+// Built-in tools that must wait for the user's Allow (set by their permission level in registry.js). Custom tools keep their own rule below.
+const GATED = new Set(['delete_file', 'run_tests', 'run_code']);
 async function runTool(tools, name, args, ctx) {
+  const g = registry.gate(name, args, { user: ctx && ctx.userId, known: new Set((tools || []).map(x => x.name)), calls: ctx && ctx.toolCalls, maxCalls: ctx && ctx.maxToolCalls, policy: ctx && ctx.policy, maxLevel: ctx && ctx.maxLevel });
+  if (!g.ok) return 'Tool error: ' + g.error + ' Nothing was run.';
+  name = g.name; args = g.args;
+  if (ctx && typeof ctx.toolCalls === 'number') ctx.toolCalls++;
+  if (g.approve && GATED.has(name) && !(ctx && ctx.approved === name)) {
+    const id = require('crypto').randomBytes(8).toString('hex');
+    pendingTools.set(id, { name, args, at: Date.now(), builtin: true });
+    for (const [k, v] of pendingTools) if (Date.now() - v.at > 15 * 60 * 1000) pendingTools.delete(k);
+    if (ctx && ctx.onPending) ctx.onPending({ id, type: 'tool', title: 'Allow ' + name + '?', tool: name, level: g.level, details: JSON.stringify(args || {}).slice(0, 400) });
+    return 'This is a ' + g.level + ' tool, so it is waiting for the user to click Allow. It has NOT run. Tell the user it needs their approval and stop. Do not say it ran.';
+  }
   let timer;
   const limit = new Promise((_, rej) => { timer = setTimeout(() => rej(new Error('"' + name + '" took longer than ' + Math.round(TOOL_LIMIT_MS / 1000) + ' seconds, so it was stopped. Try again or ask differently.')), TOOL_LIMIT_MS); });
   try {
@@ -742,6 +768,6 @@ function safeShowLength(acc) {
 }
 const isToolFail = r => /^Tool error/.test(String(r || ''));
 
-async function approveTool(id) { const p = pendingTools.get(id); if (!p) throw new Error('That request expired or was already answered.'); pendingTools.delete(id); if (!usertools.isUserTool(p.name)) throw new Error('That tool no longer exists.'); return usertools.run(p.name, p.args, { allowOff: p.allowOff === true }); }
+async function approveTool(id) { const p = pendingTools.get(id); if (!p) throw new Error('That request expired or was already answered.'); pendingTools.delete(id); if (p.builtin) { const all = require('./tools2').tools(); const out = await runTool(all, p.name, p.args, { approved: p.name, userId: 'approved' }); return out; } if (!usertools.isUserTool(p.name)) throw new Error('That tool no longer exists.'); return usertools.run(p.name, p.args, { allowOff: p.allowOff === true }); }
 function rejectTool(id) { return pendingTools.delete(id); }
 module.exports = { studioResearch, fetchText, webSearch, factualQuestion, mediaRequest, usertools, media, approveTool, rejectTool, cleanSearchQuery, loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, COST, DAILY };

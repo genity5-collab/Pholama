@@ -9,8 +9,10 @@ const EXE = n => n + (WIN ? '.exe' : '');
 
 // id: how we recognise it. ext: file endings. probe: the command that proves it is installed.
 // compile(src, out) -> [cmd, args] builds a program (compiled languages). run(src, out) -> [cmd, args] starts it.
+// The small Python that Pholama Setup installs (Windows). Looked up each time, so installing it takes effect without a restart.
+function ownPython() { try { const e = require('./setup').pythonExe(); return require('fs').existsSync(e) ? [[e, ['--version']]] : []; } catch { return []; } }
 const LANGS = {
-  python: { name: 'Python', ext: ['.py'], probe: [['python3', ['--version']], ['python', ['--version']], ['py', ['--version']]], run: (s, o, c) => [c, [s]], install: 'Install Python from https://www.python.org/downloads/ (tick "Add to PATH" on Windows).' },
+  python: { name: 'Python', ext: ['.py'], get probe() { return [...ownPython(), ['python3', ['--version']], ['python', ['--version']], ['py', ['--version']]]; }, run: (s, o, c) => [c, [s]], install: 'Open Studio > Setup and press Install Python (about 11 MB), or install it from https://www.python.org/downloads/ (tick "Add to PATH" on Windows).' },
   node: { name: 'JavaScript (Node.js)', ext: ['.js', '.mjs', '.cjs'], probe: [['node', ['--version']]], run: (s, o, c) => [c, [s]], install: 'Install Node.js from https://nodejs.org/.' },
   typescript: { name: 'TypeScript', ext: ['.ts'], probe: [['tsx', ['--version']], ['ts-node', ['--version']], ['deno', ['--version']]], run: (s, o, c) => c === 'deno' ? [c, ['run', s]] : [c, [s]], install: 'Install Node.js, then run: npm install -g tsx   (or install Deno from https://deno.com/).' },
   cpp: { name: 'C++', ext: ['.cpp', '.cc', '.cxx'], probe: [['g++', ['--version']], ['clang++', ['--version']]], compile: (s, o, c) => [c, ['-std=c++17', '-O2', s, '-o', o]], run: (s, o) => [o, []], install: 'Install a C++ compiler: on Windows get MSYS2/MinGW-w64 (g++) or LLVM (clang++); on Mac run "xcode-select --install"; on Linux install "g++" with your package manager.' },

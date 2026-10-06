@@ -1,0 +1,46 @@
+// Tool registry: permission levels, JSON Schema validation, size and depth caps, rate limit, call limit, approval rules.
+const R = require('../server/registry.js'); let bad = 0, n = 0;
+const ok = (name, c, x) => { n++; console.log((c ? 'PASS ' : 'FAIL ') + name + (c ? '' : '  -> ' + String(x).slice(0, 200))); if (!c) bad++; };
+const G = (name, args, ctx) => R.gate(name, args, ctx || {});
+R.resetRate();
+
+ok('read_file is READ, write_file WRITE, delete_file DESTRUCTIVE, run_tests ADMIN', R.levelOf('read_file') === 'READ' && R.levelOf('write_file') === 'WRITE' && R.levelOf('delete_file') === 'DESTRUCTIVE' && R.levelOf('run_tests') === 'ADMIN');
+ok('an unknown tool is ADMIN (never silently free)', R.levelOf('mystery_tool') === 'ADMIN');
+ok('a custom GET tool is READ, POST is WRITE, DELETE is DESTRUCTIVE', R.levelOf('x_a', { method: 'GET' }) === 'READ' && R.levelOf('x_a', { method: 'POST' }) === 'WRITE' && R.levelOf('x_a', { method: 'DELETE' }) === 'DESTRUCTIVE');
+ok('an MCP tool is WRITE (effects unknown)', R.levelOf('mcp_server_tool') === 'WRITE');
+ok('search_code and edit_code are real tools, not aliases', R.canon('create_file') === 'write_file' && R.canon('get_current_time') === 'current_time' && R.canon('search_code') === 'search_code' && R.canon('edit_code') === 'edit_code');
+ok('approval: READ never, WRITE only if policy, DESTRUCTIVE by default, ADMIN always', !R.needsApproval('READ') && !R.needsApproval('WRITE') && R.needsApproval('WRITE', { approveWrites: true }) && R.needsApproval('DESTRUCTIVE') && !R.needsApproval('DESTRUCTIVE', { approveDestructive: false }) && R.needsApproval('ADMIN', { approveDestructive: false }));
+
+ok('a valid read_file call passes', G('read_file', { path: 'src/App.tsx' }).ok === true);
+ok('a missing required argument is refused', /required/.test(G('read_file', {}).error || ''));
+ok('a wrong type is refused', /must be text/.test(G('read_file', { path: 5 }).error || ''));
+ok('an extra argument is refused', /not an argument/.test(G('read_file', { path: 'a', evil: 1 }).error || ''));
+ok('a number out of range is refused', /above|below/.test(G('read_file', { path: 'a', start: 0 }).error || ''));
+ok('a non whole number is refused', /whole number/.test(G('read_file', { path: 'a', start: 1.5 }).error || ''));
+ok('NaN / Infinity are refused', !G('read_file', { path: 'a', start: NaN }).ok && !G('read_file', { path: 'a', end: Infinity }).ok);
+ok('a too-long string is refused', /longer/.test(G('read_file', { path: 'x'.repeat(301) }).error || ''));
+ok('oversized arguments are refused', /too big/.test(G('write_file', { path: 'a', content: 'x'.repeat(30000) }).error || ''));
+ok('deep nesting is refused', (() => { let o = {}; let c = o; for (let i = 0; i < 12; i++) { c.a = {}; c = c.a; } return /too deeply/.test(G('calculator', o).error || ''); })());
+ok('__proto__ keys are refused', !G('read_file', JSON.parse('{"path":"a","__proto__":{"x":1}}')).ok);
+ok('null arguments on a tool with no required fields pass', G('current_time', null).ok === true);
+ok('arguments that are not an object are refused', !G('read_file', 'path=a').ok && !G('read_file', ['a']).ok);
+ok('an unknown tool is refused with a clear sentence', /no tool called/.test(G('wipe_everything', {}).error || ''));
+ok('a tool name with odd characters is refused safely', !G('read_file; whoami', {}).ok && !G('', {}).ok && !G(null, {}).ok);
+ok('a switched-off tool is refused', /switched off/.test(G('read_file', { path: 'a' }, { enabled: new Set(['list_files']) }).error || ''));
+ok('maxLevel blocks a higher tool', /needs permission level/.test(G('delete_file', { path: 'a' }, { maxLevel: 'WRITE' }).error || ''));
+ok('maxLevel READ allows read, blocks write', G('read_file', { path: 'a' }, { maxLevel: 'READ' }).ok && !G('write_file', { path: 'a', content: 'x' }, { maxLevel: 'READ' }).ok);
+ok('delete_file asks for approval', G('delete_file', { path: 'a' }).approve === true);
+ok('run_tests asks for approval even if destructive approval is off', G('run_tests', {}, { policy: { approveDestructive: false } }).approve === true);
+ok('read_file never asks', G('read_file', { path: 'a' }).approve === false);
+ok('write_file asks only when the policy says so', G('write_file', { path: 'a', content: 'b' }).approve === false && G('write_file', { path: 'a', content: 'b' }, { policy: { approveWrites: true } }).approve === true);
+ok('the call limit stops an endless loop', /Too many tool calls/.test(G('read_file', { path: 'a' }, { calls: 12, maxCalls: 12 }).error || '') && G('read_file', { path: 'a' }, { calls: 11, maxCalls: 12 }).ok);
+ok('the default call limit is applied', !G('read_file', { path: 'a' }, { calls: 99 }).ok);
+R.resetRate(); let last; for (let i = 0; i < 31; i++) last = G('read_file', { path: 'a' }, { user: 'u1' });
+ok('the 31st call of one tool in a minute is rate limited', last.ok === false && /this minute/.test(last.error));
+ok('another user is not affected', G('read_file', { path: 'a' }, { user: 'u2' }).ok === true);
+ok('rate limit frees up after a minute', R.rateOk('u3', 't', 0) && (() => { for (let i = 0; i < 29; i++) R.rateOk('u3', 't', 1000); return !R.rateOk('u3', 't', 2000) && R.rateOk('u3', 't', 70000); })());
+ok('a refused call does not use up rate limit', (() => { R.resetRate(); for (let i = 0; i < 100; i++) G('read_file', { path: 5 }, { user: 'u9' }); return G('read_file', { path: 'a' }, { user: 'u9' }).ok; })());
+ok('describe() gives name, level and schema, and no secrets', (() => { const d = R.describe(['read_file', 'x_mine']); return d[0].level === 'READ' && d[0].input_schema.properties.path && d[1].level === 'READ' && !/secret|token|key/i.test(JSON.stringify(d[0])); })());
+ok('a bad id or level cannot be registered', (() => { try { R.register('Bad Name', 'READ', {}); return false; } catch { } try { R.register('fine_name', 'GOD', {}); return false; } catch { } return true; })());
+ok('the registry is frozen per tool', Object.isFrozen(R.get('read_file')));
+console.log(bad ? bad + ' FAILED' : 'ALL PASSED (' + n + ')'); process.exit(bad ? 1 : 0);

@@ -9,11 +9,11 @@ You do not need to install anything first. The one-line installer downloads its 
 ```
 git clone https://github.com/genity5-collab/Pholama
 cd Pholama
-node server/server.js      # or start.bat on Windows, ./start.sh on Mac/Linux
+node server/server.js      # or double-click start.bat (Pholama for PC is for Windows)
 ```
 
 Open **http://localhost:11435**, then:
-1. **Models -> On this PC -> Install** (downloads llama.cpp for your OS, with CUDA on NVIDIA GPUs).
+1. **Models -> On this PC -> Install** (downloads llama.cpp, with CUDA on NVIDIA GPUs; Python is added automatically on first run).
 2. Pick a model that fits your RAM (the list tells you) and **Download**.
 3. Chat.
 

@@ -14,7 +14,7 @@ import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 import { downloadDecision, readCached, writeCached } from './pclink.js';
 import { canSave, usedText } from './memlimit.js';
 import { loadReader, readerLoaded } from './reader.js';
-import { showBanner, hideBanner, openInstalling, checkCelebrate, celebrateWithRetry, playAutoUpdate, updateInfo } from './updatefx.js';
+import { showBanner, hideBanner, openInstalling, checkCelebrate, celebrateWithRetry, playAutoUpdate, updateInfo, updateBannerProgress, incomingNotes } from './updatefx.js';
 import { playSplash } from './logointro.js';
 import { mediaCard, toolAsk, paintMyTools } from './mytools.js';
 import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
@@ -1664,6 +1664,7 @@ async function paintUpdate() {
     const r = await fetch('/api/update', { cache: 'no-store' }); if (!r.ok) return; const u = await r.json();
     if (u.current) { if (pageVersion === null) pageVersion = u.current; else reloadForNewVersion(u.current); }
     const state = updateInfo(u);
+    updateBannerProgress(u.progress);
     $('#updBox').style.display = ''; $('#updAuto').checked = u.auto !== false;
     $('#updPill').style.display = state.visible ? '' : 'none';
     $('#updPill').textContent = state.ready ? 'Update ready' : 'Update available';
@@ -1674,7 +1675,7 @@ async function paintUpdate() {
       if (shownBanner !== bannerKey) {
         shownBanner = bannerKey; let t = '';
         try { t = ((await (await fetch('releases.json', { cache: 'no-cache' })).json()).releases || []).find(r => r.version === u.latest)?.title || ''; } catch {}
-        showBanner({ version: u.latest, title: t, ready: state.ready,
+        showBanner({ version: u.latest, title: (u.whatsNew && u.whatsNew.version === u.latest && u.whatsNew.title) || t, notes: u.whatsNew && u.whatsNew.version === u.latest ? incomingNotes(u.whatsNew) : [], ready: state.ready,
           onRestart: () => restartPholama($('#updRestart'), u.latest),
           onInstall: button => installAvailableUpdate(u.latest, button) });
       }
@@ -1685,14 +1686,18 @@ async function paintUpdate() {
       : `You have the newest version (${u.current}).`;
   } catch {}
 }
+let progTimer = null;
+const watchProgress = on => { if (on && !progTimer) progTimer = setInterval(() => paintUpdate().catch(() => {}), 500); if (!on && progTimer) { clearInterval(progTimer); progTimer = null; } };
 async function installAvailableUpdate(version, button) {
   if (button) { button.disabled = true; button.textContent = 'Installing...'; }
+  watchProgress(true);
   $('#updMsg').textContent = `Downloading version ${version}...`;
   try {
     const r = await fetch('/api/update/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ install: true }) });
     const result = await r.json().catch(() => ({}));
     if (!r.ok || result.error) $('#updMsg').textContent = result.error || 'Could not start the update. Try again.';
   } catch { /* The server may be restarting after installing; the version watcher below handles that case. */ }
+  watchProgress(false);
   if (button && button.isConnected) { button.disabled = false; button.textContent = 'Install update'; }
   paintUpdate();
 }

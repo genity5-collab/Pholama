@@ -264,6 +264,35 @@
   "added": "2026-10-03"
  },
  {
+  "id": "qwen3-4b",
+  "name": "Qwen3 4B",
+  "family": "Qwen",
+  "params": "4B",
+  "url": "https://huggingface.co/Qwen/Qwen3-4B-GGUF/resolve/main/Qwen3-4B-Q4_K_M.gguf",
+  "file": "Qwen3-4B-Q4_K_M.gguf",
+  "bytes": 2497280256,
+  "sizeGB": 2.33,
+  "minRamGB": 5,
+  "ctx": 8192,
+  "categories": [
+   "tools",
+   "reasoning",
+   "compact"
+  ],
+  "blurb": "The original Qwen3 4B from Qwen. One model that can think step by step or answer straight away, with built-in tool calling. Stays under 3 GB.",
+  "license": "Apache-2.0",
+  "caps": [
+   "chat",
+   "tools",
+   "reasoning",
+   "thinking"
+  ],
+  "command": "pholama pull qwen3-4b",
+  "toolTier": "good",
+  "released": "2025-04",
+  "added": "2026-10-06"
+ },
+ {
   "id": "qwen2.5-1.5b",
   "name": "Qwen2.5 1.5B Instruct",
   "family": "Qwen",

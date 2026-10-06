@@ -17,12 +17,12 @@ const localVersion = () => { try { return JSON.parse(fs.readFileSync(path.join(R
 // ---- downloading: built to survive slow or blocked routes (IPv6 trouble, VPNs, some ISPs) ----
 // Each attempt forces IPv4 (family: 4) because a dead IPv6 route is the usual cause of "timed out".
 const sleep = ms => new Promise(r => setTimeout(r, ms));
-function getOnce(url, { timeout, dest } = {}, hops = 0) {
+function getOnce(url, { timeout, dest, onProgress } = {}, hops = 0) {
   return new Promise((resolve, reject) => {
     const req = lib(url).get(url, { headers: { 'User-Agent': 'pholama' }, family: 4 }, r => {
-      if ([301, 302, 307, 308].includes(r.statusCode) && hops < 5) { r.resume(); return resolve(getOnce(new URL(r.headers.location, url).href, { timeout, dest }, hops + 1)); }
+      if ([301, 302, 307, 308].includes(r.statusCode) && hops < 5) { r.resume(); return resolve(getOnce(new URL(r.headers.location, url).href, { timeout, dest, onProgress }, hops + 1)); }
       if (r.statusCode !== 200) { r.resume(); return reject(new Error('HTTP ' + r.statusCode)); }
-      if (dest) { const f = fs.createWriteStream(dest); r.pipe(f); f.on('finish', () => f.close(() => resolve(dest))); f.on('error', reject); r.on('error', reject); }
+      if (dest) { const f = fs.createWriteStream(dest); if (onProgress) { const total = +r.headers['content-length'] || 0; let got = 0; r.on('data', c => { got += c.length; try { onProgress(got, total); } catch {} }); } r.pipe(f); f.on('finish', () => f.close(() => resolve(dest))); f.on('error', reject); r.on('error', reject); }
       else { let d = ''; r.setEncoding('utf8'); r.on('data', c => d += c); r.on('end', () => resolve(d)); r.on('error', reject); }
     });
     req.on('error', reject); req.setTimeout(timeout, () => req.destroy(new Error('timed out')));
@@ -41,14 +41,14 @@ function viaSystem(url, dest, limit = 45) {
 // Try every address in order. A route that HANGS is given up on quickly (it will not recover), while a route that
 // fails fast (connection reset, HTTP 5xx) is retried. Each address then gets one go with the computer's own tool.
 // `budget` caps the whole thing so "check for update" can never freeze.
-async function fetchAny(urls, { dest, timeout = 12000, budget = 90000, sysLimit = 45 } = {}) {
+async function fetchAny(urls, { dest, timeout = 12000, budget = 90000, sysLimit = 45, onProgress } = {}) {
   const errs = [], end = Date.now() + budget, left = () => end - Date.now();
   for (const url of urls) {
     if (left() <= 0) break;
     const host = new URL(url).host;
     let definite = false;   // the server answered and said no (404 etc): no other download tool will change that
     for (let a = 0; a < 3 && left() > 0; a++) {
-      try { return await getOnce(url, { timeout: Math.min(timeout, left()), dest }); }
+      try { return await getOnce(url, { timeout: Math.min(timeout, left()), dest, onProgress }); }
       catch (e) {
         errs.push(host + ': ' + e.message);
         if (/HTTP 4\d\d/.test(e.message)) { definite = true; break; }
@@ -89,7 +89,7 @@ function copyTree(src, dst) {
   }
 }
 
-async function update({ log = console.log, color = {}, force = false } = {}) {
+async function update({ log = console.log, color = {}, force = false, progress = true } = {}) {
   const g = color.green || (x => x), r = color.red || (x => x), d = color.dim || (x => x);
   log('Checking for a newer Pholama...');
   let info;
@@ -99,7 +99,9 @@ async function update({ log = console.log, color = {}, force = false } = {}) {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'pholama-up-'));
   try {
     const tgz = path.join(tmp, 'p.tgz');
-    await fetchAny(process.env.PHOLAMA_UPDATE_ARCHIVE ? [ARCHIVE] : archiveUrls(), { dest: tgz, timeout: 60000 });
+    const t0 = Date.now(); if (progress) setProgress('downloading', 'Downloading version ' + info.latest + '...');
+    await fetchAny(process.env.PHOLAMA_UPDATE_ARCHIVE ? [ARCHIVE] : archiveUrls(), { dest: tgz, timeout: 60000, onProgress: progress ? (got, total) => setProgress('downloading', 'Downloading version ' + info.latest + '...', got, total, got / Math.max(0.25, (Date.now() - t0) / 1000)) : undefined });
+    if (progress) setProgress('installing', 'Installing...', 1, 1);
     execSync(`tar -xzf "${tgz}" -C "${tmp}"`, { stdio: 'ignore', windowsHide: true });
     const dir = fs.readdirSync(tmp).map(n => path.join(tmp, n)).find(p => fs.statSync(p).isDirectory());
     if (!dir || !fs.existsSync(path.join(dir, 'server', 'server.js')) || !fs.existsSync(path.join(dir, 'models.pc.json'))) throw new Error('The downloaded update looked incomplete, so nothing was changed.');
@@ -109,19 +111,31 @@ async function update({ log = console.log, color = {}, force = false } = {}) {
     try { fs.rmSync(backup, { recursive: true, force: true }); copyTree(ROOT, backup); } catch {}
     copyTree(dir, ROOT);
     if (process.platform !== 'win32') { for (const f of ['start.sh', 'server/server.js', 'server/cli.js']) try { fs.chmodSync(path.join(ROOT, f), 0o755); } catch {} }
+    if (progress) { try { status.whatsNew = notesFor(dir, info.latest); } catch {} setProgress('done', 'Installed version ' + info.latest, 1, 1); }
     log(g(`Updated to ${info.latest}. `) + 'Restart Pholama to use it:  pholama stop   then   pholama start');
     return { ok: true, updated: true, version: info.latest };
   } catch (e) {
+    if (progress) setProgress('error', e.message);
     log(r('Update failed: ' + e.message + ' Nothing was broken; your current version keeps working.'));
     return { ok: false };
   } finally { try { fs.rmSync(tmp, { recursive: true, force: true }); } catch {} }
 }
 
+// "What's new" for one version, read from the releases.json that came with it. Plain text only; the page shows it as text.
+function notesFor(dir, version) {
+  const j = JSON.parse(fs.readFileSync(path.join(dir, 'releases.json'), 'utf8')), r = (j.releases || []).find(x => x.version === version);
+  if (!r) return null;
+  return { version, date: String(r.date || '').slice(0, 20), title: String(r.title || '').slice(0, 160), notes: (Array.isArray(r.notes) ? r.notes : []).slice(0, 12).map(x => String(x).slice(0, 400)) };
+}
 // ---- background updates: the running app checks GitHub now and then, downloads quietly, and tells the page ----
 const HOME = path.join(os.homedir(), '.pholama'), SET = path.join(HOME, 'update.json');
 const readSet = () => { try { return JSON.parse(fs.readFileSync(SET, 'utf8')); } catch { return {}; } };
 const writeSet = o => { try { fs.mkdirSync(HOME, { recursive: true }); fs.writeFileSync(SET, JSON.stringify(o)); } catch {} };
-const status = { current: localVersion(), latest: null, ready: false, checking: false, restarting: false, lastCheck: null, error: null, auto: readSet().auto !== false };
+// Updates are the user's choice: a new install starts with automatic updates OFF. Someone who already chose (on or off) keeps their choice.
+// Not updating is always fine: an older version keeps working, it just does not get the newer features.
+const status = { current: localVersion(), latest: null, ready: false, checking: false, restarting: false, lastCheck: null, error: null, auto: readSet().auto === true, whatsNew: null,
+  progress: { phase: 'idle', done: 0, total: 0, percent: 0, speed: 0, step: '' } };
+const setProgress = (phase, step, done = 0, total = 0, speed = 0) => { status.progress = { phase, step, done, total, percent: total > 0 ? Math.min(100, Math.round(done / total * 100)) : 0, speed: Math.round(speed) }; };
 let timer = null, restartHandler = null, checkTask = null;
 // The server supplies this callback so automatic updates can replace the running process.
 // Keeping it injectable makes the updater safe to use from the CLI and easy to test.
@@ -136,6 +150,12 @@ async function backgroundCheck({ installNow = false } = {}) {
   const work = (async () => {
     try {
       const info = await check(); status.latest = info.latest; status.lastCheck = Date.now();
+      // Tell the page what is coming BEFORE it is installed, so the user can decide. A failure here never blocks anything.
+      if (info.newer && (!status.whatsNew || status.whatsNew.version !== info.latest)) {
+        try { const urls = process.env.PHOLAMA_UPDATE_BASE ? [RAW + '/releases.json'] : [RAW + '/releases.json', `https://cdn.jsdelivr.net/gh/${REPO}@${BRANCH}/releases.json`];
+          const j = JSON.parse(await fetchAny(urls, { budget: 15000 })), r = (j.releases || []).find(x => x.version === info.latest);
+          if (r) status.whatsNew = { version: info.latest, date: String(r.date || '').slice(0, 20), title: String(r.title || '').slice(0, 160), notes: (Array.isArray(r.notes) ? r.notes : []).slice(0, 12).map(x => String(x).slice(0, 400)) }; } catch {}
+      }
       if (info.newer && (status.auto || installNow)) {
         const r = await update({ log() {} });               // quiet: only program files change
         if (r.updated) {
@@ -182,4 +202,4 @@ async function offlineCheck({ log = () => {}, isRunning, runUpdate = update } = 
 function setAuto(on) { status.auto = !!on; writeSet({ ...readSet(), auto: !!on }); return status; }
 // 'running' is the version this process started with; 'current' is what is on disk now. They differ after an update until you restart.
 const RUNNING = localVersion();
-module.exports = { update, check, localVersion, status: () => ({ ...status, running: RUNNING, current: localVersion(), ready: status.ready && cmp(localVersion(), RUNNING) > 0 }), backgroundCheck, offlineCheck, startBackground, setAuto, setRestartHandler };
+module.exports = { update, check, localVersion, notesFor, setProgress, status: () => ({ ...status, running: RUNNING, current: localVersion(), ready: status.ready && cmp(localVersion(), RUNNING) > 0 }), backgroundCheck, offlineCheck, startBackground, setAuto, setRestartHandler };

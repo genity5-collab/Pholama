@@ -40,33 +40,6 @@ The website is now **Pholama Platform**. The AI lives in the PC app, and the sit
 
 **Sign in with GitHub:** press **Continue with GitHub** in Settings > Account, on the site or the PC app. It replaces pasting a token, and every write to GitHub still asks you first. Use the **same GitHub account on both** and the PC app adds **250 credits**, once per account.
 
-**Setup for whoever runs Supabase (once):** turn on the GitHub provider, then run [`supabase/github_bonus.sql`](supabase/github_bonus.sql) and [`supabase/platform.sql`](supabase/platform.sql) in the SQL Editor. GitHub callback URL: `https://<project>.supabase.co/auth/v1/callback`. Add the site and `http://localhost:11435/` to Supabase redirect URLs. To make someone a moderator: `insert into public.pholama_moderators (user_id) values ('<their user id>');`
-
-
-### Moderator guide
-
-**1. Run the SQL once, in this order** (Supabase > SQL Editor > New query > paste > Run): `supabase/github_bonus.sql`, then `supabase/platform.sql`, then `supabase/platform2.sql`.
-
-**2. Find your user id.** Log in to the site once and pick a Platform name. Then in the SQL Editor run `select user_id, platform_name from public.pholama_profiles;` (or open Supabase > Authentication > Users and copy the UID column).
-
-**3. Make someone a moderator:** `insert into public.pholama_moderators (user_id) values ('PASTE-THE-ID-HERE');` Remove one with `delete from public.pholama_moderators where user_id = 'PASTE-THE-ID-HERE';` Log out and in again to see the **Moderator** tab.
-
-**4. Moderate.** On any post you get Hide, Edit, Remove, Warn, Ban and Copy user id. The **Moderator** tab has a command line, and the same commands work in the SQL editor as `select public.pholama_mod_cmd('...');`
-
-| Command | What it does |
-|---|---|
-| `whois <name or id>` | Shows the user id, warnings and ban |
-| `warn <name> <reason>` | Sends a warning they see on Home |
-| `ban <name> <hours or perm> <reason>` | Bans for a set time, or forever |
-| `unban <name>` | Lifts a ban |
-| `takedown <post id>` / `restore <post id>` | Hides or brings back a post |
-| `delete <post id>` | Removes a post for good |
-| `edit <post id> <new text>` | Edits a post (marked as edited by a moderator) |
-| `project hide <id>` / `project show <id>` | Hides or shows a project |
-| `daily <title> \| <text>` | Sets today's daily post |
-
-Moderators cannot ban themselves or other moderators. Every action is saved in the audit log, which only moderators can read. The database checks that you are a moderator on every command, so a changed web page cannot give anyone these powers.
-
 ### Memory limits
 
 Pholama can remember facts about you ("remember that I like short answers"). To keep things light:
@@ -118,19 +91,16 @@ Windows (PowerShell):
 ```
 irm https://raw.githubusercontent.com/genity5-collab/Pholama/main/install/install.ps1 | iex
 ```
-Mac / Linux (Terminal):
-```
-curl -fsSL https://raw.githubusercontent.com/genity5-collab/Pholama/main/install/install.sh | bash
-```
+Pholama for PC is for Windows. It sets up everything it needs by itself the first time it runs (the model engine and a small Python, about 30 MB in total, and never a model you did not pick).
 
-**B. Zip file:** [download](https://github.com/genity5-collab/Pholama/archive/refs/heads/main.zip), unzip, then double-click **start.bat** (Windows) or run `./start.sh` (Mac/Linux). This route needs [Node.js 18+](https://nodejs.org) already installed; the installer above does not.
+**B. Zip file:** [download](https://github.com/genity5-collab/Pholama/archive/refs/heads/main.zip), unzip, then double-click **start.bat**. This route needs [Node.js 18+](https://nodejs.org) already installed; the installer above does not.
 
 **C. One command with npx** (only if you already have [Node.js 18+](https://nodejs.org))
 ```
 npx github:genity5-collab/Pholama
 ```
 
-**Look for the llama icon.** The installer (A) puts a **Pholama** icon on your Desktop and in the Start Menu (Windows), in your app launcher (Linux) or on your Desktop (Mac). Double-click it to open Pholama. If you used the zip (C), the first time you run **start.bat** it adds the icon to your Desktop too.
+**Look for the llama icon.** The installer (A) puts a **Pholama** icon on your Desktop and in the Start Menu. Double-click it to open Pholama. If you used the zip (C), the first time you run **start.bat** it adds the icon to your Desktop too.
 
 Then open **http://localhost:11435**, tap **Models**, then **Install**, then **Download** a model.
 
@@ -139,7 +109,8 @@ Then open **http://localhost:11435**, tap **Models**, then **Install**, then **D
 | Part | Size | Notes |
 |---|---|---|
 | **Pholama itself** | **about 0.5 MB** | The program and screens. No extra packages to install. |
-| **AI engine (llama.cpp)** | **11 to 18 MB** | Downloaded once from **Models > Install**. Windows CPU 18 MB, Mac 11 MB, Linux 17 MB. |
+| **AI engine (llama.cpp)** | **19 MB** (NVIDIA build 252 MB) | Installed for you the first time Pholama runs. You can also press **Models > Install**. |
+| **Python (small build)** | **11 MB** | Installed for you the first time Pholama runs, so the AI can run Python files. Everything Pholama needs stays under 1 GB, and your models are never counted or chosen for you. |
 | **AI engine with NVIDIA GPU (Windows)** | **about 250 MB** | Faster on NVIDIA graphics cards. Chosen automatically if one is found. |
 | **Each AI model** | **0.13 GB to 13.4 GB** | You only download the ones you pick. |
 
