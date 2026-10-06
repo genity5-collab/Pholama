@@ -1,6 +1,28 @@
 {
- "latest": "0.9.36",
+ "latest": "0.9.38",
  "releases": [
+  {
+   "version": "0.9.38",
+   "date": "2026-10-06",
+   "title": "Structured research plans and tool-run telemetry",
+   "notes": [
+    "Added a deterministic plan-first workflow for research, Studio edits and file changes: inspect, act, verify.",
+    "Local tool runs now emit completion status, duration and failure details for clearer PC chat and Studio diagnostics.",
+    "Research tasks are guided toward source discovery, primary-page inspection and evidence-based synthesis, inspired by the smolagents open deep research example.",
+    "Includes the v0.9.37 monochrome interface and supplied Pholama llama branding refresh."
+   ]
+  },
+  {
+   "version": "0.9.37",
+   "date": "2026-10-06",
+   "title": "New monochrome Pholama look and supplied llama icon",
+   "notes": [
+    "Updated the public site and PC app with a calm monochrome interface inspired by the clean, minimal local-AI aesthetic of Ollama.",
+    "Replaced the visible Pholama branding, model loaders and hero mark with the supplied white llama wearing sunglasses on a black tile.",
+    "Updated browser, PWA, maskable, Linux/Mac and Windows icon assets so the same mark is used everywhere.",
+    "Kept the latest v0.9.36 features and PC/site behavior intact while refreshing the visual layer."
+   ]
+  },
   {
    "version": "0.9.36",
    "date": "2026-10-05",

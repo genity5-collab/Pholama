@@ -403,6 +403,19 @@ async function chat(req, res, b) {
     if (inStudio && !canTools) log('error', 'This model cannot use tools, so it cannot build in Studio. Pick a model tagged "tools" (Qwen3 0.6B is the smallest).');
     const visited = agent.sources.makeCollector(12); let sentSrc = 0;
     const tctx = { sources: visited, pholamaToken: String(req.headers['x-pholama-token'] || '').slice(0, 4000), ghToken: String(req.headers['x-github-token'] || '').slice(0, 200), mentionTools, onPending: p => line({ approve: p }), onMedia: m => line({ media: m }) };
+    let toolRunSeq = 0;
+    const runToolTracked = async (name, args) => {
+      const id = 'r' + Date.now().toString(36) + (toolRunSeq++ % 1000), started = Date.now();
+      try {
+        const result = String(await agent.runTool(tools, name, args, tctx));
+        line({ toolEnd: { id, name, ok: !/^Tool error/.test(result), ms: Date.now() - started } });
+        return result;
+      } catch (e) {
+        const result = 'Tool error: ' + e.message;
+        line({ toolEnd: { id, name, ok: false, ms: Date.now() - started, error: String(e.message).slice(0, 220) } });
+        return result;
+      }
+    };
     if (tools.length) log('step', `${tools.length} tools ready: ${tools.map(t => t.name).join(', ')}`);
     const effort = ['long', 'max'].includes(b.effort) ? b.effort : 'normal';
     // Price this message from the two levels, then take the credits BEFORE answering so the counter visibly drops.
@@ -455,13 +468,18 @@ async function chat(req, res, b) {
     const skillNote = allow.skills ? agent.plugins.skillsPrompt(agent.plugins.listSkills()) : '';
     const messages = [{ role: 'system', content: mentionHint + skillNote + agent.systemPrompt(tools, thinking, b.memory === true && Array.isArray(b.memories) ? b.memories : [], effortUse) + (inStudio && tools.length ? agent.studioPrompt(b.studio.project, (() => { try { return stu.snapshot(b.studio.project).map(f => ({ name: f.name, size: f.size })); } catch { return []; } })()) + (() => { try { return agent.studioResearch(require('./studioplus').projectMap(b.studio.project)); } catch { return ''; } })() + (() => { try { const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.studioFocus(stu.snapshot(b.studio.project), lu && lu.content, b.studio.project); } catch { return ''; } })() : '') + (() => { if (tools.length) return ''; const lu = [...(b.messages || [])].reverse().find(m => m.role === 'user'); return agent.aboutUserHint(lu && lu.content, b.memory === true && Array.isArray(b.memories) ? b.memories : []); })() }, ...(b.messages || []).filter(m => m.role !== 'system')];
     // Host-side routing: obvious intents run their tool before the model answers (weak models skip tool calls).
+    const plan = agent.taskPlan(origUserText, tools);
+    if (plan.length) {
+      log('action', 'Plan: ' + plan.map((x, i) => `${i + 1}. ${x.label}`).join(' → '));
+      messages[0].content += '\n\n[private work plan] ' + plan.map((x, i) => `${i + 1}) ${x.label}`).join('  ') + '\nFollow one step at a time. Inspect evidence before drawing conclusions, and verify changes before saying they are done.';
+    }
     if (tools.length) {
       const lastUser = [...messages].reverse().find(m => m.role === 'user');
       const r0 = lastUser && agent.routeIntent(lastUser.content, tools, messages.filter(m => m !== lastUser));
       if (r0) {
         log('action', `Request looks like a job for ${r0.name}. Running it first.`);
         log('action', `${r0.name} ${JSON.stringify(r0.args)}`);
-        line({ toolStart: { name: r0.name, args: r0.args } }); let result; try { result = String(await agent.runTool(tools, r0.name, r0.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
+        line({ toolStart: { name: r0.name, args: r0.args } }); let result = await runToolTracked(r0.name, r0.args);
         if (/^(web_search|fetch_page|github_|platform_)/.test(r0.name) && !/^Tool error/.test(result)) searchRan = true;
         if (editclaim.changedFile(r0.name, result)) studioChanged = true;
         if (r0.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
@@ -715,7 +733,7 @@ async function chat(req, res, b) {
       { const sig = call.name + JSON.stringify(call.args || {}); seenCalls[sig] = (seenCalls[sig] || 0) + 1;
         if (seenCalls[sig] >= 3) { log('error', 'The model repeated the same step 3 times, so I stopped it to save your time.'); line({ message: { content: '\n(I stopped because the AI kept repeating the same step. Try a bigger model, or ask for one smaller change.)' } }); break; } }
       log('action', `Model asked for ${call.name} ${JSON.stringify(call.args)}`);
-      line({ toolStart: { name: call.name, args: call.args } }); let result; try { result = String(await agent.runTool(tools, call.name, call.args, tctx)); } catch (e) { result = 'Tool error: ' + e.message; }
+      line({ toolStart: { name: call.name, args: call.args } }); let result = await runToolTracked(call.name, call.args);
       if (/^(web_search|fetch_page|github_|platform_)/.test(call.name) && !/^Tool error/.test(result)) searchRan = true;
       if (editclaim.changedFile(call.name, result)) studioChanged = true;
       if (call.name === 'remember_thing' && result.startsWith('SAVED:')) { line({ memory: { text: result.slice(6) } }); log('result', 'Asked your account to save: ' + result.slice(6)); result = 'Saved to memory.'; } else
