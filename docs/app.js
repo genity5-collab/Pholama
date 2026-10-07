@@ -2,30 +2,24 @@
 //  "browser": WebLLM (WebGPU) runs the model inside this tab, weights cached in browser storage. Works on phones.
 //  "local":   talks to the Pholama server on your PC (llama.cpp / Ollama) using PC RAM/GPU.
 import { Account, cleanName } from './account.js';
-import { sourcesCard } from './sources.js';
 import { llamaLoader, LLAMA_CSS } from './loader.js';
-import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME, setLocalToolAI } from './cloud.js';
+import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME } from './cloud.js';
 import { planFallback } from './fallback.js';
-import { BRAIN_KEY, readBrain, saveBrain, resolveBrain, brainChoices, brainWarning } from './maxbrain.js';
 import { splitThinking, thinkLabel, countWords } from './thinking.js';
 import { splitBlocks, LANGS, cleanLang, extFor, safeFileName, diffLines, diffStats, extractScript, editPrompt, runCommand } from './codeblocks.js';
-import { collapse, groupByDay, dayTitle, applyFilter, summarise, summaryText, info as logInfo, detailRows, fmtTime, FILTERS, title as elTitle, mergeLive } from './editlog.js';
-import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
-import { downloadDecision, readCached, writeCached } from './pclink.js';
+import { collapse, groupByDay, dayTitle, applyFilter, summarise, summaryText, info as logInfo, detailRows, fmtTime, FILTERS } from './editlog.js';
 import { canSave, usedText } from './memlimit.js';
 import { loadReader, readerLoaded } from './reader.js';
-import { showBanner, hideBanner, openInstalling, checkCelebrate, celebrateWithRetry, playAutoUpdate, updateInfo, updateBannerProgress, incomingNotes } from './updatefx.js';
 import { playSplash } from './logointro.js';
-import { mediaCard, toolAsk, paintMyTools } from './mytools.js';
 import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
 import { READER } from './attach.js';
-import { buildKeysPanel, friendlyModelName } from './keys.js';
 import { initAttach, hasAttachments, attachedNames, clearAttachments, prepare } from './attachui.js';
-import { findMentionQuery, pluginOptions, filterPluginOptions } from './mention-picker.js';
+import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
+import { downloadDecision, readCached, writeCached } from './pclink.js';
 
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
-const chatEl = $('#chat'), inEl = $('#in'), mentionMenu = $('#mentionMenu'), sel = $('#model'), dlg = $('#dlg'), listEl = $('#list');
+const chatEl = $('#chat'), inEl = $('#in'), sel = $('#model'), dlg = $('#dlg'), listEl = $('#list');
 const heroEl = $('#hero');   // kept so New session can bring the welcome screen back
 let hasGPU = false;
 let hasF16 = false;
@@ -87,34 +81,12 @@ function codeBlockEl(code, lang) {
   const c = document.createElement('code'); c.textContent = code;
   pre.append(nums, c); w.append(bar, pre); return w;
 }
-// Put reply text into an element. Web links the AI writes become tappable, but only plain http(s) ones with no login in front and
-// nothing pointing inside the user's own network. Everything else stays plain text. Built from nodes, never from HTML.
-const LINK_RE = /\[([^\]\n]{1,80})\]\((https?:\/\/[^\s)]+)\)|(https?:\/\/[^\s<>"'`)\]]+[^\s<>"'`)\].,;:!?])/g;
-export function linkOk(raw) {
-  let u; try { u = new URL(raw); } catch { return null; }
-  if (!/^https?:$/.test(u.protocol) || u.username || u.password) return null;
-  const h = u.hostname.toLowerCase().replace(/^\[|\]$/g, '');
-  if (!h || h === 'localhost' || /\.(local|localhost|internal|lan)$/.test(h) || h === '::1' || /^f[cd]|^fe80/.test(h)) return null;
-  const m = /^(\d+)\.(\d+)\.(\d+)\.(\d+)$/.exec(h); if (m) { const a = +m[1], b = +m[2]; if (a === 10 || a === 127 || a === 0 || a >= 224 || (a === 169 && b === 254) || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) return null; }
-  return u.toString();
-}
-function setText(node, text) {
-  if (node.dataset.raw === text) return; node.dataset.raw = text; node.textContent = '';
-  let last = 0, m; LINK_RE.lastIndex = 0;
-  while ((m = LINK_RE.exec(text))) {
-    const url = linkOk(m[2] || m[3]); if (!url) continue;
-    if (m.index > last) node.append(document.createTextNode(text.slice(last, m.index)));
-    const a = document.createElement('a'); a.href = url; a.target = '_blank'; a.rel = 'noopener noreferrer nofollow'; a.className = 'ans-link';
-    a.textContent = m[1] ? m[1] : m[3]; if (m[1]) a.title = url; node.append(a); last = m.index + m[0].length;
-  }
-  if (last < text.length) node.append(document.createTextNode(text.slice(last)));
-}
 function renderAnswer(el, raw) {
   const parts = splitBlocks(raw);
-  if (!parts.some(p => p.type === 'code')) { if (el.dataset.sig) { el.textContent = ''; delete el.dataset.sig; delete el.dataset.raw; } setText(el, raw); return; }
+  if (!parts.some(p => p.type === 'code')) { if (el.dataset.sig) { el.textContent = ''; delete el.dataset.sig; } el.textContent = raw; return; }
   const sig = parts.map(p => p.type === 'code' ? 'c' + p.lang : 't').join('|');
   if (el.dataset.sig !== sig) {                    // the shape changed (new block started): build it again
-    el.dataset.sig = sig; el.textContent = ''; delete el.dataset.raw;
+    el.dataset.sig = sig; el.textContent = '';
     for (const p of parts) {
       if (p.type === 'text') { const d = document.createElement('div'); d.className = 'cbtext'; el.append(d); }
       else el.append(codeBlockEl('', p.lang));
@@ -123,7 +95,7 @@ function renderAnswer(el, raw) {
   // same shape: only refresh the text inside, so scrolling and selection survive while streaming
   parts.forEach((p, k) => {
     const node = el.children[k]; if (!node) return;
-    if (p.type === 'text') { setText(node, p.text); return; }
+    if (p.type === 'text') { if (node.textContent !== p.text) node.textContent = p.text; return; }
     const c = node.querySelector('code'); if (c.textContent !== p.code) {
       c.textContent = p.code; node.querySelector('.cbn').textContent = p.code.split('\n').map((_, i) => i + 1).join('\n');
     }
@@ -149,9 +121,7 @@ function makeMsg() {
   };
   const ans = document.createElement('div'); ans.className = 'ans';
   const use = document.createElement('div'); use.className = 'usage'; use.style.display = 'none';
-  const srcs = sourcesCard([]); srcs.el.style.display = 'none';
-  const mediaBox = document.createElement('div'); mediaBox.className = 'mediabox';
-  el.append(live, think, ans, mediaBox, srcs.el, use); chatEl.appendChild(el); chatEl.scrollTop = 1e9;
+  el.append(live, think, ans, use); chatEl.appendChild(el); chatEl.scrollTop = 1e9;
   const lines = live.querySelector('.lines'), sum = live.querySelector('.sum'); let n = 0;
   return {
     el,
@@ -177,9 +147,6 @@ function makeMsg() {
     thought(text, seconds) {   // a finished reasoning text from Agent Max (not streamed)
       if (!text) return; tStop(); showThought(String(text).trim(), false, (+seconds || 0) * 1000); think.open = false;
     },
-    media(m) { const c = mediaCard(m); if (c) { mediaBox.append(c); chatEl.scrollTop = 1e9; } },   // a YouTube video or a picture the AI chose to show
-    tool(a) { mediaBox.append(toolAsk(a, api, () => { chatEl.scrollTop = 1e9; })); chatEl.scrollTop = 1e9; },
-    sources(list) { srcs.update(list); chatEl.scrollTop = 1e9; },   // sites the AI visited, with safe links and preview pictures
     usage(u) {            // u = {in, out, estimated, seconds}. Real counts come from the model backend; otherwise flagged as estimates.
       if (!u) return; const tot = (u.in || 0) + (u.out || 0), f = n => (+n).toLocaleString();
       use.textContent = `${u.estimated ? '~' : ''}${f(u.in)} in \u00b7 ${u.estimated ? '~' : ''}${f(u.out)} out \u00b7 ${u.estimated ? '~' : ''}${f(tot)} tokens` + (u.seconds ? ` \u00b7 ${u.seconds}s` : '') + (u.estimated ? ' (estimated)' : '');
@@ -194,7 +161,11 @@ function makeMsg() {
 function addUser(text) { const d = document.createElement('div'); d.className = 'm u'; const b = document.createElement('div'); b.className = 'bub'; b.textContent = text; d.appendChild(b); chatEl.appendChild(d); chatEl.scrollTop = 1e9; return d; }
 function hideHero() { const h = $('#hero'); if (h) h.remove(); }
 const add = (cls, txt) => { const d = document.createElement('div'); d.className = cls; d.textContent = txt; chatEl.appendChild(d); chatEl.scrollTop = 1e9; return d; };
-const saved = () => JSON.parse(localStorage.getItem('pholama.ready') || '[]');
+const saved = () => {   // only models this site still offers (older visits may have saved ones that were removed)
+  let l = []; try { l = JSON.parse(localStorage.getItem('pholama.ready') || '[]'); } catch {}
+  if (!catalog) return l;
+  return l.filter(id => catalog.browser.some(x => x.id === id || x.fallback === id) || (catalog.cpu || []).some(x => 'cpu:' + x.id === id));
+};
 const markReady = id => { const s = new Set(saved()); s.add(id); localStorage.setItem('pholama.ready', JSON.stringify([...s])); };
 
 // The Pholama logo animation plays as soon as the app or the site opens. It sits on top of startup, never delays it, and can be skipped.
@@ -204,10 +175,10 @@ const markReady = id => { const s = new Set(saved()); s.add(id); localStorage.se
 async function init() {
   hasGPU = await probeGPU();
   catalog = await (await fetch('models.json')).json();
-  try { const r = await api('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) { server = await r.json(); setLocalToolAI(server.toolAI === true); } } catch { setLocalToolAI(false); }
+  try { const r = await api('api/hardware'); if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json(); } catch {}
   tab = server ? 'local' : 'browser';
   if (server) { const tl = $('#tLocal'); if (tl) tl.textContent = 'Models on this PC'; }   // PC build: phone models are never offered
-  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) { navigator.serviceWorker.register('sw.js').then(reg => { if (reg.waiting) reg.waiting.postMessage({ type: 'SKIP_WAITING' }); reg.addEventListener('updatefound', () => { const worker = reg.installing; if (worker) worker.addEventListener('statechange', () => { if (worker.state === 'installed' && navigator.serviceWorker.controller) worker.postMessage({ type: 'SKIP_WAITING' }); }); }); }).catch(() => {}); navigator.serviceWorker.addEventListener('controllerchange', () => { if (!window.__pholamaReloaded) { window.__pholamaReloaded = true; location.reload(); } }); }
+  if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) navigator.serviceWorker.register('sw.js').catch(() => {});
   await refreshSelect();
   { const L = llamaLoader(84); $('#heroLogo').appendChild(L.el); L.done(); L.el.classList.remove('ok'); L.el.style.color = 'var(--fg)';
     for (const q of ['Explain how a rocket works', 'Write a short poem', 'Help me plan my day']) { const b = document.createElement('button'); b.textContent = q; b.onclick = () => { inEl.value = q; send(); }; $('#heroChips').appendChild(b); } }
@@ -216,28 +187,26 @@ async function init() {
   await Account.load();
   try { await Account.finishLogin(); }
   catch (e) { Account.logout(); openSettings('account'); $('#a_msg').textContent = e.message; }
-  await afterAuth(); paintAcct();
+  await afterAuth(); paintAcct(); paintWhoami();
   if (server && ![...sel.options].some(o => !o.disabled)) dlg.showModal(), render();   // only on the PC: the website has no chat, so a new visitor is never asked to download an AI
 }
 
 async function refreshSelect() {
   sel.innerHTML = '';
-  // Phone and in-browser models are gone for good: the dropdown only ever lists PC models, your own keys, and Agent Max.
+  for (const id of saved()) {
+    const m = catalog.browser.find(x => x.id === id || x.fallback === id); if (m) sel.add(new Option('📱 ' + m.name, 'web:' + id));
+    const c = (catalog.cpu || []).find(x => 'cpu:' + x.id === id); if (c) sel.add(new Option('📱 ' + c.name, id));
+  }
   if (server) try {
     const t = await (await api('api/tags')).json();
-    for (const m of t.models) sel.add(new Option(m.hosted ? '🔑 ' + (m.label || m.name.replace(/^byok:/, '')) : '💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
-    shareRecentAis(t.models.map(m => m.name));
+    for (const m of t.models) sel.add(new Option('💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
   } catch {}
-  sel.add(new Option('☁ ' + MAX_NAME + ' (cloud, no download)', CLOUD_ID));
   const first = [...sel.options].findIndex(o => !o.disabled); if (first >= 0) sel.selectedIndex = first;
   paintSwitches(); paintEffort(); paintComposerPill();
 }
 
-
 // Same account on a PC: never download a model into this browser. Returns normally when allowed, throws a friendly error when not.
-const SITE_NO_DL = 'Downloading models from the website has ended. Use the cloud assistant here, or get the Pholama PC app to run models on your computer.';
 async function mustNotDownload(value) {
-  if (!server) throw new Error(SITE_NO_DL);   // the website never downloads a model into the browser (phones included)
   if (!Account.user()) return;
   if (value.startsWith('web:') && await cachedOnDevice(value.slice(4))) return;   // already on this device: nothing to download, keep it working
   const uid = Account.user().id; let has = readCached(localStorage, uid);
@@ -303,71 +272,16 @@ let cred = null;
 async function refreshCredits() {
   if (!server) { $('#cr').style.display = 'none'; paintComposerPill(); return; }
   try { cred = await (await api('api/credits')).json(); } catch { return; }
-  const c = $('#cr'); c.style.display = ''; c.textContent = cred.left; c.title = cred.left + ' of ' + cred.daily + ' daily credits left' + (cred.left === 0 ? '. ' + restockLine(cred) : '. Resets daily.');
+  const c = $('#cr'); c.style.display = ''; c.textContent = cred.left; c.title = cred.left + ' of ' + cred.daily + ' daily credits left' + (cred.left === 0 ? '. Search, tools, MCP and thinking are off until tomorrow.' : '. Resets daily.');
   c.className = 'pill' + (cred.left === 0 ? ' zero' : cred.left < cred.daily * 0.2 ? ' low' : '');
   paintComposerPill();
   paintUsage();
-}
-// ----- Plugins and skills: everything is drawn with textContent, so a skill or plugin text can never inject markup. -----
-async function paintPlugins() {
-  if (!server) return;
-  let d; try { d = await (await api('api/plugins')).json(); } catch { return; }
-  const box = $('#plList'); if (!box) return; box.textContent = '';
-  for (const p of d.plugins) {
-    const lab = document.createElement('label'); lab.className = 'sw';
-    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = !!p.on;
-    const sp = document.createElement('span'), sm = document.createElement('small');
-    sp.append(p.name); sm.textContent = p.desc + (p.on && p.paid && !p.usable ? ' (paused: no credits left today)' : p.paid ? ' Uses a few credits.' : '');
-    sp.append(sm); lab.append(cb, sp); box.append(lab);
-    cb.onchange = async () => { cb.disabled = true; try { await api('api/plugins/switch', { method: 'POST', body: JSON.stringify({ id: p.id, on: cb.checked }) }); } catch {} cb.disabled = false; paintPlugins(); };
-  }
-  const h = $('#plHealth'); if (h) h.textContent = d.check.ok ? 'Self-check: everything is healthy.' : 'Self-check found ' + d.check.problems.length + ' problem(s): ' + d.check.problems.slice(0, 3).join('; ') + '. Broken skills are ignored, chat keeps working.';
-  { const mt = $('#myToolsBox'); if (mt) paintMyTools(mt, api, { model: () => sel.value }); }
-  const sk = $('#skList'); if (!sk) return; sk.textContent = '';
-  if (!d.skills.length) { const e = document.createElement('div'); e.className = 'sys'; e.textContent = 'No skills yet.'; sk.append(e); }
-  for (const k of d.skills) {
-    const row = document.createElement('div'); row.className = 'sys'; row.style.cssText = 'display:flex;gap:6px;align-items:center;text-align:left';
-    const cb = document.createElement('input'); cb.type = 'checkbox'; cb.checked = k.on;
-    const t = document.createElement('span'); t.style.flex = '1'; t.textContent = k.name + ': ' + k.when + (k.by === 'ai' ? ' (written by the AI)' : '');
-    const del = document.createElement('button'); del.type = 'button'; del.textContent = 'Delete';
-    row.append(cb, t, del); sk.append(row);
-    cb.onchange = async () => { await api('api/skills/switch', { method: 'POST', body: JSON.stringify({ name: k.name, on: cb.checked }) }); paintPlugins(); };
-    del.onclick = async () => { if (!confirm('Delete the skill "' + k.name + '"?')) return; await api('api/skills/delete', { method: 'POST', body: JSON.stringify({ name: k.name }) }); paintPlugins(); };
-  }
-}
-async function saveSkillFromForm() {
-  const m = $('#skMsg'); m.textContent = '';
-  try {
-    const r = await api('api/skills', { method: 'POST', body: JSON.stringify({ name: $('#skName').value, when: $('#skWhen').value, steps: $('#skSteps').value }) }); const j = await r.json();
-    if (!r.ok) { m.textContent = j.error || 'Could not save.'; return; }
-    m.textContent = 'Saved "' + j.name + '".'; $('#skName').value = $('#skWhen').value = $('#skSteps').value = ''; paintPlugins();
-  } catch { m.textContent = 'Could not reach the PC app.'; }
-}
-if ($('#skSave')) $('#skSave').onclick = saveSkillFromForm;
-if ($('#plRefresh')) $('#plRefresh').onclick = paintPlugins;
-// "Write it with the AI": the chosen model drafts the skill as JSON, the server checks it, and it lands in the form for you to read before saving.
-if ($('#skAi')) $('#skAi').onclick = async () => {
-  const m = $('#skMsg'), idea = ($('#skWhen').value || $('#skName').value || '').trim();
-  if (idea.length < 5) { m.textContent = 'Type what the skill is for in "When to use it" first.'; return; }
-  m.textContent = 'Writing...'; $('#skAi').disabled = true;
-  try {
-    const r = await api('api/skills/draft', { method: 'POST', body: JSON.stringify({ model: sel.value, idea }) }); const j = await r.json();
-    if (!r.ok) { m.textContent = j.error || 'The AI could not write it. Try again or write it yourself.'; return; }
-    $('#skName').value = j.skill.name || ''; $('#skWhen').value = j.skill.when || ''; $('#skSteps').value = j.skill.steps || ''; m.textContent = 'Drafted. Read it, change anything, then press Save skill.';
-  } catch { m.textContent = 'The AI could not write it. Try again or write it yourself.'; }
-  finally { $('#skAi').disabled = false; }
-};
-// The restock sentence comes from the PC with the numbers already worked out, so this can never show "NaN".
-function restockLine(c) {
-  const r = c && c.restock, w = r && typeof r.wait === 'string' && r.wait && !/NaN|undefined/.test(r.wait) ? r.wait : 'until tomorrow';
-  return 'Integration credit limit reached. Please wait ' + w + (r && r.clock && !/NaN/.test(r.clock) ? ' for a restock (tomorrow at ' + r.clock + ')' : ' for a restock') + '. Search, web pages, GitHub, thinking and memory are off until then. Plain chat on your own model stays free.';
 }
 async function openOpts() {
   const off = !server; $('#t_off').style.display = off ? '' : 'none';
   if (!off) {
     await refreshCredits();
-    $('#t_cr').textContent = cred.left === 0 ? restockLine(cred) : `${cred.left} of ${cred.daily} credits left today` + (cred.bonus ? ` (includes ${cred.bonus} bonus from logging in).` : '.') + ' Resets at midnight.';
-    paintPlugins();
+    $('#t_cr').textContent = cred.left === 0 ? 'Out of credits. Thinking mode is off until tomorrow. Tools and chat still work.' : `${cred.left} of ${cred.daily} credits left today` + (cred.bonus ? ` (includes ${cred.bonus} bonus from logging in).` : '.') + ' Resets at midnight.';
     const pr = cred.allowed.prefs; ghPaint(); for (const k of ['terminal', 'github', 'search', 'tools', 'mcp', 'thinking']) $('#p_' + k).checked = !!pr[k];
     paintEditLog();
     await listMcpUI();
@@ -422,7 +336,7 @@ async function paintSwitches() {
     try { const c = await (await api('api/caps?model=' + encodeURIComponent(sel.value))).json(); await refreshCredits();
     const mp = (cred && cred.allowed && cred.allowed.prefs) || {};
     let hasMcp = false; try { hasMcp = ((await (await api('api/mcp')).json()).servers || []).length > 0; } catch {}
-    swCaps = { _tier: c.tier, terminal: c.tools && c.tier !== 'basic' && mp.terminal === true, github: c.github && mp.github !== false, search: c.search && mp.search !== false, tools: c.tools && mp.tools !== false, mcp: c.mcp && mp.mcp !== false, _hasMcp: hasMcp, thinking: c.thinking && mp.thinking !== false, _src: c.source };
+    swCaps = { terminal: c.tools && mp.terminal === true, github: c.github && mp.github !== false, search: c.search && mp.search !== false, tools: c.tools && mp.tools !== false, mcp: c.mcp && mp.mcp !== false, _hasMcp: hasMcp, thinking: c.thinking && mp.thinking !== false, _src: c.source };
     } catch {}
   }
   row.innerHTML = '';
@@ -434,9 +348,8 @@ async function paintSwitches() {
   }
   if (!shown.length && server && sel.value && (sel.value.startsWith('ollama:') || sel.value.startsWith('gguf:'))) {
     const n = document.createElement('span'); n.className = 'swnote';
-    n.textContent = swCaps._src === 'unknown' ? 'Tools off: could not read this model\'s abilities.' : 'Plain chat: this model cannot run tools. Pick one tagged "Runs tools" in Models (for example Qwen3 8B or Qwen2.5 7B).'; row.appendChild(n);
+    n.textContent = swCaps._src === 'unknown' ? 'Tools off: could not read this model\'s abilities.' : 'Plain chat: this model does not support tools.'; row.appendChild(n);
   }
-  if (shown.length && swCaps._tier === 'basic') { const n = document.createElement('span'); n.className = 'swnote'; n.textContent = 'Small model: Pholama guides it. Studio builds and edits work, but it is not a full agent. A bigger model runs tools better.'; row.appendChild(n); }
   row.style.display = row.children.length ? '' : 'none';
 }
 sel.addEventListener('change', () => { paintSwitches(); paintEffort(); paintComposerPill(); });
@@ -494,7 +407,7 @@ let pendingImages = 0;   // pictures attached to the message being sent (a count
 async function pcChat(model, msg, onText) {
   const imagesNow = pendingImages; pendingImages = 0;
   const ac = new AbortController(); stopper = () => ac.abort();
-  const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: history, agent: true, images: imagesNow, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [], duo: duoOn(), duoHelper: duoHelperId() }) });
+  const r = await api('api/chat', { method: 'POST', signal: ac.signal, headers: ghHeaders(), body: JSON.stringify({ model, messages: history, agent: true, images: imagesNow, switches: swState(), effort, memory: memOn, memories: memOn ? memories : [] }) });
   const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '';
   for (;;) {
     const { done, value } = await rd.read(); if (done) break;
@@ -505,9 +418,7 @@ async function pcChat(model, msg, onText) {
       if (j.log) { msg.log(j.log.kind, j.log.text, j.log.t); continue; }
       if (j.status) { msg.log('step', j.status); continue; }
       if (j.memory) { const note = await saveMemory(j.memory.text); msg.log(/^Saved/.test(note) ? 'result' : 'error', note); continue; }
-      if (j.media) { msg.media(j.media); continue; }
-      if (j.approve) { if (j.approve.type === 'tool') msg.tool(j.approve); else (j.approve.type === 'command' ? cmdAsk : ghAsk)(msg, j.approve); continue; }
-      if (j.sources) { msg.sources(j.sources); continue; }
+      if (j.approve) { (j.approve.type === 'command' ? cmdAsk : ghAsk)(msg, j.approve); continue; }
       if (j.tool) { refreshCredits(); continue; }
       if (j.usage) { msg.usage(j.usage); continue; }
       if (j.credits) { refreshCredits(); continue; }
@@ -521,9 +432,7 @@ async function send() {
   const text = inEl.value.trim(); if (!text && !hasAttachments()) return;
   if (!sel.value) return alert('Open Models and download a model first.');
   if (needLogin('use')) return;
-  const picked = sel.value, brain = picked === CLOUD_ID ? maxBrainNow() : { run: 'cloud' };   // Max can be powered by the official cloud or by a local AI (free, unlimited)
-  const effModel = brain.run === 'local' ? brain.model : picked;
-  const isCloud = effModel === CLOUD_ID, token = Account.token();
+  const isCloud = sel.value === CLOUD_ID, token = Account.token();
   if (isCloud && !token) return needLogin('use');
   inEl.value = ''; inEl.style.height = 'auto'; setBusy(true); stopped = false;
   const files = attachedNames();
@@ -531,17 +440,13 @@ async function send() {
   const msg = makeMsg(); let acc = '', pendingUi = null, plan = null; const sessionAtStart = sessionId;
   let shownText = text, attach = null;
   try {
-    if (files.length) {   // files first: text files become text, pictures are read into words, so every engine below works unchanged
-      attach = await prepare(text, history, m => msg.log('step', m, 0));
-      shownText = attach.content;
-    }
+    if (files.length) { attach = await prepare(text, history, m => msg.log('step', m, 0)); shownText = attach.content; }
     pendingImages = attach && attach.hasImages ? Math.min(4, (attach.seen || []).length) : 0;
     history.push({ role: 'user', content: shownText }); clearAttachments();
     saveCurrentSession();
-    const local = effModel.startsWith('cpu:') || effModel.startsWith('web:');
+    const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');
     if (local) { const ri = rememberIntent(text); if (ri && memOn) msg.log('result', await saveMemory(ri), 0); }
-    if (!isCloud) await ensureEngine(effModel);
-    if (brain.run === 'local') msg.log('step', brain.note, 0);
+    if (!isCloud) await ensureEngine(sel.value);
     const base = attach && attach.hasImages ? attach.build(history.slice(0, -1)) : history;
     const mem = local ? memorySystem() : null, send_ = mem ? [mem, ...base] : base;
     if (isCloud) {
@@ -586,7 +491,7 @@ async function send() {
       const sec = +((performance.now() - t0) / 1000).toFixed(1);
       msg.usage(wu ? { in: wu.prompt_tokens, out: wu.completion_tokens, estimated: false, seconds: sec } : { in: send_.reduce((a, m) => a + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: sec });
     } else {
-      await pcChat(effModel, msg, t => { acc += t; msg.text(acc); });
+      await pcChat(sel.value, msg, t => { acc += t; msg.text(acc); });
     }
     if (sessionAtStart !== sessionId) return;                // a New session began while this ran: drop the late reply
     const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
@@ -637,8 +542,7 @@ async function afterAuth() {
   const u = Account.user();
   memOn = false; memories = [];
   if (u) claimBonus();
-  if (u) { githubBothBonus(); collectRewards(); }
-  if (u) shareRecentAis();
+  if (u) recordSiteLogin();
   if (u) { try { memOn = await Account.memoryOn(); if (memOn) memories = (await Account.list()).map(m => m.content); } catch {} }
 }
 function paintAcct() {
@@ -781,12 +685,6 @@ function render() {
   $('#tLocal').classList.toggle('on', true);   // one tab only: models live on the PC
   listEl.innerHTML = '';
   paintDuoBar();
-  if (server && !remoteBase()) { buildKeysPanel({ api, parent: listEl, onChange: () => { refreshSelect(); } }); }
-  if (tab === 'browser' && !server) {
-    const n = document.createElement('div'); n.className = 'sys'; n.style.cssText = 'text-align:left;line-height:1.5;padding:6px 2px';
-    n.innerHTML = '<b>Model downloads on the website have ended.</b><br>Mobile support has fully ended, so the website no longer downloads models to your phone or browser. Chat here uses the cloud assistant. To run models on your own computer, get the Pholama PC app.';
-    listEl.appendChild(n); return;
-  }
   if (tab === 'browser') {
     const ram = deviceRam(), gpu = hasGPU;
     $('#hw').textContent = gpu
@@ -823,6 +721,7 @@ function render() {
       const idle = (label, isReady) => { r.loader.set(isReady ? 1 : 0); r.bar.style.display = 'none'; r.btn.textContent = label; r.btn.disabled = false; r.btn.onclick = start; del.style.display = isReady ? '' : 'none'; use.style.display = isReady ? '' : 'none'; };
       const start = async () => {
         if (needLogin('download')) return;
+        { const why = (await import('./platform.js')).assistantRule(saved().filter(id => (catalog.browser || []).some(x => x.id === id || x.fallback === id) || (catalog.cpu || []).some(x => 'cpu:' + x.id === id)), key); if (why) { r.sub.textContent = why; return; } }   // one small assistant on the site
         r.btn.disabled = true;
         try {
           if (gpu) await ensureEngineWithBar(useId, r);
@@ -916,7 +815,6 @@ function renderPC() {
   hint.innerHTML = 'Terminal: <code>pholama pull NAME</code> downloads, <code>pholama chat NAME</code> chats, <code>pholama serve NAME</code> shares it with your apps on this PC, <code>pholama rm NAME</code> removes it. Or use the buttons here.';
   listEl.appendChild(hint);
   const shown = models.filter(m => (pcCat === 'all' || (m.categories || []).includes(pcCat)) && (pcFam === 'all' || m.family === pcFam) && (!pcInstalled || m.downloaded || m.partial));
-  shown.sort((a, b) => (b.recommended ? 1 : 0) - (a.recommended ? 1 : 0));   // the recommended model always comes first
   if (!shown.length) { const e = document.createElement('div'); e.className = 'sys'; e.textContent = 'No models match these filters.'; listEl.appendChild(e); }
   for (const m of shown) {
     const bytes = m.bytes || m.sizeGB * 1073741824;
@@ -924,9 +822,6 @@ function renderPC() {
     const catTxt = (m.categories || []).map(c => (PC_CATS.find(x => x[0] === c) || [0, c])[1]).join(' · ');
     const base = `${fmtMB(bytes)} · needs about ${m.minRamGB} GB RAM · ${m.fits ? 'fits your PC' : 'may be too big for your PC'}${catTxt ? ' · ' + catTxt : ''}`;
     r.sub.textContent = base;
-    { const tc = document.createElement('span'); const t = m.toolTier || 'none'; tc.className = 'chip ' + (t === 'good' ? 'rec' : 'warn'); tc.textContent = t === 'good' ? 'Runs tools' : t === 'basic' ? 'Basic tools only' : 'Chat only, no tools';
-      tc.title = t === 'good' ? 'Trained for tool calling and big enough to use it well.' : t === 'basic' ? 'Too small to call tools on its own. Pholama guides it for Studio builds and edits, but it is not a real agent.' : 'This model cannot run tools. Good for chat, not for building or using tools.'; r.sub.parentNode.insertBefore(tc, r.sub); }
-    if (m.recommended) { const badge = document.createElement('span'); badge.className = 'chip rec'; badge.textContent = 'Recommended'; badge.title = 'Smallest model that really runs tools, and fits your PC'; r.sub.parentNode.insertBefore(badge, r.sub); }
     if (m.blurb) { const bl = document.createElement('small'); bl.textContent = m.blurb; r.sub.parentNode.insertBefore(bl, r.bar); }
     const cmd = document.createElement('div'); cmd.className = 'cmdrow';
     const code = document.createElement('code'); code.textContent = m.command || ('pholama pull ' + m.id);
@@ -967,7 +862,7 @@ async function refreshModels() {
     if (r.ok && (r.headers.get('content-type') || '').includes('json')) server = await r.json();
     else server = null;
   } catch { server = null; }
-  setLocalToolAI(!!server && server.toolAI === true);   // a new download or a delete changes the Agent Max daily allowance
+  markSite();
   await refreshSelect(); render();
 }
 function row(title, sub, btn) {
@@ -993,13 +888,12 @@ async function ensureEngineWithBar(id, r) {
   engineModel = id; markReady(id);
 }
 
-$('#mgr').onclick = () => { render(); dlg.showModal(); };
+$('#mgr').onclick = () => { if (siteOnly()) return; render(); dlg.showModal(); };   // model management is PC-only
 $('#close').onclick = () => { dlg.close(); refreshSelect(); };
 // (the "In this browser" tab is gone: phone and browser models are no longer supported)
 $('#tLocal').onclick = () => { tab = 'local'; render(); };
-if ($('#langRefresh')) $('#langRefresh').onclick = () => paintLangs(true);
 $('#send').onclick = send;
-initAttach({ model: () => { const v = sel.value, all = [...((catalog && catalog.browser) || []), ...((catalog && catalog.cpu) || []), ...((catalog && catalog.local) || [])]; const found = all.find(m => v.endsWith(m.id) || v === 'web:' + m.id || v === 'cpu:' + m.id) || { name: 'this model' }; return readerOn() ? { ...found, accepts: [...(found.accepts || []), 'image'] } : found; }, note: m => alert(m) });
+initAttach({ model: () => { const v = sel.value, all = [...((catalog && catalog.browser) || []), ...((catalog && catalog.cpu) || [])]; const found = all.find(m => v === 'web:' + m.id || v === 'cpu:' + m.id || v.endsWith(m.id)) || { name: 'this model' }; return readerOn() ? { ...found, accepts: [...(found.accepts || []), 'image'] } : found; }, note: m => alert(m) });
 
 // New session: stop any running reply, save current chat, clear, show welcome screen again.
 function newSession() {
@@ -1010,65 +904,11 @@ function newSession() {
   chatEl.innerHTML = ''; chatEl.appendChild(heroEl); inEl.value = ''; paintCloudLeft(null); inEl.focus();
 }
 $('#newSess').onclick = () => { if (history.length && !confirm('Start a new session? This clears the current chat.')) return; newSession(); };
-let mentionState = null, mentionItems = [], mentionIndex = 0, customMentionTools = [], mentionLoading = null, mentionFetchedAt = 0;
-function closeMentionMenu() { mentionState = null; mentionItems = []; mentionMenu.hidden = true; inEl.setAttribute('aria-expanded', 'false'); }
-function paintMentionMenu() {
-  if (!mentionState) return closeMentionMenu();
-  mentionItems = filterPluginOptions(pluginOptions(customMentionTools), mentionState.query);
-  mentionIndex = Math.max(0, Math.min(mentionIndex, mentionItems.length - 1)); mentionMenu.replaceChildren();
-  if (!mentionItems.length) { const empty = document.createElement('div'); empty.className = 'mention-empty'; empty.textContent = 'No matching plugins'; mentionMenu.appendChild(empty); }
-  mentionItems.forEach((item, i) => {
-    const b = document.createElement('button'); b.type = 'button'; b.className = 'mention-option' + (i === mentionIndex ? ' on' : ''); b.setAttribute('role', 'option'); b.setAttribute('aria-selected', String(i === mentionIndex));
-    const name = document.createElement('span'); name.className = 'mention-name'; name.textContent = '@' + item.name;
-    const meta = document.createElement('span'); meta.className = 'mention-meta'; meta.textContent = (item.title || item.name) + (item.off ? ' · Off (mention turns it on for this message)' : '');
-    const desc = document.createElement('small'); desc.textContent = item.description || '';
-    b.append(name, meta, desc); b.onmouseenter = () => { mentionIndex = i; mentionMenu.querySelectorAll('.mention-option').forEach((x, j) => { x.classList.toggle('on', j === i); x.setAttribute('aria-selected', String(j === i)); }); };
-    b.onmousedown = e => e.preventDefault(); b.onclick = () => selectMention(item); mentionMenu.appendChild(b);
-  });
-  mentionMenu.hidden = false; inEl.setAttribute('aria-expanded', 'true');
-}
-async function loadMentionTools(force = false) {
-  if (mentionLoading) return mentionLoading;
-  if (!force && Date.now() - mentionFetchedAt < 1500) return;
-  mentionFetchedAt = Date.now();
-  mentionLoading = (async () => { try { const r = await api('api/mytools'); if (r.ok) { const j = await r.json(); customMentionTools = Array.isArray(j.tools) ? j.tools : []; } } catch {} finally { mentionLoading = null; if (mentionState) paintMentionMenu(); } })();
-  return mentionLoading;
-}
-function updateMentionMenu() {
-  const q = findMentionQuery(inEl.value, inEl.selectionStart);
-  if (!q) return closeMentionMenu();
-  const opening = !mentionState; mentionState = q; mentionIndex = 0; paintMentionMenu();
-  if (opening) void loadMentionTools(true);
-}
-function selectMention(item) {
-  if (!mentionState) return;
-  const q = mentionState; inEl.setRangeText('@' + item.name + ' ', q.start, q.end, 'end'); closeMentionMenu();
-  inEl.focus(); inEl.dispatchEvent(new Event('input', { bubbles: true }));
-}
-function moveMentionIndex(delta) { if (!mentionItems.length) return; mentionIndex = (mentionIndex + delta + mentionItems.length) % mentionItems.length; paintMentionMenu(); const active = mentionMenu.querySelector('[aria-selected="true"]'); if (active) active.scrollIntoView({ block: 'nearest' }); }
-inEl.addEventListener('input', updateMentionMenu); inEl.addEventListener('click', updateMentionMenu); inEl.addEventListener('keyup', e => { if (['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(e.key)) updateMentionMenu(); });
-inEl.addEventListener('blur', () => setTimeout(() => { if (!mentionMenu.contains(document.activeElement)) closeMentionMenu(); }, 80));
-inEl.addEventListener('keydown', e => {
-  if (mentionState && !mentionMenu.hidden) {
-    if (e.key === 'ArrowDown') { e.preventDefault(); moveMentionIndex(1); return; }
-    if (e.key === 'ArrowUp') { e.preventDefault(); moveMentionIndex(-1); return; }
-    if (e.key === 'Escape') { e.preventDefault(); closeMentionMenu(); return; }
-    if ((e.key === 'Enter' && !e.shiftKey) || e.key === 'Tab') { if (mentionItems.length) { e.preventDefault(); selectMention(mentionItems[mentionIndex]); return; } }
-  }
-  if (e.key === 'Enter' && !e.shiftKey && !/Mobi|Android/i.test(navigator.userAgent)) { e.preventDefault(); send(); }
-});
+inEl.addEventListener('keydown', e => { if (e.key === 'Enter' && !e.shiftKey && !/Mobi|Android/i.test(navigator.userAgent)) { e.preventDefault(); send(); } });
 
 // ----- Settings dialog & tabs -----
-// Settings > Plans: Free vs Pro and the one-time code for the Roblox game (plans.js does the work).
-let plansTab = null;
-async function paintPlans() {
-  try {
-    if (!plansTab) plansTab = await (await import('./plans.js')).mount($('#plans_host'), { Account, cfg: window.PHOLAMA || {} });
-    await plansTab.paint();
-  } catch { $('#plans_host').textContent = 'Could not load the plans page. Try again.'; }
-}
 function openSettings(tabName = 'usage') {
-  const tabs = ['usage', 'tools', 'account', 'plans', 'script', 'remote', 'safety'];
+  const tabs = ['usage', 'tools', 'account', 'script', 'remote', 'safety'];
   if (!tabs.includes(tabName)) tabName = 'usage';
   for (const t of tabs) {
     const btn = $('#s_tab_' + t);
@@ -1079,64 +919,22 @@ function openSettings(tabName = 'usage') {
   if (tabName === 'usage') paintUsage();
   if (tabName === 'tools') openOpts();
   if (tabName === 'account') { $('#a_msg').textContent = ''; paintAcct(); }
-  if (tabName === 'plans') paintPlans();
   if (tabName === 'remote') paintRemoteUI();
   $('#dlgSettings').showModal();
 }
 
-for (const t of ['usage', 'tools', 'account', 'plans', 'script', 'remote', 'safety']) {
+for (const t of ['usage', 'tools', 'account', 'script', 'remote', 'safety']) {
   const btn = $('#s_tab_' + t);
   if (btn) btn.onclick = () => openSettings(t);
 }
-// Inside Tools: Features, Plugins and skills, My tools, MCP, Updates and log. One group shows at a time, and Pholama remembers which.
-function showSub(key) {
-  const bar = document.querySelector('.s-sub'); if (!bar) return;
-  if (!document.querySelector('.s-pane[data-pane="' + key + '"]')) key = 'feat';
-  for (const b of bar.querySelectorAll('button')) { const on = b.dataset.sub === key; b.classList.toggle('on', on); b.setAttribute('aria-selected', on ? 'true' : 'false'); }
-  for (const p of document.querySelectorAll('.s-pane')) p.style.display = p.dataset.pane === key ? '' : 'none';
-  try { localStorage.setItem('ph_sub', key); } catch {}
-}
-{ const bar = document.querySelector('.s-sub'); if (bar) { for (const b of bar.querySelectorAll('button')) b.onclick = () => showSub(b.dataset.sub); let k = 'feat'; try { k = localStorage.getItem('ph_sub') || 'feat'; } catch {} showSub(k); } }
-window.phShowSub = showSub;
 $('#settingsBtn').onclick = () => openSettings('usage');
 $('#closeSettings').onclick = () => $('#dlgSettings').close();
 $('#opt').onclick = () => openSettings('tools');
 $('#acct').onclick = () => openSettings('account');
 $('#cr').onclick = () => openSettings('usage');
 
-// ---- Max brain: the official cloud, or a free local AI on this PC ----
-const onOwnPc = () => !!server && !remoteBase();
-const pcModelInfo = () => [...sel.options].filter(o => !o.disabled && /^(gguf|ollama):/.test(o.value)).map(o => ({ id: o.value, name: o.textContent.replace(/^[^\w]+/, ''), tools: !/no tools/i.test(o.textContent) }));
-function maxBrainNow() {
-  let raw = null; try { raw = localStorage.getItem(BRAIN_KEY); } catch {}
-  return resolveBrain({ brain: raw, isPc: onOwnPc(), installed: pcModelInfo().map(m => m.id) });
-}
-function paintBrain() {
-  const box = $('#brainBox'), pick = $('#brainSel'), note = $('#brainNote'); if (!box || !pick || !note) return;
-  box.style.display = onOwnPc() ? '' : 'none'; if (!onOwnPc()) return;
-  const models = pcModelInfo(), opts = brainChoices(models);
-  let saved = 'cloud'; try { const b = readBrain(localStorage.getItem(BRAIN_KEY)); saved = b.mode === 'local' ? b.model : 'cloud'; } catch {}
-  if (!opts.some(o => o.value === saved)) saved = 'cloud';
-  pick.textContent = ''; for (const o of opts) { const e = new Option(o.label, o.value); e.title = o.help; pick.add(e); }
-  pick.value = saved;
-  const say = () => { const r = maxBrainNow(), w = brainWarning(pick.value, models), h = (opts.find(o => o.value === pick.value) || {}).help || ''; note.textContent = (r.note || h) + (w ? ' ' + w : ''); };
-  pick.onchange = () => { try { localStorage.setItem(BRAIN_KEY, saveBrain(pick.value === 'cloud' ? { mode: 'cloud' } : { mode: 'local', model: pick.value })); } catch {} say(); paintUsage(); paintComposerPill(); };
-  say();
-}
-
 // Tells the user, in Settings, what happens when Max runs out. Only shown on the user's own PC.
-async function paintLangs(fresh) {
-  const box = $('#langBox'), list = $('#langList'); if (!box || !list) return;
-  box.style.display = onOwnPc() ? '' : 'none'; if (!onOwnPc()) return;
-  let langs = []; try { langs = (await (await api('api/languages' + (fresh ? '?fresh=1' : ''))).json()).languages || []; } catch { list.textContent = 'Could not check.'; return; }
-  list.textContent = '';
-  const row = (l) => { const d = document.createElement('div'); d.style.cssText = 'padding:3px 0'; const b = document.createElement('b'); b.textContent = (l.installed ? '✓ ' : '✗ ') + l.name; d.append(b); const s = document.createElement('span'); s.style.opacity = '.75'; s.textContent = l.installed ? '  ' + l.version : '  not installed. ' + l.howToInstall; d.append(s); return d; };
-  for (const l of langs.filter(x => x.installed)) list.append(row(l));
-  const missing = langs.filter(x => !x.installed);
-  if (missing.length) { const det = document.createElement('details'); const sm = document.createElement('summary'); sm.textContent = missing.length + ' more you can install'; det.append(sm); for (const l of missing) det.append(row(l)); list.append(det); }
-}
 function paintFallback() {
-  paintBrain(); paintLangs(false);
   const box = $('#fbBox'), note = $('#fbNote'); if (!box || !note) return;
   const onPc = !!server && !remoteBase();
   box.style.display = onPc ? '' : 'none'; if (!onPc) return;
@@ -1145,57 +943,9 @@ function paintFallback() {
     ? `When Agent Max reaches its limit or cannot be reached, your own model (${m.model.replace(/^(gguf|ollama):/, '')}) answers instead. Free, no credits, and you will see a badge on those answers.`
     : 'When Agent Max reaches its limit, your PC can answer instead. Download a model in Models to turn this on. It is automatic and free.';
 }
-// ---------- Studio (only on the PC itself: it edits files on this computer) ----------
-let studio = null, studioLoading = false;
-function showView(name) {
-  const st = name === 'studio', dh = name === 'dash';
-  document.body.classList.toggle('studio-on', st); document.body.classList.toggle('dash-on', dh); $('#studio').hidden = !st; const dz = $('#dash'); if (dz) dz.hidden = !dh;
-  for (const [id, on] of [['#vDash', dh], ['#vChat', name === 'chat'], ['#vStudio', st]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
-  if (dh) paintDashboard();
-  try { localStorage.setItem('pholama_view', name); } catch {}
-}
-let dashMod = null;
-async function paintDashboard() {
-  const el = $('#dash'); if (!el) return;
-  try {
-    dashMod = dashMod || await import('./dashboard.js');
-    await dashMod.mountDashboard(el, { server, openChat: p => { showView('chat'); if (p) { inEl.value = p; inEl.focus(); } else inEl.focus(); }, openModels: () => $('#mgr').click(), openStudio: () => openStudio() });
-  } catch (e) { el.textContent = 'The dashboard could not load: ' + (e && e.message || e); }
-}
-async function openStudio() {
-  showView('studio');
-  if (studio || studioLoading) { if (studio) studio.open(); return; }
-  studioLoading = true;
-  try {
-    let mod; try { mod = await import('./studio.js'); } catch (e1) { mod = await import('./studio.js?fresh=' + Date.now()); }   // a stale cached copy that will not parse: fetch a fresh one once
-    const { createStudio } = mod;
-    studio = createStudio({ api, $, ghHeaders, mount: $('#studio'), getModel: () => { const v = sel.value || ''; if (v !== CLOUD_ID) return v; const b = maxBrainNow(); return b.run === 'local' ? b.model : v; }, onMaxUsage: u => {
-      // Same store the chat uses, so the usage page and the pill at the chat box show Studio's Max messages too.
-      let cur = {}; try { cur = JSON.parse(localStorage.getItem('pholama.maxUsage') || 'null') || {}; } catch {}
-      if (u && u.hit === 'day' && cur.day_cap != null) cur.day_used = cur.day_cap;          // the cloud said the day is full
-      else if (u && u.hit === 'month' && cur.month_cap != null) cur.month_used = cur.month_cap;
-      else if (u && u.day_used != null) cur = { day_used: u.day_used, day_cap: u.day_cap, month_used: u.month_used, month_cap: u.month_cap };
-      else return;
-      try { localStorage.setItem('pholama.maxUsage', JSON.stringify(cur)); } catch {}
-      try { paintUsage(); } catch {} try { paintComposerPill(); } catch {}
-    } });
-    await studio.open();
-  } catch (e) { $('#studio').textContent = 'Studio could not load: ' + (e && e.message || e); console.warn(e); }
-  finally { studioLoading = false; }
-}
-function studioTab(onPc) {
-  const b = $('#vStudio'); if (!b) return;
-  b.style.display = onPc ? '' : 'none';
-  if (!onPc && document.body.classList.contains('studio-on')) showView('chat');
-}
-$('#vDash').onclick = () => showView('dash');
-$('#vChat').onclick = () => showView('chat');
-$('#vStudio').onclick = () => openStudio();
-
 // The welcome screen on the user's own PC: real facts about this machine, nothing invented.
 function paintPcWelcome() {
   const onPc = !!server && !remoteBase(); const badge = $('#pcBadge'); if (badge) badge.style.display = onPc ? '' : 'none';
-  studioTab(onPc);
   const box = $('#pcStatus'); if (!box) return; if (!onPc) { box.style.display = 'none'; return; }
   const hw = server.hardware || {}, n = pcModelNames().filter(v => !/^(web|cpu|cloud):/.test(v)).length;
   const chip = (label, value) => { const c = document.createElement('div'); c.className = 'pcchip'; const a = document.createElement('small'); a.textContent = label; const b = document.createElement('b'); b.textContent = value; c.append(a, b); return c; };
@@ -1209,7 +959,6 @@ function paintPcWelcome() {
   box.style.display = '';
 }
 function paintUsage() {
-  const cn = $('#t_collect'); if (cn && !cn.dataset.on) { cn.dataset.on = '1'; cn.onclick = async () => { cn.disabled = true; await collectRewards(true); cn.disabled = false; await refreshCredits(); }; }
   paintFallback(); paintPcWelcome();
   let uData = null;
   try { uData = JSON.parse(localStorage.getItem('pholama.maxUsage') || 'null'); } catch {}
@@ -1251,9 +1000,7 @@ function paintComposerPill() {
   if (!cb) return;
   cb.onclick = () => openSettings('usage');
   const isCloud = sel.value === CLOUD_ID;
-  if (isCloud && maxBrainNow().run === 'local') {   // Max is running on a local AI: free, nothing counted
-    cb.textContent = 'Max local, free'; cb.className = 'pill'; cb.title = maxBrainNow().note + ' Tap for settings.'; cb.style.display = '';
-  } else if (isCloud) {
+  if (isCloud) {
     let uData = null;
     try { uData = JSON.parse(localStorage.getItem('pholama.maxUsage') || 'null'); } catch {}
     const dUsed = uData ? (uData.day_used ?? 0) : 0;
@@ -1472,38 +1219,53 @@ $('#clearHistBtn').onclick = () => {
   paintHistoryList();
 };
 
-init().then(refreshCredits).then(() => showView('dash'));
-
-// ----- Report rewards + moderator gifts: the database says how many are waiting, the PC server collects them with your own login. -----
-let collecting = false;
-async function collectRewards(say) {
-  if (!server || remoteBase() || collecting) return 0;
-  collecting = true;
-  try {
-    const t = Account.token(); if (!t) { if (say) add('sys', 'Sign in first, then press Collect now.'); return 0; }
-    const r = await (await api('api/bonus/rewards', { method: 'POST', body: JSON.stringify({ token: t }) })).json();
-    if (r && r.granted > 0) { await refreshCredits(); add('sys', '+' + r.granted + ' integration credits added (report rewards and moderator gifts).'); return r.granted; }
-    if (say) add('sys', 'Nothing waiting right now.');
-  } catch { if (say) add('sys', 'Could not reach the account server. Try again in a moment.'); }
-  finally { collecting = false; }
-  return 0;
+// ---------- views: the Dashboard is the landing page, Chat is one tap away ----------
+function showView(name) {
+  if (siteOnly() && name === 'chat') name = 'plat';            // the website has no chat
+  const dh = name === 'dash', ph = name === 'plat';
+  document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph);
+  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph;
+  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vChat', !dh && !ph]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  if (dh) paintDashboard();
+  if (ph) paintPlatform();
 }
-// Gifts and rewards are picked up by themselves every 2 minutes while Pholama is open and you are signed in (not while the tab is hidden).
-setInterval(() => { if (!document.hidden && server && !remoteBase()) collectRewards(); }, 120000);
-document.addEventListener('visibilitychange', () => { if (!document.hidden && server && !remoteBase()) collectRewards(); });
-// ----- GitHub on both: this page only reports where you signed in. The database decides, and the PC server grants the 250. -----
-async function githubBothBonus() {
-  if (!server || remoteBase()) return;   // only the real PC app counts as the PC
+// The website (no PC server) is only the Platform and info pages. Chat, tools and big models are in the PC app.
+const siteOnly = () => !server;
+function markSite() { document.body.classList.toggle('site-only', siteOnly()); }
+let platMod = null;
+async function paintPlatform() {
+  const host = $('#platHost'); if (!host) return;
   try {
-    if (!Account.isGithub()) return;
-    await Account.recordSurface('pc');
-    const t = Account.token(); if (!t) return;
-    const r = await (await api('api/bonus/github', { method: 'POST', body: JSON.stringify({ token: t }) })).json();
-    if (r && r.granted) { await refreshCredits(); add('sys', 'You used GitHub on both the site and the PC app. +250 credits added.'); }
-  } catch {}
+    platMod = platMod || await import('./platformui.js');
+    await platMod.mountPlatform(host, { Account, cfg: () => window.PHOLAMA || {}, login: () => { openSettings('account'); }, onProfile: paintWhoami });
+  } catch (e) { host.textContent = 'The Platform could not load: ' + (e && e.message || e); }
 }
+// "Logged in as Name" in the header, on PC and on phones. Shows the platform name when there is one.
+async function paintWhoami(name) {
+  const b = $('#whoami'); if (!b) return;
+  const u = Account.user(); if (!u) { b.style.display = 'none'; return; }
+  let n = name; if (!n) { try { const m = await import('./platform.js'); const p = await m.makePlatform(Account, () => window.PHOLAMA || {}).profile(); n = p && p.platform_name; } catch {} }
+  b.textContent = 'Logged in as ' + (n || Account.name() || 'you'); b.style.display = ''; b.onclick = () => showView('plat');
+}
+let dashMod = null;
+async function paintDashboard() {
+  const el = $('#dash'); if (!el) return;
+  try {
+    dashMod = dashMod || await import('./dashboard.js');
+    await dashMod.mountDashboard(el, { server, openChat: p => { showView('chat'); if (p) { inEl.value = p; inEl.focus(); } else inEl.focus(); }, openModels: () => $('#mgr').click() });
+    if (!server) { try { const infoMod = await import('./info.js'); const rel = await (await fetch('releases.json', { cache: 'no-cache' })).json().catch(() => null); const host = document.createElement('div'); host.id = 'infoHost'; el.appendChild(host); infoMod.mountInfo(host, { releases: rel && rel.releases }); } catch {} }
+  } catch (e) { el.textContent = 'The dashboard could not load: ' + (e && e.message || e); }
+}
+$('#vDash').onclick = () => showView('dash');
+$('#vChat').onclick = () => showView('chat');
+$('#vPlat').onclick = () => showView('plat');
+init().then(refreshCredits).then(() => { markSite(); showView(siteOnly() ? 'plat' : 'dash'); });
 
 // ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----
+// ----- GitHub on both: the site only reports that you signed in here. The 250 is granted by the PC app once the database sees both. -----
+async function recordSiteLogin() {
+  try { if (Account.isGithub()) await Account.recordSurface('site'); } catch {}
+}
 async function claimBonus() {
   if (!server || remoteBase()) return;   // only on the PC itself
   try { const t = Account.token(); if (!t) return; const r = await (await api('api/bonus', { method: 'POST', body: JSON.stringify({ token: t }) })).json(); if (r && r.granted) { await refreshCredits(); } } catch {}
@@ -1553,7 +1315,7 @@ function elPaint() {
       const st = logInfo(e.status), det = document.createElement('details'); det.className = 'elrow tone-' + st.tone;
       const sm = document.createElement('summary');
       const chip = document.createElement('span'); chip.className = 'elchip'; chip.textContent = st.word + (e.kind === 'bonus' ? ' +' + e.credits : '');
-      const what = document.createElement('span'); what.className = 'elwhat'; what.textContent = elTitle(e);
+      const what = document.createElement('span'); what.className = 'elwhat'; what.textContent = e.cmd ? e.cmd.replace(/\s+/g, ' ').slice(0, 120) : (e.kind === 'bonus' ? 'Login bonus' : 'Event');
       const tm = document.createElement('span'); tm.className = 'eltime'; tm.textContent = fmtTime(e.t);
       sm.append(chip, what, tm); det.append(sm);
       const body = document.createElement('div'); body.className = 'elbody';
@@ -1567,19 +1329,8 @@ async function paintEditLog() {
   const box = $('#editLog'); if (!box) return;
   if (!server || remoteBase()) { box.textContent = 'The edit log lives on the PC. Open Pholama on the PC to see it.'; $('#elFilters').textContent = ''; $('#elSummary').textContent = ''; return; }
   try { elEntries = (await (await api('api/editlog?n=200')).json()).entries || []; } catch { elEntries = []; }
-  elPaint(); elStartLive();
+  elPaint();
 }
-// Live: new log entries arrive by themselves. One stream, reconnects after a drop, repaints at most 4 times a second, and stops when the panel is closed.
-let elLive = null, elTimer = null, elRetry = 0;
-function elSchedulePaint() { if (elTimer) return; elTimer = setTimeout(() => { elTimer = null; elPaint(); }, 250); }
-function elStartLive() {
-  if (elLive || !server || remoteBase() || typeof EventSource === 'undefined') return;
-  try { elLive = new EventSource('api/editlog/stream'); } catch { return; }
-  elLive.onopen = () => { elRetry = 0; const s = $('#elLiveDot'); if (s) s.textContent = 'Live'; };
-  elLive.onmessage = ev => { let e; try { e = JSON.parse(ev.data); } catch { return; } elEntries = mergeLive(elEntries, e, 300); elSchedulePaint(); };
-  elLive.onerror = () => { const s = $('#elLiveDot'); if (s) s.textContent = 'Reconnecting...'; elStopLive(); const wait = Math.min(15000, 1000 * 2 ** Math.min(elRetry++, 4)); setTimeout(elStartLive, wait); };
-}
-function elStopLive() { if (elLive) { try { elLive.close(); } catch {} elLive = null; } }
 $('#logRefresh').onclick = paintEditLog;
 $('#logClear').onclick = async () => { if (!confirm('Clear the edit log? This cannot be undone.')) return; try { await api('api/editlog', { method: 'DELETE' }); } catch {} paintEditLog(); };
 
@@ -1587,7 +1338,7 @@ $('#logClear').onclick = async () => { if (!confirm('Clear the edit log? This ca
 const GHK = 'pholama_gh_token';
 // A pasted token wins. Otherwise a GitHub sign-in supplies it, so nothing has to be pasted.
 const ghToken = () => { try { return localStorage.getItem(GHK) || Account.githubToken() || ''; } catch { return ''; } };
-function ghHeaders() { const t = ghToken(), p = (typeof Account !== 'undefined' && Account.token && Account.token()) || ''; return { ...(t ? { 'x-github-token': t } : {}), ...(p ? { 'x-pholama-token': p } : {}) }; }   // the Platform login is only used so the AI can READ the Platform as you
+function ghHeaders() { const t = ghToken(); return t ? { 'x-github-token': t } : {}; }
 function ghPaint() { const t = ghToken(); const el = $('#ghState'); if (el) el.textContent = t ? (localStorage.getItem(GHK) ? 'GitHub connected on this device (token saved here only).' : 'GitHub connected through your GitHub sign-in. No token needed.') : 'Not connected. Reading public repos works without a token.'; }
 $('#ghSave').onclick = () => { const v = $('#ghTok').value.trim(); if (!v) return; try { localStorage.setItem(GHK, v); } catch {} $('#ghTok').value = ''; ghPaint(); };
 $('#ghClear').onclick = () => { try { localStorage.removeItem(GHK); } catch {} ghPaint(); };
@@ -1650,81 +1401,20 @@ document.querySelectorAll('[data-copy]').forEach(b => b.addEventListener('click'
 
 
 // ---------- updates (PC app only; the server says if it is the PC app) ----------
-let shownBanner = null;
-// The version this page was loaded with. If the server later restarts on a newer one (an automatic update), reload so the page and Studio run the new code,
-// but never while Studio is working, has unsaved edits, or a message is being typed.
-let pageVersion = null, reloadWaiting = false;
-function reloadForNewVersion(now) {
-  if (now === pageVersion || reloadWaiting) return; reloadWaiting = true;
-  const tryIt = () => { let busy = false; try { busy = !!(studio && studio.isBusy && studio.isBusy()) || !!((document.getElementById('in') || {}).value || '').trim(); } catch {} if (busy) { setTimeout(tryIt, 5000); return; } location.reload(); };
-  setTimeout(tryIt, 1500);
-}
 async function paintUpdate() {
   try {
-    const r = await fetch('/api/update', { cache: 'no-store' }); if (!r.ok) return; const u = await r.json();
-    if (u.current) { if (pageVersion === null) pageVersion = u.current; else reloadForNewVersion(u.current); }
-    const state = updateInfo(u);
-    updateBannerProgress(u.progress);
+    const r = await fetch('/api/update'); if (!r.ok) return; const u = await r.json();
     $('#updBox').style.display = ''; $('#updAuto').checked = u.auto !== false;
-    $('#updPill').style.display = state.visible ? '' : 'none';
-    $('#updPill').textContent = state.ready ? 'Update ready' : 'Update available';
-    $('#updPill').title = state.ready ? 'A new version was downloaded' : 'A new version is available to install';
-    $('#updRestart').style.display = state.ready ? '' : 'none';
-    const bannerKey = state.visible ? `${u.latest}:${state.ready ? 'ready' : 'available'}` : null;
-    if (state.visible) {
-      if (shownBanner !== bannerKey) {
-        shownBanner = bannerKey; let t = '';
-        try { t = ((await (await fetch('releases.json', { cache: 'no-cache' })).json()).releases || []).find(r => r.version === u.latest)?.title || ''; } catch {}
-        showBanner({ version: u.latest, title: (u.whatsNew && u.whatsNew.version === u.latest && u.whatsNew.title) || t, notes: u.whatsNew && u.whatsNew.version === u.latest ? incomingNotes(u.whatsNew) : [], ready: state.ready,
-          onRestart: () => restartPholama($('#updRestart'), u.latest),
-          onInstall: button => installAvailableUpdate(u.latest, button) });
-      }
-    } else { shownBanner = null; hideBanner(); }
-    $('#updMsg').textContent = state.ready ? `Version ${u.latest} is downloaded. Press Restart now to use it.`
-      : u.error ? u.error
-      : state.available ? `New version ${u.latest} is available. You can install it now, or leave automatic updates on.`
+    $('#updPill').style.display = u.ready ? '' : 'none';
+    $('#updMsg').textContent = u.ready ? `Version ${u.latest} is downloaded. Close Pholama and start it again to use it.`
+      : u.error ? u.error : u.latest && u.latest !== u.current ? `New version ${u.latest} is available. Turn on automatic updates or press Check now.`
       : `You have the newest version (${u.current}).`;
   } catch {}
 }
-let progTimer = null;
-const watchProgress = on => { if (on && !progTimer) progTimer = setInterval(() => paintUpdate().catch(() => {}), 500); if (!on && progTimer) { clearInterval(progTimer); progTimer = null; } };
-async function installAvailableUpdate(version, button) {
-  if (button) { button.disabled = true; button.textContent = 'Installing...'; }
-  watchProgress(true);
-  $('#updMsg').textContent = `Downloading version ${version}...`;
-  try {
-    const r = await fetch('/api/update/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ install: true }) });
-    const result = await r.json().catch(() => ({}));
-    if (!r.ok || result.error) $('#updMsg').textContent = result.error || 'Could not start the update. Try again.';
-  } catch { /* The server may be restarting after installing; the version watcher below handles that case. */ }
-  watchProgress(false);
-  if (button && button.isConnected) { button.disabled = false; button.textContent = 'Install update'; }
-  paintUpdate();
-}
-// Ask this PC's server to start a fresh copy of itself, wait for it to come back, then reload the page so the new version is what you see.
-async function restartPholama(btn, version) {
-  if (!version) { try { const u = await (await fetch('/api/update', { cache: 'no-store' })).json(); version = u.latest || null; } catch {} }
-  hideBanner(); const scene = openInstalling(version); let sceneOpen = true;
-  const fail = m => { if (sceneOpen) { sceneOpen = false; scene.fail(m); } };
-  if (btn) { btn.disabled = true; btn.textContent = 'Restarting...'; }
-  await new Promise(r => setTimeout(r, 700)); scene.step(1);
-  try { const r = await fetch('/api/restart', { method: 'POST' }); if (!r.ok) throw new Error((await r.json().catch(() => ({}))).error || 'failed'); }
-  catch (e) { if (!/NetworkError|Failed to fetch|fetch failed|networkerror/i.test(String(e.message || e))) { if (btn) { btn.disabled = false; btn.textContent = 'Restart now'; } fail('Could not restart from here'); alert('Could not restart from here (' + e.message + '). Try again.'); return; } }
-  scene.step(2); await new Promise(r => setTimeout(r, 2500));
-  for (let i = 0; i < 60; i++) { try { const r = await fetch('/api/version', { cache: 'no-store' }); if (r.ok) { const v = await r.json(); if (!version || v.version === version) { scene.done(); await new Promise(r => setTimeout(r, 900)); location.reload(); return; } } } catch {} await new Promise(r => setTimeout(r, 700)); }
-  if (btn) { btn.disabled = false; btn.textContent = 'Restart now'; } fail('Pholama did not come back'); alert('Pholama did not come back on its own. Open it again from your Desktop icon.');
-}
-window.restartPholama = restartPholama;
-$('#updRestart').onclick = e => restartPholama(e.currentTarget, null);
-$('#updCheck').onclick = async () => { $('#updCheck').disabled = true; $('#updMsg').textContent = 'Checking and installing if an update is available...'; try { await fetch('/api/update/check', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ install: true }) }); } catch {} finally { $('#updCheck').disabled = false; } paintUpdate(); };
+$('#updCheck').onclick = async () => { $('#updMsg').textContent = 'Checking...'; try { await fetch('/api/update/check', { method: 'POST' }); } catch {} paintUpdate(); };
 $('#updAuto').onchange = async e => { try { await fetch('/api/update/auto', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ auto: e.target.checked }) }); } catch {} paintUpdate(); };
 $('#updPill').onclick = () => { $('#opt').click(); };
-paintUpdate(); setInterval(paintUpdate, 60 * 1000);   // ask the server every minute
-document.addEventListener('visibilitychange', () => { if (!document.hidden) paintUpdate(); });
-// An automatic update restarts the server in the background; once the replacement reports
-// a different version, refresh this already-open tab so it cannot keep serving stale Studio code.
-{ let loadedServerVersion = '', updatePlaying = false; const watchServerVersion = async () => { if (!server) return; try { const r = await fetch('/api/version', { cache: 'no-store' }); if (!r.ok) return; const v = await r.json(); if (!loadedServerVersion) loadedServerVersion = v.version; else if (v.version && v.version !== loadedServerVersion && !updatePlaying) { updatePlaying = true; playAutoUpdate(v.version); } } catch {} }; watchServerVersion(); setInterval(watchServerVersion, 5000); }
-celebrateWithRetry(async () => { const v = await (await fetch(server ? '/api/version' : 'releases.json', { cache: 'no-cache' })).json(); return server ? v.version : v.latest; }, async () => (await (await fetch('releases.json', { cache: 'no-cache' })).json()).releases || []).catch(() => {});
+paintUpdate(); setInterval(paintUpdate, 10 * 60 * 1000);
 
 
 // ---------- PC celebration banner (website only; hidden on the PC app itself, and once dismissed) ----------
@@ -1735,13 +1425,3 @@ celebrateWithRetry(async () => { const v = await (await fetch(server ? '/api/ver
   setTimeout(() => { if (!gone && !server) box.hidden = false; }, 1500);
   $('#pcPromoX').onclick = () => { box.hidden = true; try { localStorage.setItem('pholama.promo.pc', '1'); } catch {} };
 })();
-
-// ----- Recent local AIs: once per app start, when the browser is idle, send only the model NAMES to your Platform profile -----
-let aisShared = false, aisNames = [];
-function shareRecentAis(names) {
-  if (names) aisNames = names;
-  if (aisShared || !server || remoteBase() || !Account.user()) return;
-  aisShared = true;
-  const go = () => { Account.reportRecentAis(aisNames); };
-  if (window.requestIdleCallback) requestIdleCallback(go, { timeout: 8000 }); else setTimeout(go, 3000);
-}
