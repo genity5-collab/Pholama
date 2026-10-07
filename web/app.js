@@ -1148,19 +1148,11 @@ function paintFallback() {
 // ---------- Studio (only on the PC itself: it edits files on this computer) ----------
 let studio = null, studioLoading = false;
 function showView(name) {
-  const st = name === 'studio', dh = name === 'dash', ph = name === 'plat';
-  document.body.classList.toggle('studio-on', st); document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph);
-  $('#studio').hidden = !st; const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph;
-  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vChat', name === 'chat'], ['#vStudio', st]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  const st = name === 'studio', dh = name === 'dash';
+  document.body.classList.toggle('studio-on', st); document.body.classList.toggle('dash-on', dh); $('#studio').hidden = !st; const dz = $('#dash'); if (dz) dz.hidden = !dh;
+  for (const [id, on] of [['#vDash', dh], ['#vChat', name === 'chat'], ['#vStudio', st]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
   if (dh) paintDashboard();
-  if (ph) paintPlatform();
   try { localStorage.setItem('pholama_view', name); } catch {}
-}
-let platMod = null;
-async function paintPlatform() {
-  const host = $('#platHost'); if (!host) return;
-  try { platMod = platMod || await import('./platformui.js'); await platMod.mountPlatform(host, { Account, cfg: () => window.PHOLAMA || {}, login: () => $('#settingsBtn').click(), onProfile: () => {} }); }
-  catch (e) { host.textContent = 'The Platform could not load: ' + (e && e.message || e); }
 }
 let dashMod = null;
 async function paintDashboard() {
@@ -1197,7 +1189,6 @@ function studioTab(onPc) {
   if (!onPc && document.body.classList.contains('studio-on')) showView('chat');
 }
 $('#vDash').onclick = () => showView('dash');
-$('#vPlat').onclick = () => showView('plat');
 $('#vChat').onclick = () => showView('chat');
 $('#vStudio').onclick = () => openStudio();
 
