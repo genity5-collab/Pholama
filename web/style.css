@@ -534,6 +534,10 @@ header{border-bottom:1px solid var(--line);backdrop-filter:blur(18px);background
 .st-setuprow{display:flex;flex-wrap:wrap;gap:8px;align-items:center;padding:8px 10px;border:1px solid var(--line);border-radius:10px;margin:6px 0;background:var(--card)}
 .st-setuprow.ok span{color:var(--ok)}.st-setuprow small{flex-basis:100%;color:var(--mut)}.st-setuprow button{margin-left:auto;min-height:34px;padding:4px 12px}
 .st-setupprog,.st-setupnote{margin-top:8px;font-size:13px;color:var(--mut)}
+.st-setuphead:not(:first-child){margin-top:16px}
+.st-setuprow input[type=text],.st-setuprow input[type=password]{flex:1 1 100%;min-width:0;margin:0}
+.st-setuprow button.st-primary{margin-left:0;background:var(--acc);color:var(--acct);border-color:transparent}
+.st-setuprow button:disabled{opacity:.55;cursor:default}
 
 /* Pholama monochrome refresh: calm surfaces, black-and-white controls, and the supplied llama mark. */
 :root{--bg:#fafaf8;--fg:#171717;--mut:#70706d;--line:#e4e4df;--card:#ffffff;--card2:#f1f1ed;--acc:#171717;--acct:#ffffff;--bubble:#eeeeea;--ok:#557a4d;--err:#b84d4d;--warn:#9a6a23;--glow:rgba(0,0,0,.10)}

@@ -183,7 +183,7 @@ function startBackground(hours = 6) {
 // Scheduled OS task: respect the user's auto-update setting and do nothing if the app is running;
 // the live server performs its own more-frequent check and owns restart handling.
 async function offlineCheck({ log = () => {}, isRunning, runUpdate = update } = {}) {
-  if (readSet().auto === false) return { ok: true, skipped: 'automatic-updates-off' };
+  if (readSet().auto !== true) return { ok: true, skipped: 'automatic-updates-off' };   // updates are the user's choice: only when they turned it on
   let running = false;
   try {
     if (isRunning) running = await isRunning();

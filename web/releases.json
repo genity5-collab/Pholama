@@ -1,6 +1,20 @@
 {
- "latest": "0.9.40",
+ "latest": "0.9.41",
  "releases": [
+  {
+   "version": "0.9.41",
+   "date": "2026-10-07",
+   "title": "Updates really are your choice, plus tool servers and project tools in Studio.",
+   "notes": [
+    "Fixed: updates are now your choice everywhere. If you never turned automatic updates on, nothing installs in the background any more, not even while Pholama is closed. You still see what is new and can update whenever you like.",
+    "New: Pholama checks that Python and the model engine are still there every time it starts, including after an update, and installs only what is missing. It gives up after 3 failed tries, so having no internet can never make it loop.",
+    "New: Studio > Tools lets you add tool servers: programs that give the AI extra tools. You add them yourself, the AI can never start one, and every tool it uses asks for your click first. A small Python tool server for reading files in your Pholama workspace is built in.",
+    "New: the AI is now told exactly which arguments each tool takes, so smaller models fill them in correctly.",
+    "New: Studio > Project keeps variables ({{NAME}}) on your PC for use in the preview. The AI sees the names, never the values, and exports never include them. You can also export a project to one file and import it again; import checks every file name and never overwrites a project.",
+    "New: Studio > Setup lists the models of 4 GB or less that are rated good at tool calling, newest first, and says whether each fits your PC. Nothing is downloaded for you.",
+    "Fixed: importing a project now opens the imported project straight away."
+   ]
+  },
   {
    "version": "0.9.40",
    "date": "2026-10-06",

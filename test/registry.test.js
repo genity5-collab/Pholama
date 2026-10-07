@@ -7,7 +7,9 @@ R.resetRate();
 ok('read_file is READ, write_file WRITE, delete_file DESTRUCTIVE, run_tests ADMIN', R.levelOf('read_file') === 'READ' && R.levelOf('write_file') === 'WRITE' && R.levelOf('delete_file') === 'DESTRUCTIVE' && R.levelOf('run_tests') === 'ADMIN');
 ok('an unknown tool is ADMIN (never silently free)', R.levelOf('mystery_tool') === 'ADMIN');
 ok('a custom GET tool is READ, POST is WRITE, DELETE is DESTRUCTIVE', R.levelOf('x_a', { method: 'GET' }) === 'READ' && R.levelOf('x_a', { method: 'POST' }) === 'WRITE' && R.levelOf('x_a', { method: 'DELETE' }) === 'DESTRUCTIVE');
-ok('an MCP tool is WRITE (effects unknown)', R.levelOf('mcp_server_tool') === 'WRITE');
+ok('a tool-server (MCP) tool is ADMIN: it is a program the user added and can do anything', R.levelOf('mcp_server_tool') === 'ADMIN' && R.levelOf('mcp:server:tool') === 'ADMIN');
+ok('a tool-server tool ALWAYS asks, even when "approve writes" is off', R.gate('mcp_files_read_file', { path: 'a' }, { known: new Set(['mcp_files_read_file']), policy: { approveWrites: false, approveDestructive: false } }).approve === true);
+ok('a tool-server tool is refused in a chat that only allows WRITE', R.gate('mcp_files_read_file', {}, { known: new Set(['mcp_files_read_file']), maxLevel: 'WRITE' }).ok === false);
 ok('search_code and edit_code are real tools, not aliases', R.canon('create_file') === 'write_file' && R.canon('get_current_time') === 'current_time' && R.canon('search_code') === 'search_code' && R.canon('edit_code') === 'edit_code');
 ok('approval: READ never, WRITE only if policy, DESTRUCTIVE by default, ADMIN always', !R.needsApproval('READ') && !R.needsApproval('WRITE') && R.needsApproval('WRITE', { approveWrites: true }) && R.needsApproval('DESTRUCTIVE') && !R.needsApproval('DESTRUCTIVE', { approveDestructive: false }) && R.needsApproval('ADMIN', { approveDestructive: false }));
 

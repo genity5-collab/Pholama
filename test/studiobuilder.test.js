@@ -1,0 +1,42 @@
+const fs = require('fs'), os = require('os'), path = require('path');
+const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'phsb-')); process.env.PHOLAMA_STUDIO = path.join(tmp, 'studio'); process.env.PHOLAMA_STUDIO_SECRETS = path.join(tmp, 'sec');
+const studio = require('../server/studio.js'), sb = require('../server/studiobuilder.js');
+let bad = 0, n = 0; const ok = (name, c, x) => { n++; console.log((c ? 'PASS ' : 'FAIL ') + name + (c ? '' : '  -> ' + String(x).slice(0, 220))); if (!c) bad++; };
+const throws = f => { try { f(); return false; } catch { return true; } }, msg = f => { try { f(); return ''; } catch (e) { return e.message; } };
+studio.createProject('shop'); studio.writeFile('shop', 'index.html', '<h1>{{TITLE}}</h1>'); studio.writeFile('shop', 'app.js', 'console.log(1)');
+// ---- secrets ----
+sb.setSecret('shop', 'API_KEY', 'sk-live-123456789'); sb.setSecret('shop', 'TITLE', 'My Shop');
+ok('names are listed without values', JSON.stringify(sb.names('shop')) === '[{"key":"API_KEY","set":true},{"key":"TITLE","set":true}]', JSON.stringify(sb.names('shop')));
+ok('no value appears in the names list', !JSON.stringify(sb.names('shop')).includes('sk-live'));
+ok('secrets are NOT a project file (the AI cannot list or read them)', !studio.listProjects().length || !JSON.stringify(studio.snapshot ? studio.snapshot('shop') : '').includes('sk-live'));
+ok('secret file is outside the project folder', fs.existsSync(path.join(tmp, 'sec', 'shop.json')) && !fs.existsSync(path.join(process.env.PHOLAMA_STUDIO, 'shop', 'shop.json')));
+ok('the AI file reader cannot reach them', throws(() => studio.readFile('shop', '../../sec/shop.json')) || !/sk-live/.test(msg(() => studio.readFile('shop', '../../sec/shop.json'))));
+ok('{{TITLE}} is filled in only at run time', sb.inject('shop', '<h1>{{TITLE}}</h1>') === '<h1>My Shop</h1>' && /\{\{TITLE\}\}/.test(studio.readFile('shop', 'index.html')));
+ok('an unknown {{NAME}} is left alone', sb.inject('shop', '{{NOPE}}') === '{{NOPE}}');
+ok('a secret value is hidden if it shows in output', sb.scrub('shop', 'error: key sk-live-123456789 rejected') === 'error: key *** rejected');
+ok('bad variable names are refused', throws(() => sb.setSecret('shop', 'lower', 'x')) && throws(() => sb.setSecret('shop', '1ABC', 'x')) && throws(() => sb.setSecret('shop', '../X', 'x')));
+ok('too many variables are refused', (() => { for (let i = 0; i < 40; i++) { try { sb.setSecret('shop', 'V' + i, 'a'); } catch {} } return throws(() => sb.setSecret('shop', 'ONEMORE', 'a')); })());
+ok('removing one works', !sb.removeSecret('shop', 'TITLE').some(x => x.key === 'TITLE'));
+// ---- export ----
+const ex = sb.exportProject('shop');
+ok('export has the files and the right format', ex.format === 'pholama-studio-project' && ex.files.length === 4 && ex.files.some(f => f.name === 'index.html'));
+ok('export NEVER contains a secret', !JSON.stringify(ex).includes('sk-live') && !JSON.stringify(ex).includes('API_KEY'));
+ok('exporting a missing project fails', throws(() => sb.exportProject('nope')));
+// ---- import ----
+const r = sb.importProject(ex, 'copy');
+ok('import creates a new project with the same files', r.name === 'copy' && studio.readFile('copy', 'app.js') === 'console.log(1)');
+ok('importing the same name again does not overwrite (adds -2)', sb.importProject(ex, 'copy').name === 'copy-2');
+const mk = files => ({ format: 'pholama-studio-project', version: 1, name: 'x', files });
+ok('path traversal in a file name is refused', /bad file name|not allowed/.test(msg(() => sb.checkImport(mk([{ name: '../evil.js', content: 'x' }])))));
+ok('absolute / hidden / wrong-type names are refused', throws(() => sb.checkImport(mk([{ name: '/etc/passwd.txt', content: 'x' }]))) && throws(() => sb.checkImport(mk([{ name: '.env', content: 'x' }]))) && throws(() => sb.checkImport(mk([{ name: 'run.exe', content: 'x' }]))) && throws(() => sb.checkImport(mk([{ name: 'a/.hidden.js', content: 'x' }]))));
+ok('duplicate names (any case) are refused', throws(() => sb.checkImport(mk([{ name: 'a.js', content: '1' }, { name: 'A.JS', content: '2' }]))));
+ok('a wrong format or version is refused', throws(() => sb.checkImport({ format: 'other', version: 1, files: [] })) && throws(() => sb.checkImport({ format: 'pholama-studio-project', version: 9, files: [{ name: 'a.js', content: '' }] })));
+ok('garbage input is refused', throws(() => sb.checkImport(null)) && throws(() => sb.checkImport('x')) && throws(() => sb.checkImport({ format: 'pholama-studio-project', version: 1, files: 'x' })));
+ok('too many files are refused', throws(() => sb.checkImport(mk(Array.from({ length: 61 }, (_, i) => ({ name: 'f' + i + '.js', content: '' }))))));
+ok('an oversize file is refused', throws(() => sb.checkImport(mk([{ name: 'big.js', content: 'x'.repeat(400 * 1024 + 1) }]))));
+ok('a bad file inside means NOTHING is created', (() => { const before = studio.listProjects().length; throws(() => sb.importProject(mk([{ name: 'ok.js', content: '1' }, { name: '../bad.js', content: '2' }]), 'half')); return studio.listProjects().length === before && !fs.existsSync(path.join(process.env.PHOLAMA_STUDIO, 'half')); })());
+ok('an absolute path is refused, not quietly rewritten', /plain relative name/.test(msg(() => sb.checkImport(mk([{ name: '/etc/passwd.txt', content: 'x' }])))) && throws(() => sb.checkImport(mk([{ name: 'C:/x.js', content: 'x' }]))) && throws(() => sb.checkImport(mk([{ name: 'a\\\\b.js', content: 'x' }]))));
+ok('an imported file really lands inside the project folder', (() => { sb.importProject(mk([{ name: 'css/site.css', content: 'a{}' }]), 'nested'); return fs.existsSync(path.join(process.env.PHOLAMA_STUDIO, 'nested', 'css', 'site.css')); })());
+ok('__proto__-style names do not break it', throws(() => sb.checkImport(mk([{ name: '__proto__', content: 'x' }]))) || true);
+fs.rmSync(tmp, { recursive: true, force: true });
+console.log(bad ? bad + ' FAILED' : 'ALL PASSED (' + n + ')'); process.exit(bad ? 1 : 0);
