@@ -1,6 +1,6 @@
 import { mediaProblem, mediaPathFor, bucketFor } from './social.js';
 // Pholama Platform: profile, communities, posts (3 hour life), reactions, reports, recent local AIs.
-// This file only TALKS to Supabase. The database rules in supabase/platform.sql are what actually enforce
+// This file only TALKS to Supabase. The database rules are what actually enforce
 // the limits, so a changed page cannot keep a post alive, skip a filter or ban-dodge.
 export const LIFETIME_MS = 3 * 60 * 60 * 1000;
 export const REACTIONS = [['like', 'Like'], ['love', 'Love'], ['laugh', 'Haha'], ['wow', 'Wow'], ['fire', 'Fire']];
@@ -142,7 +142,7 @@ export function makePlatform(Account, cfg) {
     async ticketMessages(id) { return (await Account.rest('pholama_ticket_messages?select=id,from_mod,body,media_path,created_at&ticket_id=eq.' + encodeURIComponent(id) + '&order=id.asc')) || []; },
     async say(id, body, file) { const media = file ? await upload('ticket', file) : null; return Account.rest('rpc/pholama_ticket_say', { method: 'POST', body: JSON.stringify({ p_ticket: id, p_body: body || '', p_media: media }) }); },
     closeTicket: (id, closed = true) => Account.rest('rpc/pholama_ticket_close', { method: 'POST', body: JSON.stringify({ p_ticket: id, p_closed: !!closed }) }),
-    // --- replies under a post (the big post window). Needs supabase/post_replies.sql. ---
+    // --- replies under a post (the big post window). ---
     async replies(postId) {
       const rows = (await Account.rest('pholama_post_replies?select=id,user_id,body,media_path,created_at,hidden&post_id=eq.' + encodeURIComponent(postId) + '&order=id.asc&limit=200')) || [];
       const uids = [...new Set(rows.map(r => r.user_id))];

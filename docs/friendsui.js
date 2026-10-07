@@ -1,6 +1,7 @@
 // Pholama Platform: Friends and Private Chat UI
 import { makeSocial, relation, sortFriends, unreadTotal, socialFriendly, dmProblem, isVideoPath } from './social.js';
 import { attachPicker, lazyMedia, installMediaStyles } from './mediaui.js';
+import { MAX_FRIEND, makeMaxFriend, maxProblem, maxFriendly, leftLine } from './maxfriend.js';
 
 const el = (tag, cls, text) => {
   const n = document.createElement(tag);
@@ -90,6 +91,8 @@ export function friendsStyles() {
 
 .pfr-item { display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 12px; background: var(--card2); }
 .pfr-item-info { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; }
+.pfr-maxbox { display: flex; flex-direction: column; gap: 8px; background: var(--card); border: 1px solid var(--line); border-radius: var(--r); padding: 12px; }
+.pfr-max-badge { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; border-radius: 50%; background: var(--acc, #5865f2); color: #fff; font-weight: 700; font-size: 12px; flex: none; }
 .pfr-avatar { width: 34px; height: 34px; border-radius: 50%; background: var(--line); color: var(--fg); display: grid; place-items: center; font-weight: 700; font-size: 14px; flex-shrink: 0; overflow: hidden; }
 .pfr-avatar img { width: 100%; height: 100%; object-fit: cover; }
 .pfr-name { font-weight: 600; font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: flex; align-items: center; gap: 6px; }
@@ -154,6 +157,7 @@ export async function mountFriends(host, ctx) {
   installFriendsStyles();
   const { Account, cfg, onUnread, startCall } = ctx || {};
   const S = makeSocial(Account, cfg);
+  const MX = makeMaxFriend(Account);   // Agent Max: a built-in friend. Not a row in the friends table, so it cannot be removed, blocked or counted.
   const me = Account && Account.user && Account.user() ? Account.user().id : '';
 
   host.textContent = '';
@@ -232,6 +236,18 @@ export async function mountFriends(host, ctx) {
 
   function renderSidebar() {
     sidebar.textContent = '';
+
+    // Agent Max is always first. It has no Remove, Block or Report button on purpose.
+    const secMax = el('section', 'pfr-maxbox');   // not a .pfr-section: the Requests / Friends / Sent / Blocked sections keep their places
+    secMax.append(el('div', 'pfr-section-title', 'Agent Max'));
+    const maxItem = el('div', 'pfr-item pfr-max-item');
+    const maxInfo = el('div', 'pfr-item-info');
+    maxInfo.append(el('span', 'pfr-max-badge', 'AM'), el('span', 'pfr-name', MAX_FRIEND.name));
+    const maxActs = el('div', 'pfr-actions');
+    maxActs.append(btn('Chat', () => openChat(MAX_FRIEND), 'p'));
+    maxItem.append(maxInfo, maxActs);
+    secMax.append(maxItem);
+    sidebar.append(secMax);
 
     const requestsForYou = socialList.filter(r => relation(r) === 'received');
     const friends = sortFriends(socialList.filter(r => relation(r) === 'friend'));
@@ -395,8 +411,29 @@ export async function mountFriends(host, ctx) {
     }
   });
 
+  async function sendToMax() {
+    const text = textarea.value;
+    const bad = maxProblem(text);
+    if (bad) { errorLine.textContent = bad; return; }
+    sendMsgBtn.disabled = true; errorLine.textContent = '';
+    try {
+      const res = await MX.send(text);
+      if (res.ok === false) { errorLine.textContent = leftLine(res.info) || 'No messages left today.'; return; }
+      textarea.value = '';
+      await loadMessages({ scrollToBottom: true });
+      if (res.answered === false) errorLine.textContent = 'Agent Max did not answer. You were not charged. Try again.';
+      await showMaxLeft();
+    } catch (err) {
+      errorLine.textContent = maxFriendly(err);
+    } finally {
+      sendMsgBtn.disabled = false;
+    }
+  }
+  async function showMaxLeft() { try { hintLine.textContent = leftLine(await MX.left()); } catch (e) { hintLine.textContent = ''; } }
+
   async function handleSendMsg() {
     if (!activeFriend) return;
+    if (activeFriend.builtin) return sendToMax();
     const text = textarea.value;
     const file = picker && picker.get ? picker.get() : null;
     const bad = dmProblem(text, !!file);
@@ -451,6 +488,20 @@ export async function mountFriends(host, ctx) {
 
   async function loadMessages({ isPoll = false, scrollToBottom = false } = {}) {
     if (!activeFriend || !host.isConnected) return;
+    if (activeFriend.builtin) {
+      try {
+        const bubbles = await MX.history();
+        messagesBody.textContent = '';
+        if (!bubbles.length) messagesBody.append(el('div', 'pfr-chat-empty', 'Say hi to Agent Max!'));
+        for (const b of bubbles) {
+          const w = el('div', 'pfr-msg ' + (b.mine ? 'pfr-mine' : 'pfr-theirs'));
+          const bub = el('div', 'pfr-bub'); bub.append(el('div', null, b.text));
+          w.append(bub); messagesBody.append(w);
+        }
+        messagesBody.scrollTop = messagesBody.scrollHeight;
+      } catch (err) { if (!isPoll) errorLine.textContent = maxFriendly(err); }
+      return;
+    }
     try {
       const msgs = await S.messages(activeFriend.other);
       await S.markRead(activeFriend.other).catch(() => {});
@@ -545,8 +596,11 @@ export async function mountFriends(host, ctx) {
     errorLine.textContent = '';
     textarea.value = '';
     if (picker && picker.clear) picker.clear();
+    picker.node.style.display = friend.builtin ? 'none' : '';   // Agent Max is text only
+    hintLine.textContent = friend.builtin ? '' : 'Links are not allowed. You can send pictures and videos instead.';
+    if (friend.builtin) showMaxLeft();
     await loadMessages({ scrollToBottom: true });
-    schedulePoll();
+    if (!friend.builtin) schedulePoll();   // Agent Max is not polled: nobody else writes to that chat
   }
 
   function closeChat() {
