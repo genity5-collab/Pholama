@@ -57,27 +57,11 @@ async function installPython(progress, signal, url) {
   if (t.status !== 0 || !fs.existsSync(pythonExe())) throw new Error('Could not unpack Python: ' + String(t.stderr || t.error || '').slice(0, 160));
   return { ok: true, where: pythonExe(), version: PY_VERSION };
 }
-// Should the dependency check run now? It runs on EVERY start (and so after every update, which restarts the app), because a file can be
-// deleted after a successful setup. It only installs what is missing, so a healthy PC does nothing. The one limit: after 3 failed tries in a
-// row it stops until the next update, so having no internet can never make it loop. Never on other systems; PHOLAMA_NO_AUTOSETUP=1 turns it off.
-// prior = the saved { ok, tries, version } or null. A new app version resets the failure count.
-function shouldAutoSetup(platform, env, prior, version) {
+// Should first-run auto-install run now? prior = the saved { ok, tries } or null. Never on other systems, never when switched off,
+// never once it worked, and never more than 3 failed tries (so no internet cannot make it loop forever).
+function shouldAutoSetup(platform, env, prior) {
   if (platform !== 'win32' || (env && env.PHOLAMA_NO_AUTOSETUP === '1')) return false;
-  if (prior && !prior.ok && (prior.tries || 0) >= 3 && (!version || prior.version === version)) return false;
+  if (prior && (prior.ok || (prior.tries || 0) >= 3)) return false;
   return true;
 }
-// What is actually missing right now? Pure function of facts, so it is testable. needs = ['engine','python'] subset.
-function missingNow(f) {
-  const out = [];
-  if (!(f && (f.llamaServer || f.ollama))) out.push('engine');
-  if (!(f && f.python && f.python.installed)) out.push('python');
-  return out;
-}
-// Can the bundled tool server really start with this Python? (a 2-second protocol handshake). Returns { ok, error? }.
-function toolServerCheck(pyPath, scriptPath) {
-  try {
-    const r = require('child_process').spawnSync(pyPath, [scriptPath], { input: JSON.stringify({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }) + '\n', encoding: 'utf8', timeout: 8000, windowsHide: true });
-    return /"serverInfo"/.test(String(r.stdout || '')) ? { ok: true } : { ok: false, error: String(r.stderr || r.error || 'no answer').slice(0, 160) };
-  } catch (e) { return { ok: false, error: String(e.message).slice(0, 160) }; }
-}
-module.exports = { shouldAutoSetup, missingNow, toolServerCheck, BUDGET_MB, SIZES, PY_VERSION, PY_URL, PY_HOST_OK, report, describe, mb, detectPython, installPython, pythonExe, pythonDir };
+module.exports = { shouldAutoSetup, BUDGET_MB, SIZES, PY_VERSION, PY_URL, PY_HOST_OK, report, describe, mb, detectPython, installPython, pythonExe, pythonDir };

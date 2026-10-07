@@ -14,12 +14,4 @@ function pickRecommended(list, budget) {
   return comfy[0].id;
 }
 
-// The "smart tool models" list: every model rated good at calling tools whose file is at most maxGB (default 4 GB), newest generation first.
-// Only models the catalog already rates 'good' are ever listed, so the list can never promise tool use a model does not have.
-// ram is the PC's memory budget (optional): when given, each row says whether it fits comfortably.
-function smartToolModels(list, maxGB = 4, ram = 0) {
-  const ok = (Array.isArray(list) ? list : []).filter(m => m && m.toolTier === 'good' && m.sizeGB > 0 && m.sizeGB <= maxGB);
-  ok.sort((a, b) => releasedKey(b).localeCompare(releasedKey(a)) || b.bytes - a.bytes);
-  return ok.map(m => ({ id: m.id, name: m.name, sizeGB: m.sizeGB, minRamGB: m.minRamGB, params: m.params, released: m.released || '', fits: !ram ? null : ram >= m.minRamGB, comfy: !ram ? null : (m.sizeGB <= ram * 0.5 && m.sizeGB + 2 <= ram) }));
-}
-module.exports = { pickRecommended, releasedKey, smartToolModels };
+module.exports = { pickRecommended, releasedKey };

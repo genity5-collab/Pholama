@@ -71,15 +71,13 @@ export function createStudio(env) {
   mount.innerHTML = `
   <div class="st-bar">
     <select id="stProj" title="Project"></select>
-    <button id="stNew">New</button><button id="stDel" title="Delete this project">Delete</button><button id="stRefresh" title="Pull the latest files from the local Pholama server">Refresh files</button><button id="stActivity" title="Show AI edits, checks and commands">Activity</button><button id="stHistory" title="Version history: go back to an earlier version of this project">History</button><button id="stSetup" title="What the AI tools need on this PC, and how big it is">Setup</button><button id="stTools" title="Tool servers: let the AI use tools from other programs (always asks first)">Tools</button><button id="stProject" title="Project variables, export and import">Project</button><button id="stSettings" title="Studio settings">Settings</button>
+    <button id="stNew">New</button><button id="stDel" title="Delete this project">Delete</button><button id="stRefresh" title="Pull the latest files from the local Pholama server">Refresh files</button><button id="stActivity" title="Show AI edits, checks and commands">Activity</button><button id="stHistory" title="Version history: go back to an earlier version of this project">History</button><button id="stSetup" title="What the AI tools need on this PC, and how big it is">Setup</button><button id="stSettings" title="Studio settings">Settings</button>
     <span class="sp"></span>
     <button id="stPublish" class="p" title="Put this project on GitHub">Publish</button>
   </div>
   <div id="stActivityPanel" class="st-activity" hidden><div class="st-panelhead"><b>Activity</b><span class="sp"></span><button id="stActivityRefresh">Refresh</button></div><div id="stActivityList" class="st-activitylist">Loading...</div></div>
   <div id="stHistoryPanel" class="st-activity st-history" hidden><div class="st-panelhead"><b>Version history</b><span class="sp"></span><button id="stHistorySave" title="Save the project as it is now">Save version</button><button id="stHistoryClose">Close</button></div><div id="stHistoryList" class="st-activitylist">Loading...</div></div>
   <div id="stSetupPanel" class="st-activity st-setup" hidden><div class="st-panelhead"><b>Setup</b><span class="sp"></span><button id="stSetupRefresh">Refresh</button><button id="stSetupClose">Close</button></div><div id="stSetupBody" class="st-activitylist">Loading...</div></div>
-  <div id="stToolsPanel" class="st-activity st-setup" hidden><div class="st-panelhead"><b>Tool servers</b><span class="sp"></span><button id="stToolsClose">Close</button></div><div id="stToolsBody" class="st-setupbody">Loading...</div></div>
-  <div id="stProjectPanel" class="st-activity st-setup" hidden><div class="st-panelhead"><b>Project</b><span class="sp"></span><button id="stProjectClose">Close</button></div><div id="stProjectBody" class="st-setupbody">Loading...</div></div>
   <div id="stSettingsPanel" class="st-settings" hidden><div class="st-panelhead"><b>Studio settings</b><span class="sp"></span><button id="stSettingsClose">Close</button></div><label class="st-setting"><input id="stCompanion" type="checkbox"><span><b>Pholama companion</b><small>Turn it on, drag it anywhere, then click for reactions. It never reads the page or sends anything.</small></span></label><div class="sys">The companion is off by default and can be turned off at any time.</div></div>
   <div class="st-main">
     <div class="st-left">
@@ -100,7 +98,7 @@ export function createStudio(env) {
     <div id="stAiLog" class="st-ailog"></div>
     <div class="st-aibox"><textarea id="stAsk" rows="2" placeholder="Describe an app to build, then inspect Preview, Code and Logs side by side..."></textarea><button id="stDiagnose" title="Check the project and explain the next fix">Diagnose</button><button id="stSend" class="p">Send</button></div>
   </div>`;
-  for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stActivity', 'stSettings', 'stActivityPanel', 'stActivityRefresh', 'stActivityList', 'stHistory', 'stHistoryPanel', 'stHistorySave', 'stHistoryClose', 'stHistoryList', 'stSetup', 'stSetupPanel', 'stSetupRefresh', 'stSetupClose', 'stSetupBody', 'stTools', 'stToolsPanel', 'stToolsClose', 'stToolsBody', 'stProject', 'stProjectPanel', 'stProjectClose', 'stProjectBody', 'stSettingsPanel', 'stSettingsClose', 'stCompanion', 'stPublish', 'stFind', 'stFindCount', 'stFindResults', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stNewScript', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stDiagnose', 'stSend']) el[id] = mount.querySelector('#' + id);
+  for (const id of ['stProj', 'stNew', 'stDel', 'stRefresh', 'stActivity', 'stSettings', 'stActivityPanel', 'stActivityRefresh', 'stActivityList', 'stHistory', 'stHistoryPanel', 'stHistorySave', 'stHistoryClose', 'stHistoryList', 'stSetup', 'stSetupPanel', 'stSetupRefresh', 'stSetupClose', 'stSetupBody', 'stSettingsPanel', 'stSettingsClose', 'stCompanion', 'stPublish', 'stFind', 'stFindCount', 'stFindResults', 'stTabs', 'stCode', 'stStat', 'stAddFile', 'stNewScript', 'stRm', 'stFrame', 'stReload', 'stCon', 'stClear', 'stAiLog', 'stAsk', 'stDiagnose', 'stSend']) el[id] = mount.querySelector('#' + id);
   const live = createLiveCard(el.stAiLog);   // the Live Activity card: what the AI thinks and which files it touches, right in the chat
   const fx = createFx({ host: el.stCode.parentElement, code: el.stCode, tabs: el.stTabs, frame: el.stFrame });   // the 'AI is editing' animation
   const activityTitle = e => e.kind === 'file' ? ((e.status === 'working' ? 'Working on ' : e.status === 'failed' ? 'Failed: ' : 'Changed ') + (e.path || 'a file')) : e.kind === 'command' ? (e.status === 'ok' ? 'Command finished' : e.status === 'proposed' ? 'Command waiting for approval' : 'Command ' + (e.status || 'updated')) : (e.text || e.status || e.kind || 'Activity');
@@ -126,73 +124,12 @@ export function createStudio(env) {
     }
     const py = d.python || {}; if (py.status === 'installing' || py.status === 'error') { const bar = document.createElement('div'); bar.className = 'st-setupprog'; bar.textContent = py.status === 'error' ? 'Python: ' + py.error : py.step + (py.total ? '  ' + Math.round(py.done / py.total * 100) + '%' : ''); box.appendChild(bar); }
     const note = document.createElement('div'); note.className = 'st-setupnote'; note.textContent = d.modelNote; box.appendChild(note);
-    const sm = d.smartModels || [];
-    if (sm.length) {
-      const h2 = document.createElement('div'); h2.className = 'st-setuphead'; h2.textContent = 'Smart models that can run tools, 4 GB or less'; box.appendChild(h2);
-      const why = document.createElement('div'); why.className = 'st-setupnote'; why.textContent = 'Each one is rated good at tool calling, newest first (that is the order they came out, not a score). Pick yours in Models; nothing is downloaded for you.'; box.appendChild(why);
-      for (const m of sm.slice(0, 12)) {
-        const row = document.createElement('div'); row.className = 'st-setuprow' + (m.downloaded ? ' ok' : '');
-        const t = document.createElement('span'); t.textContent = (m.downloaded ? 'Downloaded  ' : '') + m.name + '  (' + m.sizeGB + ' GB)'; row.appendChild(t);
-        const s2 = document.createElement('small'); s2.textContent = m.params + ', needs about ' + m.minRamGB + ' GB of memory' + (m.fits === false ? '. Too big for this PC.' : m.comfy ? '. Runs comfortably here.' : m.fits ? '. Fits, but tightly.' : ''); row.appendChild(s2);
-        box.appendChild(row);
-      }
-    }
   };
   const loadSetup = async () => { try { const d = await jget('api/setup'); paintSetup(d); const busy = (d.python && d.python.status === 'installing') || (d.engine && d.engine.status === 'installing'); if (!busy) { clearInterval(setupTimer); setupTimer = null; } return d; } catch (e) { el.stSetupBody.textContent = e.message; } };
   const watchSetup = () => { if (!setupTimer) setupTimer = setInterval(loadSetup, 700); loadSetup(); };
   el.stSetup.onclick = () => { el.stHistoryPanel.hidden = true; el.stActivityPanel.hidden = true; el.stSettingsPanel.hidden = true; el.stSetupPanel.hidden = !el.stSetupPanel.hidden; if (!el.stSetupPanel.hidden) loadSetup(); else { clearInterval(setupTimer); setupTimer = null; } };
   el.stSetupClose.onclick = () => { el.stSetupPanel.hidden = true; clearInterval(setupTimer); setupTimer = null; };
   el.stSetupRefresh.onclick = loadSetup;
-  // ---- Tool servers: programs the USER adds so the AI can use their tools. Every call to them asks for a click first. ----
-  const mk = (tag, text, cls) => { const e = document.createElement(tag); if (text != null) e.textContent = text; if (cls) e.className = cls; return e; };
-  const closeAll = () => { for (const k of ['stHistoryPanel', 'stActivityPanel', 'stSettingsPanel', 'stSetupPanel', 'stToolsPanel', 'stProjectPanel']) if (el[k]) el[k].hidden = true; };
-  const paintTools = d => {
-    const box = el.stToolsBody; box.textContent = '';
-    box.appendChild(mk('div', 'A tool server is a program that gives the AI extra tools (read files, use git, and more). You add it yourself. The AI can never start one, and every tool it uses asks for your click first.', 'st-setupnote'));
-    const list = d.servers || [];
-    if (!list.length) box.appendChild(mk('div', 'No tool servers yet.', 'st-setupnote'));
-    for (const sv of list) {
-      const row = mk('div', null, 'st-setuprow' + (sv.running ? ' ok' : '')); row.appendChild(mk('span', (sv.running ? '[x] ' : '[ ] ') + sv.id + (sv.running ? '  (' + sv.tools + ' tools)' : '  (not running)')));
-      row.appendChild(mk('small', sv.command + ' ' + (sv.args || []).join(' ').slice(0, 120)));
-      const rm = mk('button', 'Remove'); rm.onclick = async () => { if (!confirm('Remove the tool server "' + sv.id + '"?')) return; try { await jsend('api/toolservers?name=' + encodeURIComponent(sv.id), 'DELETE'); loadTools(); } catch (e) { alert(e.message); } };
-      row.appendChild(rm); box.appendChild(row);
-    }
-    const add = mk('div', null, 'st-setuprow'); add.appendChild(mk('span', 'Pholama files (read_file, analyze_file, sessions)')); add.appendChild(mk('small', 'Built in, needs Python (see Setup). Runs only inside your Pholama workspace folder.'));
-    const ab = mk('button', list.some(x => x.id === 'files') ? 'Added' : 'Add'); ab.disabled = list.some(x => x.id === 'files');
-    ab.onclick = async () => { if (!confirm('This starts a small Python program on your PC that can read files inside your Pholama workspace folder. Continue?')) return; try { const r = await jsend('api/toolservers', 'POST', { bundled: 'files', confirm: true }); if (r.warning) alert(r.warning); loadTools(); } catch (e) { alert(e.message); } };
-    add.appendChild(ab); box.appendChild(add);
-    const own = mk('div', null, 'st-setuprow'); own.appendChild(mk('span', 'Add your own')); own.appendChild(mk('small', 'Name (letters/digits), the command, and its arguments. Example: name "git", command "npx", arguments "-y @modelcontextprotocol/server-git".'));
-    const nm = mk('input'); nm.type = 'text'; nm.placeholder = 'name'; nm.maxLength = 16; const cm = mk('input'); cm.type = 'text'; cm.placeholder = 'command (python, npx, node...)'; const ag = mk('input'); ag.type = 'text'; ag.placeholder = 'arguments, separated by spaces';
-    for (const i of [nm, cm, ag]) { i.style.flexBasis = '100%'; own.appendChild(i); }
-    const go = mk('button', 'Add tool server'); go.className = 'st-primary';
-    go.onclick = async () => { const name = nm.value.trim().toLowerCase(), command = cm.value.trim(); if (!name || !command) return alert('Give it a name and a command.'); if (!confirm('This will run "' + command + ' ' + ag.value.trim() + '" on your PC. Only continue if you trust it.')) return;
-      try { const r = await jsend('api/toolservers', 'POST', { name, command, args: ag.value.trim() ? ag.value.trim().split(/\s+/) : [], confirm: true }); if (r.warning) alert(r.warning); nm.value = cm.value = ag.value = ''; loadTools(); } catch (e) { alert(e.message); } };
-    own.appendChild(go); box.appendChild(own);
-  };
-  const loadTools = async () => { try { paintTools(await jget('api/toolservers')); } catch (e) { el.stToolsBody.textContent = 'Tool servers are unavailable: ' + e.message; } };
-  el.stTools.onclick = () => { const was = el.stToolsPanel.hidden; closeAll(); el.stToolsPanel.hidden = !was; if (was) loadTools(); };
-  el.stToolsClose.onclick = () => { el.stToolsPanel.hidden = true; };
-  // ---- Project: variables the app can use ({{NAME}}), kept on this PC and never shown to the AI; export / import one file ----
-  const pBase = () => 'api/studio/projects/' + encodeURIComponent(S.project);
-  const paintProject = d => {
-    const box = el.stProjectBody; box.textContent = '';
-    if (!S.project) { box.textContent = 'Open or create a project first.'; return; }
-    box.appendChild(mk('div', 'Variables stay on this PC. Use them in your files as {{NAME}}; they are filled in only in the preview. The AI sees the names, never the values, and exports never include them.', 'st-setupnote'));
-    const vars = d.vars || []; if (!vars.length) box.appendChild(mk('div', 'No variables yet.', 'st-setupnote'));
-    for (const v of vars) { const row = mk('div', null, 'st-setuprow ok'); row.appendChild(mk('span', '{{' + v.key + '}}  set')); const rm = mk('button', 'Remove'); rm.onclick = async () => { try { await jsend(pBase() + '/secrets', 'DELETE', { key: v.key }); loadProject(); } catch (e) { alert(e.message); } }; row.appendChild(rm); box.appendChild(row); }
-    const add = mk('div', null, 'st-setuprow'); const k = mk('input'); k.type = 'text'; k.placeholder = 'NAME (capitals)'; k.maxLength = 48; const val = mk('input'); val.type = 'password'; val.placeholder = 'value'; val.autocomplete = 'off';
-    k.style.flexBasis = '100%'; val.style.flexBasis = '100%'; const sv = mk('button', 'Save variable'); sv.className = 'st-primary';
-    sv.onclick = async () => { try { await jsend(pBase() + '/secrets', 'PUT', { key: k.value.trim(), value: val.value }); k.value = val.value = ''; loadProject(); } catch (e) { alert(e.message); } };
-    add.appendChild(k); add.appendChild(val); add.appendChild(sv); box.appendChild(add);
-    const io = mk('div', null, 'st-setuprow'); io.appendChild(mk('span', 'Export or import')); io.appendChild(mk('small', 'One file with all this project\'s files. Import checks every file name and never overwrites a project.'));
-    const ex = mk('button', 'Export project'); ex.onclick = async () => { try { const b = await jget(pBase() + '/export'); const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([JSON.stringify(b, null, 1)], { type: 'application/json' })); a.download = S.project + '.pholama-project.json'; a.click(); setTimeout(() => URL.revokeObjectURL(a.href), 4000); } catch (e) { alert(e.message); } };
-    const im = mk('button', 'Import project...'); const fi = mk('input'); fi.type = 'file'; fi.accept = '.json,application/json'; fi.hidden = true;
-    fi.onchange = async () => { const f = fi.files[0]; fi.value = ''; if (!f) return; if (f.size > 6 * 1024 * 1024) return alert('That file is too big.'); try { const r = await jsend('api/studio/import', 'POST', { bundle: JSON.parse(await f.text()) }); alert('Imported "' + r.name + '" (' + r.files + ' files).'); if (typeof S.reloadProjects === 'function') S.reloadProjects(r.name); else el.stRefresh.click(); } catch (e) { alert(/JSON/.test(e.message) ? 'That is not a project file.' : e.message); } };
-    im.onclick = () => fi.click(); io.appendChild(ex); io.appendChild(im); io.appendChild(fi); box.appendChild(io);
-  };
-  const loadProject = async () => { try { paintProject(S.project ? await jget(pBase() + '/secrets') : {}); } catch (e) { el.stProjectBody.textContent = 'Unavailable: ' + e.message; } };
-  el.stProject.onclick = () => { const was = el.stProjectPanel.hidden; closeAll(); el.stProjectPanel.hidden = !was; if (was) loadProject(); };
-  el.stProjectClose.onclick = () => { el.stProjectPanel.hidden = true; };
   // ---- version history: the project as it was before each AI edit; see what changed and go back ----
   const histBase = () => 'api/studio/projects/' + encodeURIComponent(S.project) + '/history';
   const ago = t => { const m = Math.max(0, Math.round((Date.now() - t) / 60000)); return m < 1 ? 'just now' : m < 60 ? m + ' min ago' : m < 1440 ? Math.round(m / 60) + ' h ago' : Math.round(m / 1440) + ' d ago'; };
@@ -301,7 +238,6 @@ export function createStudio(env) {
     const want = pick && projects.some(p => p.name === pick) ? pick : (S.project && projects.some(p => p.name === S.project) ? S.project : projects[0].name);
     el.stProj.value = want; await openProject(want);
   }
-  S.reloadProjects = name => loadProjects(name).catch(e => say(e.message, 'err'));   // used by Import, so the new project is selected
   async function openProject(name) {
     S.project = name; S.dirty.clear(); S.newFiles.clear(); S.current = null;
     const j = await jget('api/studio/projects/' + encodeURIComponent(name)); S.files = j.files;

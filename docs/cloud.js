@@ -2,11 +2,11 @@
 const FN = 'https://lyra-09dfabbf.base44.app/functions/pholamaCloud';
 
 // Think effort: how long and careful the answer is. On Agent Max every message counts as 1 whatever the effort.
-// On your own models it uses integration credits: Long +10, Max +25 (plus +25 when Thinking is on too). Agent Max stays 1 message.
+// On your own models nothing is ever charged.
 export const EFFORT = {
-  normal: { label: 'Normal', hint: 'Quick, short answers. Free.' },
-  long:   { label: 'Long',   hint: 'Fuller, more careful answers. +10 credits on your own models.' },
-  max:    { label: 'Max',    hint: 'Deepest reasoning. +25 credits, and +25 more if Thinking is on too.' },
+  normal: { label: 'Normal', hint: 'Quick, short answers.' },
+  long:   { label: 'Long',   hint: 'Fuller, more careful answers.' },
+  max:    { label: 'Max',    hint: 'Deepest reasoning and the most thorough answers.' },
 };
 export const MAX_NAME = 'Agent Max', MAX_DAY = 10, MAX_MONTH = 30;
 export const effortKeys = () => Object.keys(EFFORT);
@@ -30,12 +30,10 @@ export const GATE_MESSAGE = 'Sign in with Discord to chat and download models. I
 // ---- cloud chat ----
 // Returns { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }.
 // Throws Error with .code = login | limit-day | limit-month | server | setup | network (and .info with the counts).
-export let localToolAI = false;                       // set by the page: does this PC have a local AI that can run tools?
-export function setLocalToolAI(v) { localToolAI = !!v; }
 export async function cloudChat(messages, effort, token, signal) {
   let r;
   try {
-    r = await fetch(FN, { method: 'POST', signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ messages: messages.slice(-12), effort: cleanEffort(effort), localTools: localToolAI }) });
+    r = await fetch(FN, { method: 'POST', signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ messages: messages.slice(-12), effort: cleanEffort(effort) }) });
   } catch (e) {
     if (e && e.name === 'AbortError') throw e;
     const err = new Error('Could not reach the cloud model. Check your connection.'); err.code = 'network'; throw err;

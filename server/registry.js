@@ -51,12 +51,12 @@ register('fetch_page', 'READ', S({ url: str(2000) }, ['url']));
 const canon = name => ALIASES[name] || name;
 const get = name => REG.get(canon(String(name || '')));
 
-// What level is this tool? Custom tools (x_name) are READ when they only GET, otherwise WRITE. MCP tools are ADMIN (a tool server is an arbitrary program, so every call asks first).
+// What level is this tool? Custom tools (x_name) are READ when they only GET, otherwise WRITE. MCP tools are WRITE (unknown effects).
 function levelOf(name, info = {}) {
   const r = get(name); if (r) return r.level;
   const n = String(name || '');
   if (/^x_/.test(n)) return info.method && String(info.method).toUpperCase() !== 'GET' ? (info.method.toUpperCase() === 'DELETE' ? 'DESTRUCTIVE' : 'WRITE') : 'READ';
-  if (/^mcp[_:]/.test(n)) return 'ADMIN';   // a tool server is a program the user added: it can do anything, so it always asks first
+  if (/^mcp[_:]/.test(n)) return 'WRITE';
   return 'ADMIN';
 }
 

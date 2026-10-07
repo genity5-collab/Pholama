@@ -904,15 +904,6 @@ const server = http.createServer(async (req, res) => {
         if (seg[0] === 'projects' && seg[1] && seg[2] === 'file' && req.method === 'DELETE') { const b = await body(req); return json(res, 200, { ok: true, text: stu.deleteFile(seg[1], b.file) }); }
         if (seg[0] === 'projects' && seg[1] && seg[2] === 'check' && req.method === 'GET') return json(res, 200, { issues: stu.check(seg[1]) });
         if (seg[0] === 'run' && req.method === 'POST') { const b = await body(req); return json(res, 200, stu.runJs(b.code)); }
-        // ---- project secrets, export and import (studiobuilder.js). Secret VALUES are never sent back to the page. ----
-        const sbld = require('./studiobuilder');
-        if (seg[0] === 'projects' && seg[1] && seg[2] === 'secrets' && req.method === 'GET') return json(res, 200, { vars: sbld.names(seg[1]) });
-        if (seg[0] === 'projects' && seg[1] && seg[2] === 'secrets' && req.method === 'PUT') { const b = await body(req); return json(res, 200, { vars: sbld.setSecret(seg[1], b.key, b.value) }); }
-        if (seg[0] === 'projects' && seg[1] && seg[2] === 'secrets' && req.method === 'DELETE') { const b = await body(req); return json(res, 200, { vars: sbld.removeSecret(seg[1], b.key) }); }
-        if (seg[0] === 'projects' && seg[1] && seg[2] === 'export' && req.method === 'GET') return json(res, 200, sbld.exportProject(seg[1]));
-        if (seg[0] === 'import' && req.method === 'POST') { const b = await body(req); return json(res, 200, sbld.importProject(b.bundle, b.name)); }
-        // the preview fills {{NAME}} from the saved variables, in the browser copy only (the project files are never changed)
-        if (seg[0] === 'projects' && seg[1] && seg[2] === 'preview-vars' && req.method === 'POST') { const b = await body(req); const out = {}; for (const [k, v] of Object.entries(b.files || {})) out[k] = sbld.inject(seg[1], v); return json(res, 200, { files: out }); }
         // ---- folders, pictures, map, publish check (studioplus.js) ----
         const sp = require('./studioplus');
         if (seg[0] === 'projects' && seg[1] && seg[2] === 'tree' && req.method === 'GET') { const d = require('path').join(stu.ROOT, stu.projName(seg[1])); return json(res, 200, sp.walkAll(d)); }
@@ -1062,22 +1053,6 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/mcp' && req.method === 'GET') return json(res, 200, { servers: agent.state().mcp.map(x => ({ name: x.name, url: x.url })), tools: await agent.listMcp() });
     if (p === '/api/mcp' && req.method === 'POST') return json(res, 200, { servers: agent.addMcp(await body(req)) });
     if (p === '/api/mcp' && req.method === 'DELETE') { agent.removeMcp(u.searchParams.get('name')); return json(res, 200, { ok: true }); }
-    // ---- tool servers on this PC (stdio MCP). The USER adds them; the AI can never start one. Every call to their tools asks first. ----
-    if (p === '/api/toolservers' && req.method === 'GET') { const m = require('./toolservers'); return json(res, 200, { servers: m.list(), bundled: { id: 'files', label: 'Pholama files (read_file, analyze_file, sessions)' } }); }
-    if (p === '/api/toolservers' && req.method === 'POST') {
-      const m = require('./toolservers'), b = await body(req);
-      if (b.confirm !== true) return json(res, 400, { error: 'Adding a tool server runs a program on your PC. Confirm it first.' });
-      try {
-        if (b.bundled === 'files') {
-          const py = require('./setup').detectPython(); if (!py.installed) return json(res, 400, { error: 'Python is not installed yet. Open Studio > Setup and install it first.' });
-          m.add('files', { command: py.where || 'python', args: [path.join(ROOT, 'tools', 'mcp', 'pholama_files.py')] });
-        } else m.add(String(b.name || ''), { command: b.command, args: b.args, env: b.env });
-        const id = b.bundled === 'files' ? 'files' : String(b.name); let tools = [];
-        try { await m.start(id); tools = (m.list().find(x => x.id === id) || {}).tools; } catch (e) { return json(res, 200, { ok: true, servers: m.list(), warning: 'Saved, but it did not start: ' + String(e.message).slice(0, 200) }); }
-        return json(res, 200, { ok: true, servers: m.list(), tools });
-      } catch (e) { return json(res, 400, { error: e.message }); }
-    }
-    if (p === '/api/toolservers' && req.method === 'DELETE') { const m = require('./toolservers'); m.remove(String(u.searchParams.get('name') || '')); return json(res, 200, { ok: true, servers: m.list() }); }
     if (p === '/api/update' && req.method === 'GET') return json(res, 200, require('./update').status());
     if (p === '/api/update/check' && req.method === 'POST') { const b = await body(req); return json(res, 200, await require('./update').backgroundCheck({ installNow: b.install === true })); }
     if (p === '/api/update/auto' && req.method === 'POST') { const b = await body(req); return json(res, 200, require('./update').setAuto(b.auto !== false)); }
@@ -1099,9 +1074,7 @@ const server = http.createServer(async (req, res) => {
     if (p === '/api/setup' && req.method === 'GET') {
       const setup = require('./setup'), h = hardware(); let models = []; try { models = recommend(h).map(m => ({ id: m.id, downloaded: !!m.downloaded })); } catch {}
       const rep = setup.report({ hardware: h, llamaServer: !!findLlamaServer(), ollama: await ollamaUp(), python: setup.detectPython(), models, nodePrivate: true });
-      // Smart tool models of 4 GB or less: only models the catalog rates 'good' at tools. Listed, never downloaded for you.
-      let smart = []; try { smart = require('./recommend').smartToolModels(CATALOG, 4, h.ramGB || 0).map(m => ({ ...m, downloaded: fs.existsSync(path.join(MODELS_DIR, (CATALOG.find(x => x.id === m.id) || {}).file || '\0')) })); } catch {}
-      return json(res, 200, { ...rep, text: setup.describe(rep), windows: process.platform === 'win32', python: pyInst, engine: inst, smartModels: smart });
+      return json(res, 200, { ...rep, text: setup.describe(rep), windows: process.platform === 'win32', python: pyInst, engine: inst });
     }
     if (p === '/api/setup/python' && req.method === 'POST') {
       if (process.platform !== 'win32') return json(res, 400, { error: 'The built-in Python is for Windows. On this system install Python with your package manager.' });
@@ -1203,10 +1176,9 @@ server.listen(PORT, HOST, () => {
   try {
     const setupFile = path.join(os.homedir(), '.pholama', 'setup-done.json');
     const prior = (() => { try { return JSON.parse(fs.readFileSync(setupFile, 'utf8')); } catch { return null; } })();
-    const appVersion = (() => { try { return require('./update').localVersion(); } catch { return ''; } })();
-    if (require('./setup').shouldAutoSetup(process.platform, process.env, prior, appVersion)) setTimeout(async () => {
+    if (require('./setup').shouldAutoSetup(process.platform, process.env, prior)) setTimeout(async () => {
       const setup = require('./setup'), tries = ((prior && prior.tries) || 0) + 1;
-      const mark = o => { try { fs.mkdirSync(path.dirname(setupFile), { recursive: true }); fs.writeFileSync(setupFile, JSON.stringify({ at: Date.now(), tries: o.ok ? 0 : tries, version: appVersion, ...o })); } catch {} };
+      const mark = o => { try { fs.mkdirSync(path.dirname(setupFile), { recursive: true }); fs.writeFileSync(setupFile, JSON.stringify({ at: Date.now(), tries, ...o })); } catch {} };
       try {
         if (!findLlamaServer() && !(await ollamaUp())) {
           installLlama(); await new Promise(r => setTimeout(r, 300));
@@ -1214,9 +1186,6 @@ server.listen(PORT, HOST, () => {
           if (!findLlamaServer()) throw new Error(inst.error || 'The model engine did not install.');
         }
         if (!setup.detectPython().installed) { Object.assign(pyInst, { status: 'installing', error: null, step: 'Starting...', done: 0, total: 0 }); await setup.installPython((t, d, tt) => Object.assign(pyInst, { step: t, done: d, total: tt })); Object.assign(pyInst, { status: 'done', step: 'Python is ready.' }); }
-        // The bundled tool server must really start with this Python. If it cannot, setup is NOT reported as done.
-        { const py = setup.detectPython(), chk = py.installed ? setup.toolServerCheck(py.where || 'python', path.join(ROOT, 'tools', 'mcp', 'pholama_files.py')) : { ok: false, error: 'Python not found' };
-          if (!chk.ok) throw new Error('The tool server could not start with this Python: ' + chk.error); }
         mark({ ok: true });
       } catch (e) { Object.assign(pyInst, { status: 'error', error: e.message }); mark({ ok: false, error: String(e.message).slice(0, 160) }); }
     }, 8000).unref();

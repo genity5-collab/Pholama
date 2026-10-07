@@ -18,7 +18,6 @@ const sources = require('./sources');
 const power = require('./power');
 const plugins = require('./plugins');
 const usertools = require('./usertools');
-const stdioMcp = require('./toolservers');
 const media = require('./media');
 
 function today() { const d = new Date(); return d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -380,7 +379,6 @@ async function buildTools(a) {
   if (a.skills) { tools.push(...plugins.SKILL_TOOLS); tools.push(usertools.MAKER_TOOL, ...usertools.asTools(a.mentionTools || []).map(t => ({ name: t.name, desc: t.desc, kind: 'usertool' }))); }
   if (a.search) tools.push(...media.tools());   // show_video / show_image: only when the web switch is on
   if (a.studio && a.inStudio) tools.push(...studio.tools());
-  if (a.tools || a.terminal) { try { tools.push(...(await stdioMcp.asTools()).map(t => ({ name: t.name, desc: t.desc, kind: 'mcp', params: t.params }))); } catch {} }   // tools from servers the USER added; each call asks first
   if (a.terminal) tools.push({ name: 'run_command', desc: 'Run ONE shell command on the user\'s PC. The user must click Allow first; nothing runs until they do. args: {"command": string, "cwd": string (optional folder inside the home folder), "why": string (one short sentence for the user)}', kind: 'cmd' });
   const mcp = [];
   if (a.mcp) for (const t of await listMcp()) if (!t.error) { const n = `${t.server}__${t.name}`; mcp.push(t); tools.push({ name: n, desc: `${(t.description || '').slice(0, 160)} args schema: ${JSON.stringify(t.schema || {}).slice(0, 300)}`, kind: 'mcp', mcp: t }); }
@@ -450,9 +448,8 @@ async function runTool(tools, name, args, ctx) {
   const g = registry.gate(name, args, { user: ctx && ctx.userId, known: new Set((tools || []).map(x => x.name)), calls: ctx && ctx.toolCalls, maxCalls: ctx && ctx.maxToolCalls, policy: ctx && ctx.policy, maxLevel: ctx && ctx.maxLevel });
   if (!g.ok) return 'Tool error: ' + g.error + ' Nothing was run.';
   name = g.name; args = g.args;
-  if (stdioMcp.isMcpTool(name)) { const sch = stdioMcp.schemaOf(name); if (sch) { const errs = registry.validate(args, sch); if (errs.length) return 'Tool error: The arguments are not valid: ' + errs.slice(0, 4).join('; ') + '. Fix them and call the tool again. Nothing was run.'; } }
   if (ctx && typeof ctx.toolCalls === 'number') ctx.toolCalls++;
-  if (g.approve && (GATED.has(name) || stdioMcp.isMcpTool(name)) && !(ctx && ctx.approved === name)) {
+  if (g.approve && GATED.has(name) && !(ctx && ctx.approved === name)) {
     const id = require('crypto').randomBytes(8).toString('hex');
     pendingTools.set(id, { name, args, at: Date.now(), builtin: true });
     for (const [k, v] of pendingTools) if (Date.now() - v.at > 15 * 60 * 1000) pendingTools.delete(k);
@@ -472,7 +469,6 @@ async function runToolRaw(tools, name, args, ctx) {
   if (name === 'run_command') {
     return power.propose(args || {}, ctx);
   }
-  if (stdioMcp.isMcpTool(name)) return stdioMcp.call(name, args);   // user-added tool server; reached only after the gate and the user's OK
   if (tools2.isTool2(name)) {   // local and free, works even with 0 credits
     const out = tools2.run(name, args);
     if (/^(write_file|append_file|edit_file|delete_file|make_folder)$/.test(name)) { try { power.logEntry({ kind: 'file', status: 'ok', tool: name, path: String((args && args.path) || '').slice(0, 200), by: 'ai' }); } catch {} }
@@ -797,6 +793,6 @@ function safeShowLength(acc) {
 }
 const isToolFail = r => /^Tool error/.test(String(r || ''));
 
-async function approveTool(id) { const p = pendingTools.get(id); if (!p) throw new Error('That request expired or was already answered.'); pendingTools.delete(id); if (p.builtin && stdioMcp.isMcpTool(p.name)) return stdioMcp.call(p.name, p.args); if (p.builtin) { const all = require('./tools2').tools(); const out = await runTool(all, p.name, p.args, { approved: p.name, userId: 'approved' }); return out; } if (!usertools.isUserTool(p.name)) throw new Error('That tool no longer exists.'); return usertools.run(p.name, p.args, { allowOff: p.allowOff === true }); }
+async function approveTool(id) { const p = pendingTools.get(id); if (!p) throw new Error('That request expired or was already answered.'); pendingTools.delete(id); if (p.builtin) { const all = require('./tools2').tools(); const out = await runTool(all, p.name, p.args, { approved: p.name, userId: 'approved' }); return out; } if (!usertools.isUserTool(p.name)) throw new Error('That tool no longer exists.'); return usertools.run(p.name, p.args, { allowOff: p.allowOff === true }); }
 function rejectTool(id) { return pendingTools.delete(id); }
 module.exports = { studioResearch, fetchText, webSearch, factualQuestion, mediaRequest, usertools, media, approveTool, rejectTool, cleanSearchQuery, loggedStudio, lineCounts, lazyRefusal, LAZY_RETRY, plugins, searchSubjectFromHistory, inventedSearch, restock, limitMessage, safeShowLength, looksLikeToolAttempt, stripToolText, badCallNotice, toolFailNotice, isToolFail, setTier, tidyFile, planGuidedBuild, parseFileBlocks, planGuidedEdit, cleanGuidedLine, bestLine, studioFocus, sources, messageCost, EFFORT_COST, aboutUserHint, parseFileBlock, studioPrompt, power, github, credits, spend, allowed, listMcp, addMcp, removeMcp, setPrefs, state, systemPrompt, buildTools, runTool, parseTool, routeIntent, taskPlan, COST, DAILY };

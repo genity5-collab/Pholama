@@ -27,7 +27,7 @@ ok('missing/garbage input does not crash', S.report(null).items.length === 4 && 
 ok('auto-install runs on a fresh Windows PC', S.shouldAutoSetup('win32', {}, null) === true);
 ok('auto-install never runs on Mac or Linux', !S.shouldAutoSetup('linux', {}, null) && !S.shouldAutoSetup('darwin', {}, null));
 ok('auto-install can be switched off', !S.shouldAutoSetup('win32', { PHOLAMA_NO_AUTOSETUP: '1' }, null));
-ok('after it worked, the check still runs again (it only installs what is missing, so a healthy PC does nothing)', S.shouldAutoSetup('win32', {}, { ok: true, tries: 1 }));
+ok('auto-install does not repeat once it worked', !S.shouldAutoSetup('win32', {}, { ok: true, tries: 1 }));
 ok('a failed try is retried next start', S.shouldAutoSetup('win32', {}, { ok: false, tries: 1 }) && S.shouldAutoSetup('win32', {}, { ok: false, tries: 2 }));
 ok('after 3 failed tries it stops (no endless loop without internet)', !S.shouldAutoSetup('win32', {}, { ok: false, tries: 3 }));
 ok('only python.org https links are allowed', S.PY_HOST_OK(S.PY_URL) && !S.PY_HOST_OK('http://www.python.org/x.zip') && !S.PY_HOST_OK('https://evil.com/python.zip') && !S.PY_HOST_OK('https://www.python.org.evil.com/x') && !S.PY_HOST_OK('nonsense'));

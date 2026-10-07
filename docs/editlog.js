@@ -10,7 +10,6 @@ export const STATUS = {
   denied:    { word: 'Denied by you',      tone: 'warn', group: 'blocked' },
   expired:   { word: 'Expired',            tone: 'mute', group: 'blocked' },
   proposed:  { word: 'Waiting for you',    tone: 'info', group: 'waiting' },
-  working:   { word: 'Working...',         tone: 'info', group: 'waiting' },   // live: flips to Done when the same id finishes
   granted:   { word: 'Bonus added',        tone: 'good', group: 'bonus' },
   'already-granted': { word: 'Bonus already added', tone: 'mute', group: 'bonus' },
 };
@@ -26,25 +25,6 @@ export function collapse(entries) {
     out.push(e);
   }
   return out;
-}
-
-// One short line for a row, whatever kind of entry it is.
-export function title(e) {
-  if (!e) return 'Event';
-  if (e.cmd) return String(e.cmd).replace(/\s+/g, ' ').slice(0, 120);
-  if (e.kind === 'bonus') return 'Login bonus';
-  if (e.kind === 'file') return (FILE_WORD[e.tool] || 'Changed') + ' ' + (e.path || 'a file');
-  if (e.kind === 'think') return 'Thinking: ' + String(e.text || '').replace(/\s+/g, ' ').slice(0, 100);
-  if (e.kind === 'step') return String(e.text || 'Step').replace(/\s+/g, ' ').slice(0, 120);
-  return 'Event';
-}
-const FILE_WORD = { write_file: 'Wrote', append_file: 'Added to', edit_file: 'Edited', delete_file: 'Deleted', make_folder: 'Made folder', studio_write: 'Wrote', studio_edit: 'Edited', studio_delete: 'Deleted' };
-// A new live entry arrives. Newest first. An entry with an id that is already listed REPLACES it (Working... becomes Done). Capped so the page stays light.
-export function mergeLive(entries, entry, max = 300) {
-  if (!entry || typeof entry !== 'object') return entries;
-  const list = Array.isArray(entries) ? entries : [];
-  if (entry.id) { const i = list.findIndex(x => x && x.id === entry.id && x.kind === entry.kind); if (i >= 0) { const out = list.slice(); out[i] = { ...out[i], ...entry }; return out; } }
-  return [entry, ...list].slice(0, max);
 }
 
 export function dayKey(iso) { const d = new Date(iso); return isNaN(d) ? 'unknown' : d.getFullYear() + '-' + String(d.getMonth() + 1).padStart(2, '0') + '-' + String(d.getDate()).padStart(2, '0'); }
@@ -89,7 +69,5 @@ export function detailRows(e) {
   if (e.bytes != null) r.push(['Output size', fmtBytes(e.bytes)]);
   if (e.approvedBy) r.push(['Approved by', e.approvedBy === 'user' ? 'You' : String(e.approvedBy)]);
   if (e.kind === 'bonus') r.push(['Credits', '+' + (e.credits || 0)]);
-  if (e.kind === 'file') { if (e.path) r.push(['File', e.path]); if (e.added != null || e.removed != null) r.push(['Lines', '+' + (e.added || 0) + ' / -' + (e.removed || 0)]); if (e.project) r.push(['Project', e.project]); }
-  if (e.kind === 'think' && e.text) r.push(['Thought', String(e.text).slice(0, 600)]);
   return r;
 }
