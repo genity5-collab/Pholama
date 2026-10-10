@@ -1,5 +1,5 @@
 // Pholama Studio, the website Cloud Studio client.
-// The browser never receives the Totalum API key. It talks to the configured backend proxy.
+// Provider credentials stay in the backend environment. The browser only calls the proxy.
 const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
 const button = (label, fn, cls = '') => { const b = el('button', cls, label); b.type = 'button'; b.onclick = fn; return b; };
 
@@ -15,7 +15,7 @@ export function mountCloudStudio(host, { Account, cfg = () => ({}), now = () => 
   host.textContent = '';
   const root = el('div', 'cloudstudio');
   const head = el('div', 'cloudstudio-head');
-  const title = el('div'); title.append(el('h2', null, 'Pholama Studio'), el('p', 'dmut', 'Build and publish websites in the cloud. This is separate from the PC Studio.'));
+  const title = el('div'); title.append(el('h2', null, 'Pholama Studio'), el('p', 'dmut', 'Build and preview websites with Pholama AI. This is separate from the PC Studio.'));
   const refresh = button('Refresh', () => loadProjects(), 'cloudstudio-refresh');
   head.append(title, refresh); root.append(head);
   const notice = el('div', 'sys cloudstudio-notice'); root.append(notice);
@@ -26,7 +26,7 @@ export function mountCloudStudio(host, { Account, cfg = () => ({}), now = () => 
   function setNotice(text, kind = '') { notice.textContent = text || ''; notice.className = 'sys cloudstudio-notice' + (kind ? ' ' + kind : ''); notice.hidden = !text; }
   function call(action, body = {}) {
     const base = endpoint(cfg());
-    if (!base) return Promise.reject(new Error('Cloud Studio is waiting for its secure backend connection.'));
+    if (!base) return Promise.reject(new Error('Pholama Studio AI is waiting for its secure backend connection.'));
     return fetch(base + '/' + encodeURIComponent(action), { method: 'POST', headers: { 'Content-Type': 'application/json', ...(Account && Account.token() ? { Authorization: 'Bearer ' + Account.token() } : {}) }, body: JSON.stringify(body) })
       .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok || j.errors) throw new Error(messageText(j.errors || j)); return j.data == null ? j : j.data; });
   }
@@ -48,7 +48,7 @@ export function mountCloudStudio(host, { Account, cfg = () => ({}), now = () => 
     const h = el('div'); h.append(el('h2', null, p.label || p.projectId || 'Project'), el('p', 'dmut', p.projectId || ''));
     const deploy = button('Deploy', () => deployProject(p), 'p'); const open = button('Open preview', () => { const u = selectedPreview(p); if (u) window.open(u, '_blank', 'noopener'); }, ''); open.disabled = !selectedPreview(p); top.append(h, open, deploy); main.append(top);
     const status = el('div', 'cloudstudio-status'); status.append(el('b', null, p.agentStatus || p.status || 'Ready')); if (p.agentMessage) status.append(el('span', 'dmut', p.agentMessage)); main.append(status);
-    const preview = selectedPreview(p); if (preview) { const frame = el('section', 'dcard cloudstudio-preview'); const ph = el('div', 'cloudstudio-section-title'); ph.append(el('h3', null, 'Live preview'), button('Open in new tab', () => window.open(preview, '_blank', 'noopener'))); const iframe = document.createElement('iframe'); iframe.src = preview; iframe.title = 'Cloud project preview'; iframe.loading = 'lazy'; frame.append(ph, iframe); main.append(frame); }
+    const output = String(p.output || ''); const preview = selectedPreview(p); if (output) { const frame = el('section', 'dcard cloudstudio-preview'); const ph = el('div', 'cloudstudio-section-title'); ph.append(el('h3', null, 'Generated preview')); const iframe = document.createElement('iframe'); iframe.srcdoc = output.replace(/^```html\s*/i, '').replace(/```\s*$/i, ''); iframe.title = 'Generated Pholama Studio preview'; iframe.sandbox = 'allow-scripts'; frame.append(ph, iframe); main.append(frame); } else if (preview) { const frame = el('section', 'dcard cloudstudio-preview'); const ph = el('div', 'cloudstudio-section-title'); ph.append(el('h3', null, 'Live preview'), button('Open in new tab', () => window.open(preview, '_blank', 'noopener'))); const iframe = document.createElement('iframe'); iframe.src = preview; iframe.title = 'Cloud project preview'; iframe.loading = 'lazy'; frame.append(ph, iframe); main.append(frame); }
     const form = el('section', 'dcard cloudstudio-form'); form.append(el('h3', null, 'Continue building')); const prompt = document.createElement('textarea'); prompt.rows = 4; prompt.placeholder = 'Add a change or improvement...'; const out = el('div', 'sys'); const send = button('Send prompt', async () => { if (!prompt.value.trim()) return; send.disabled = true; out.textContent = 'Sending prompt...'; try { await call('prompt', { projectId: active, prompt: prompt.value.trim() }); prompt.value = ''; out.textContent = 'Prompt sent. Studio will refresh when the run finishes.'; pollProject(); } catch (e) { out.textContent = messageText(e); } finally { send.disabled = false; } }, 'p'); form.append(prompt, send, out); main.append(form);
   }
   async function loadProjects() { try { projects = await call('projects'); projects = Array.isArray(projects) ? projects : (projects.projects || []); paintList(); if (!active && projects[0]) active = projects[0].projectId || projects[0].id; if (active) await openProject(active); else emptyMain(); } catch (e) { paintList(); emptyMain(); setNotice(messageText(e), 'cloudstudio-warn'); } }
