@@ -1266,6 +1266,7 @@ async function paintDashboard() {
   } catch (e) { el.textContent = 'The dashboard could not load: ' + (e && e.message || e); }
 }
 $('#vDash').onclick = () => showView('dash');
+$('#vStudioCloud').onclick = () => showView('cloudstudio');
 $('#vChat').onclick = () => showView('chat');
 $('#vPlat').onclick = () => showView('plat');
 init().then(refreshCredits).then(() => { markSite(); showView(siteOnly() ? 'plat' : 'dash'); });
