@@ -16,14 +16,16 @@ export function mountCloudStudio(host, { Account, cfg = () => ({}), now = () => 
   const root = el('div', 'cloudstudio');
   const head = el('div', 'cloudstudio-head');
   const title = el('div'); title.append(el('h2', null, 'Pholama Studio'), el('p', 'dmut', 'Build and preview websites with Pholama AI. This is separate from the PC Studio.'));
+  const credits = el('div', 'cloudstudio-credits', 'Studio credits: loading…');
   const refresh = button('Refresh', () => loadProjects(), 'cloudstudio-refresh');
-  head.append(title, refresh); root.append(head);
+  head.append(title, credits, refresh); root.append(head);
   const notice = el('div', 'sys cloudstudio-notice'); root.append(notice);
   const layout = el('div', 'cloudstudio-layout'); const list = el('aside', 'cloudstudio-list'); const main = el('main', 'cloudstudio-main'); layout.append(list, main); root.append(layout); host.append(root);
-  let projects = [], active = null, timer = null, busy = false;
+  let projects = [], active = null, timer = null, busy = false, allowance = { used: 0, cap: 1000 };
 
   function stopPoll() { if (timer) { ci(timer); timer = null; } }
   function setNotice(text, kind = '') { notice.textContent = text || ''; notice.className = 'sys cloudstudio-notice' + (kind ? ' ' + kind : ''); notice.hidden = !text; }
+  async function loadAllowance() { try { allowance = await call('usage'); credits.textContent = `Studio credits: ${Math.max(0, allowance.cap - allowance.used)} left this week`; } catch { credits.textContent = 'Studio credits: unavailable'; } }
   function call(action, body = {}) {
     const base = endpoint(cfg());
     if (!base) return Promise.reject(new Error('Pholama Studio AI is waiting for its secure backend connection.'));
@@ -44,17 +46,28 @@ export function mountCloudStudio(host, { Account, cfg = () => ({}), now = () => 
     for (const p of projects) { const b = button(p.label || p.projectId || p.id || 'Untitled', () => openProject(p.projectId || p.id), 'cloudstudio-project'); b.classList.toggle('on', (p.projectId || p.id) === active); const meta = el('small', null, p.status || 'Project'); b.append(meta); list.append(b); }
   }
   function projectCard(p) {
-    main.textContent = ''; const top = el('section', 'dcard cloudstudio-project-head');
+    main.textContent = '';
+    const top = el('section', 'dcard cloudstudio-project-head');
     const h = el('div'); h.append(el('h2', null, p.label || p.projectId || 'Project'), el('p', 'dmut', p.projectId || ''));
-    const deploy = button('Deploy', () => deployProject(p), 'p'); const open = button('Open preview', () => { const u = selectedPreview(p); if (u) window.open(u, '_blank', 'noopener'); }, ''); open.disabled = !selectedPreview(p); top.append(h, open, deploy); main.append(top);
+    const deploy = button('Deploy', () => deployProject(p), 'p'); const open = button('Open live view', () => { const u = selectedPreview(p); if (u) window.open(u, '_blank', 'noopener'); }, ''); open.disabled = !selectedPreview(p); top.append(h, open, deploy); main.append(top);
     const status = el('div', 'cloudstudio-status'); status.append(el('b', null, p.agentStatus || p.status || 'Ready')); if (p.agentMessage) status.append(el('span', 'dmut', p.agentMessage)); main.append(status);
-    const output = String(p.output || ''); const preview = selectedPreview(p); if (output) { const frame = el('section', 'dcard cloudstudio-preview'); const ph = el('div', 'cloudstudio-section-title'); ph.append(el('h3', null, 'Generated preview')); const iframe = document.createElement('iframe'); iframe.srcdoc = output.replace(/^```html\s*/i, '').replace(/```\s*$/i, ''); iframe.title = 'Generated Pholama Studio preview'; iframe.sandbox = 'allow-scripts'; frame.append(ph, iframe); main.append(frame); } else if (preview) { const frame = el('section', 'dcard cloudstudio-preview'); const ph = el('div', 'cloudstudio-section-title'); ph.append(el('h3', null, 'Live preview'), button('Open in new tab', () => window.open(preview, '_blank', 'noopener'))); const iframe = document.createElement('iframe'); iframe.src = preview; iframe.title = 'Cloud project preview'; iframe.loading = 'lazy'; frame.append(ph, iframe); main.append(frame); }
-    const form = el('section', 'dcard cloudstudio-form'); form.append(el('h3', null, 'Continue building')); const prompt = document.createElement('textarea'); prompt.rows = 4; prompt.placeholder = 'Add a change or improvement...'; const out = el('div', 'sys'); const send = button('Send prompt', async () => { if (!prompt.value.trim()) return; send.disabled = true; out.textContent = 'Sending prompt...'; try { await call('prompt', { projectId: active, prompt: prompt.value.trim() }); prompt.value = ''; out.textContent = 'Prompt sent. Studio will refresh when the run finishes.'; pollProject(); } catch (e) { out.textContent = messageText(e); } finally { send.disabled = false; } }, 'p'); form.append(prompt, send, out); main.append(form);
+    const output = String(p.output || '').replace(/^```html\s*/i, '').replace(/```\s*$/i, '');
+    const draftKey = 'pholama-studio-draft:' + String(p.projectId || 'project');
+    const saved = localStorage.getItem(draftKey); let source = saved || output;
+    const work = el('section', 'dcard cloudstudio-workspace');
+    const bar = el('div', 'cloudstudio-workbar'); const mode = el('strong', null, 'Live editor'); const view = el('span', 'dmut', 'Edit code, preview changes instantly, then test the app/game screen.'); bar.append(mode, view); work.append(bar);
+    const split = el('div', 'cloudstudio-split');
+    const editor = document.createElement('textarea'); editor.className = 'cloudstudio-editor'; editor.spellcheck = false; editor.value = source; editor.setAttribute('aria-label', 'Live project editor');
+    const screen = el('div', 'cloudstudio-screen'); const screenTitle = el('div', 'cloudstudio-screen-title', 'App / game test screen'); const frame = document.createElement('iframe'); frame.title = 'Live Pholama Studio app and game test screen'; frame.sandbox = 'allow-scripts'; frame.srcdoc = source; screen.append(screenTitle, frame); split.append(editor, screen); work.append(split);
+    const actions = el('div', 'cloudstudio-editor-actions'); const save = button('Save local draft', () => { localStorage.setItem(draftKey, editor.value); setNotice('Draft saved on this device.', 'cloudstudio-ok'); }, ''); const reset = button('Reset generated output', () => { editor.value = output; frame.srcdoc = output; localStorage.removeItem(draftKey); }, ''); const test = button('Test app/game screen', () => { frame.focus(); screen.scrollIntoView({ behavior: 'smooth', block: 'center' }); setNotice('Test screen is live. Use the app/game controls inside the preview.', 'cloudstudio-ok'); }, 'p'); actions.append(save, reset, test); work.append(actions); main.append(work);
+    editor.addEventListener('input', () => { frame.srcdoc = editor.value; });
+    const chat = el('section', 'dcard cloudstudio-chat'); const chatHead = el('div', 'cloudstudio-section-title'); chatHead.append(el('h3', null, 'Pholama Studio chatbot'), el('span', 'dmut', 'Live edit assistant')); chat.append(chatHead);
+    const transcript = el('div', 'cloudstudio-transcript'); transcript.append(el('p', 'dmut', 'Ask for a change and the assistant will regenerate the complete project.')); const prompt = document.createElement('textarea'); prompt.rows = 3; prompt.placeholder = 'Add a map, change the game rules, fix the layout...'; const out = el('div', 'sys'); const send = button('Send to Studio AI', async () => { const text = prompt.value.trim(); if (!text) return; send.disabled = true; transcript.append(el('p', 'cloudstudio-user', text)); out.textContent = 'Studio AI is editing the project...'; try { const result = await call('prompt', { projectId: active, prompt: text }); prompt.value = ''; transcript.append(el('p', 'cloudstudio-ai', 'Project updated. Preview refreshed below.')); out.textContent = `Updated. ${result.usage ? Math.max(0, result.usage.cap - result.usage.used) : ''} credits remain this week.`; localStorage.removeItem(draftKey); await loadAllowance(); await openProject(active); } catch (e) { out.textContent = messageText(e); } finally { send.disabled = false; } }, 'p'); chat.append(transcript, prompt, send, out); main.append(chat);
   }
   async function loadProjects() { try { projects = await call('projects'); projects = Array.isArray(projects) ? projects : (projects.projects || []); paintList(); if (!active && projects[0]) active = projects[0].projectId || projects[0].id; if (active) await openProject(active); else emptyMain(); } catch (e) { paintList(); emptyMain(); setNotice(messageText(e), 'cloudstudio-warn'); } }
   async function openProject(id) { if (!id) return; active = id; paintList(); try { const p = await call('project', { projectId: id }); projectCard(p); if (p.agentStatus === 'running' || p.agentStatus === 'init' || p.status === 'building') pollProject(); else stopPoll(); } catch (e) { setNotice(messageText(e), 'cloudstudio-warn'); } }
   async function pollProject() { stopPoll(); const started = now(); const tick = async () => { if (now() - started > 2 * 60 * 60 * 1000) { stopPoll(); return; } try { const p = await call('project', { projectId: active }); projectCard(p); if (!['running', 'init', 'building'].includes(p.agentStatus) && p.status !== 'building') stopPoll(); } catch {} }; await tick(); timer = si(tick, 12000); }
   async function deployProject(p) { if (!confirm('Deploy this project to production?')) return; try { await call('deploy', { projectId: p.projectId || active }); setNotice('Deployment started. Refresh the project to see its status.', 'cloudstudio-ok'); await openProject(active); } catch (e) { setNotice(messageText(e), 'cloudstudio-warn'); } }
-  notice.hidden = true; emptyMain(); loadProjects();
+  notice.hidden = true; emptyMain(); loadAllowance(); loadProjects();
   return { refresh: loadProjects, stop: stopPoll };
 }
