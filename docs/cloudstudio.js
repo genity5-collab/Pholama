@@ -27,7 +27,7 @@ export function mountCloudStudio(host, { Account, cfg = () => ({}), now = () => 
   function call(action, body = {}) {
     const base = endpoint(cfg());
     if (!base) return Promise.reject(new Error('Pholama Studio AI is waiting for its secure backend connection.'));
-    return fetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(Account && Account.token() ? { Authorization: 'Bearer ' + Account.token() } : {}) }, body: JSON.stringify(body) })
+    return fetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(Account && Account.token() ? { Authorization: 'Bearer ' + Account.token() } : {}) }, body: JSON.stringify({ action, ...body }) })
       .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok || j.errors) throw new Error(messageText(j.errors || j)); return j.data == null ? j : j.data; });
   }
   function emptyMain() { main.textContent = ''; const c = el('section', 'dcard cloudstudio-empty'); c.append(el('h3', null, 'Create your first cloud project'), el('p', 'dmut', 'Describe what you want to build. Pholama Studio will send the prompt to the secure cloud builder when the backend key is configured.')); main.append(c, launchCard()); }
@@ -35,7 +35,7 @@ export function mountCloudStudio(host, { Account, cfg = () => ({}), now = () => 
     const c = el('section', 'dcard cloudstudio-form'); c.append(el('h3', null, 'New project'));
     const name = document.createElement('input'); name.placeholder = 'Project name, for example portfolio'; name.maxLength = 80;
     const prompt = document.createElement('textarea'); prompt.rows = 5; prompt.placeholder = 'Build a responsive website for...';
-    const out = el('div', 'sys'); const go = button('Launch project', async () => { if (!name.value.trim() || !prompt.value.trim()) { out.textContent = 'Add a project name and a build prompt.'; return; } go.disabled = true; out.textContent = 'Starting cloud build...'; try { const p = await call('launch', { projectId: name.value.trim(), label: name.value.trim(), prompt: prompt.value.trim() }); active = p.projectId; out.textContent = p.agent && p.agent.started === false ? 'Project created. The first build needs a retry.' : 'Project launched.'; await loadProjects(); await openProject(active); } catch (e) { out.textContent = messageText(e); } finally { go.disabled = false; } }, 'p');
+    const out = el('div', 'sys'); const go = button('Launch project', async () => { const label = name.value.trim(); const projectId = label.toLowerCase().replace(/[^a-z0-9._-]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 80); if (!projectId || !prompt.value.trim()) { out.textContent = 'Add a project name using letters or numbers, and a build prompt.'; return; } go.disabled = true; out.textContent = 'Starting cloud build...'; try { const p = await call('launch', { projectId, label, prompt: prompt.value.trim() }); active = p.projectId; out.textContent = 'Project launched.'; await loadProjects(); await openProject(active); } catch (e) { out.textContent = messageText(e); } finally { go.disabled = false; } }, 'p');
     c.append(name, prompt, go, out); return c;
   }
   function paintList() {
