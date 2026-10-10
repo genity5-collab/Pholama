@@ -11,9 +11,9 @@ const MAX_PROMPT = 8000;
 // Short, stable owner tag from the user id. Every project this user makes starts with it.
 async function tag(userId: string) {
   const d = new Uint8Array(await crypto.subtle.digest('SHA-256', new TextEncoder().encode('pholama-studio:' + userId)));
-  return Array.from(d).slice(0, 4).map(b => b.toString(16).padStart(2, '0')).join('');
+  return 'u' + Array.from(d).slice(0, 4).map(b => b.toString(16).padStart(2, '0')).join('');
 }
-const slug = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 18);
+const slug = (s: string) => String(s || '').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 18).replace(/-+$/g, '');
 const preview = (p: any) => (p?.developmentUrlFieldToUse === 'cachedDevelopmentUrl' ? p.cachedDevelopmentUrl : (p?.temporalDevelopmentProjectUrl || p?.cachedDevelopmentUrl)) || '';
 const cleanErr = (j: any, fallback: string) => {
   const c = j?.errors?.errorCode;
@@ -21,6 +21,9 @@ const cleanErr = (j: any, fallback: string) => {
   if (c === 'AGENT_RUNNING') return 'The builder is still working on this project. Wait for it to finish.';
   if (c === 'RATE_LIMIT_EXCEEDED') return 'Too many builds at once. Try again in a minute.';
   if (c === 'PROMPT_SECURITY_VIOLATION') return 'That prompt was refused by the safety check.';
+  if (c === 'INVALID_PROJECT_NAME' || c === 'INVALID_PROJECT_NAME_LENGTH') return 'Pick a different project name (letters and numbers, up to 18 characters).';
+  if (c === 'PROJECT_ALREADY_EXISTS') return 'That project name is taken. Try another.';
+  if (c === 'PROJECT_CREDIT_LIMIT_REACHED') return 'This project reached its build limit for the month.';
   return fallback;
 };
 
@@ -43,7 +46,7 @@ Deno.serve(async req => {
     const j = await r.json().catch(() => ({}));
     return { ok: r.ok && !j?.errors, status: r.status, j };
   };
-  const mine = (id: unknown) => typeof id === 'string' && id.startsWith(owner + '-') && /^[a-z0-9][a-z0-9-]{3,60}$/.test(id);
+  const mine = (id: unknown) => typeof id === 'string' && id.startsWith(owner + '-') && /^[a-z][a-z0-9-]{3,34}$/.test(id);
   const ownedList = async () => { const r = await tl('GET', '/projects'); if (!r.ok) throw new Error(cleanErr(r.j, 'Could not load your projects.')); return (Array.isArray(r.j.data) ? r.j.data : []).filter((p: any) => mine(p.projectId)); };
 
   try {
@@ -62,7 +65,7 @@ Deno.serve(async req => {
       if (!prompt || prompt.length > MAX_PROMPT) return bad('Add a build prompt under ' + MAX_PROMPT + ' characters.');
       if ((await ownedList()).length >= PER_USER_PROJECTS) return bad('You can have ' + PER_USER_PROJECTS + ' Studio projects. Open one of them instead.', 403);
       const r = await tl('POST', '/projects/launch', { projectId: owner + '-' + base, label: label || base, prompt });
-      if (!r.ok) return bad(cleanErr(r.j, 'The builder could not start this project.'), r.status === 402 ? 402 : 502);
+      if (!r.ok) return bad(cleanErr(r.j, 'The builder could not start this project.'), r.status === 402 ? 402 : r.status >= 400 && r.status < 500 && r.status !== 401 && r.status !== 403 ? 400 : 502);
       const d = r.j.data || {};
       return out({ projectId: d.projectId, label: d.label || label, started: !!d.agent?.started, expectedMinutes: d.agent?.expectedMinutes || null, warnings: (d.warnings || []).length });
     }

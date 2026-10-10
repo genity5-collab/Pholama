@@ -9,10 +9,10 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
     s.setHeader('Content-Type', 'application/json'); const send = (d, st = 200) => { s.statusCode = st; s.end(JSON.stringify(d)); };
     if (q.url.startsWith('/auth/v1/user')) return q.headers.authorization === 'Bearer good' ? send({ id: user }) : send({}, 401);
     seen.keys.add(q.headers['api-key']); seen.calls.push(q.method + ' ' + q.url);
-    if (fail) return send({ errors: { errorCode: fail, errorMessage: 'x' }, data: null }, fail === 'INSUFFICIENT_CREDITS' ? 402 : 409);
+    if (fail && !(/INVALID_PROJECT/.test(fail) && !q.url.endsWith('/projects/launch'))) return send({ errors: { errorCode: fail, errorMessage: 'x' }, data: null }, fail === 'INSUFFICIENT_CREDITS' ? 402 : /INVALID_PROJECT/.test(fail) ? 400 : 409);
     if (q.url === '/api/v1/vcaas/account') return send({ errors: null, data: { credits: 41.5 } });
     if (q.url === '/api/v1/vcaas/projects' && q.method === 'GET') return send({ errors: null, data: projects });
-    if (q.url === '/api/v1/vcaas/projects/launch') { const j = JSON.parse(b); projects.push({ projectId: j.projectId, label: j.label, agentProcessStatus: 'init' }); return send({ errors: null, data: { projectId: j.projectId, label: j.label, agent: { started: true, expectedMinutes: 12 }, warnings: [] } }); }
+    if (q.url === '/api/v1/vcaas/projects/launch') { const j = JSON.parse(b); if (!/^[a-z][a-z0-9-]*$/.test(j.projectId)) return send({ errors: { errorCode: 'INVALID_PROJECT_NAME', errorMessage: 'x' }, data: null }, 400); if (j.projectId.length < 4 || j.projectId.length > 35) return send({ errors: { errorCode: 'INVALID_PROJECT_NAME_LENGTH', errorMessage: 'x' }, data: null }, 400); projects.push({ projectId: j.projectId, label: j.label, agentProcessStatus: 'init' }); return send({ errors: null, data: { projectId: j.projectId, label: j.label, agent: { started: true, expectedMinutes: 12 }, warnings: [] } }); }
     let m = q.url.match(/^\/api\/v1\/vcaas\/projects\/([^/]+)(\/.*)?$/);
     if (m && m[2] === '/agent/status') return send({ errors: null, data: { status: agentStatus, creditsSpent: 7.25, expectedMinutes: 9, realtimeConversation: [{ author: 'user', message: 'secret prompt' }, { author: 'agent', message: 'Building the map', messageType: 'building', createdAt: 'now' }] } });
     if (m && !m[2]) return send({ errors: null, data: { projectId: m[1], label: 'L', developmentUrlFieldToUse: 'cachedDevelopmentUrl', cachedDevelopmentUrl: 'https://cached.test/x', temporalDevelopmentProjectUrl: 'https://live.test/x', productionProjectUrl: 'https://prod.test', deployment: { status: 'success' } } });
@@ -29,7 +29,7 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   r = await call({ action: 'credits' }); ok('credits come back', r.status === 200 && r.j.data.credits === 41.5, JSON.stringify(r.j));
   r = await call({ action: 'launch', label: 'My GPS App!', prompt: 'a gps app' });
   const pid = r.j.data && r.j.data.projectId;
-  ok('launch works and the project id is owner-tagged', r.status === 200 && /^[0-9a-f]{8}-my-gps-app$/.test(pid), JSON.stringify(r.j));
+  ok('launch works and the project id is owner-tagged', r.status === 200 && /^u[0-9a-f]{8}-my-gps-app$/.test(pid), JSON.stringify(r.j));
   ok('launch reports the build started', r.j.data.started === true && r.j.data.expectedMinutes === 12);
   r = await call({ action: 'projects' }); ok('my projects lists it', r.j.data.length === 1 && r.j.data[0].projectId === pid, JSON.stringify(r.j));
   projects.push({ projectId: 'someoneelse-site', label: 'not mine' });
@@ -44,9 +44,15 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   r = await call({ action: 'prompt', projectId: pid, prompt: 'add a map' }); ok('a follow-up prompt starts the builder', r.status === 200 && r.j.data.status === 'init');
   r = await call({ action: 'prompt', projectId: pid, prompt: 'x'.repeat(8001) }); ok('an oversize prompt is refused', r.status === 400);
   r = await call({ action: 'deploy', projectId: pid }); ok('publish starts', r.status === 200 && r.j.data.status === 'deploying');
-  projects.push({ projectId: pid.slice(0, 8) + '-two' }, { projectId: pid.slice(0, 8) + '-three' });
+  projects.push({ projectId: pid.slice(0, 9) + '-two' }, { projectId: pid.slice(0, 9) + '-three' });
   r = await call({ action: 'launch', label: 'fourth', prompt: 'p' }); ok('the per-user project cap (3) is enforced', r.status === 403, JSON.stringify(r.j));
   projects = [];
+  let allLetterFirst = true, longestOk = true;
+  for (const u of ['a', 'b', 'u9', 'zz', 'user-123', 'x'.repeat(40), '0', '9', '1f', '77', '5', '3']) { user = u; projects = []; const rr = await call({ action: 'launch', label: 'a'.repeat(30), prompt: 'p' }); if (rr.status !== 200 || !/^[a-z]/.test(rr.j.data.projectId)) allLetterFirst = false; if (rr.j.data && rr.j.data.projectId.length + 6 > 35) longestOk = false; }
+  user = 'u1'; projects = [];
+  ok('every user gets a project id that starts with a letter (Totalum rule)', allLetterFirst);
+  ok('even a 30-character name stays within 35 characters with 6 random chars appended', longestOk);
+  fail = 'INVALID_PROJECT_NAME'; r = await call({ action: 'launch', label: 'zz', prompt: 'p' }); ok('a rejected name tells the user to pick another (not a generic failure)', r.status === 400 && /different project name/.test(r.raw), r.raw);
   fail = 'INSUFFICIENT_CREDITS'; r = await call({ action: 'launch', label: 'broke', prompt: 'p' }); ok('out of credits gives a friendly message', r.status === 402 && /out of build credits/.test(r.raw) && !/INSUFFICIENT/.test(r.raw), r.raw);
   fail = null;
   ok('the Totalum key only ever travelled server to server', [...seen.keys].every(k => k === 'tlm_sk_secret'));
