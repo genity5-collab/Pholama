@@ -27,7 +27,7 @@ export function mountCloudStudio(host, { Account, cfg = () => ({}), now = () => 
   function call(action, body = {}) {
     const base = endpoint(cfg());
     if (!base) return Promise.reject(new Error('Pholama Studio AI is waiting for its secure backend connection.'));
-    return fetch(base + '/' + encodeURIComponent(action), { method: 'POST', headers: { 'Content-Type': 'application/json', ...(Account && Account.token() ? { Authorization: 'Bearer ' + Account.token() } : {}) }, body: JSON.stringify(body) })
+    return fetch(base, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(Account && Account.token() ? { Authorization: 'Bearer ' + Account.token() } : {}) }, body: JSON.stringify(body) })
       .then(async r => { const j = await r.json().catch(() => ({})); if (!r.ok || j.errors) throw new Error(messageText(j.errors || j)); return j.data == null ? j : j.data; });
   }
   function emptyMain() { main.textContent = ''; const c = el('section', 'dcard cloudstudio-empty'); c.append(el('h3', null, 'Create your first cloud project'), el('p', 'dmut', 'Describe what you want to build. Pholama Studio will send the prompt to the secure cloud builder when the backend key is configured.')); main.append(c, launchCard()); }
