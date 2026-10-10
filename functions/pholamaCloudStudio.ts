@@ -2,7 +2,8 @@
 // Required secrets: PHOLAMA_API_KEY and PHOLAMA_SUPABASE_SERVICE_KEY.
 const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
 const FREE_AI = 'https://api.free.ai/v1/chat/';
-const MODEL = 'qwen/qwen-2.5-coder-32b-instruct';
+const PREFERRED_MODEL = 'qwen/qwen-2.5-coder-32b-instruct';
+const FREE_MODEL = 'qwen-coder';
 const WEEKLY_CAP = 1000;
 const cors = { 'Access-Control-Allow-Origin': '*', 'Access-Control-Allow-Headers': 'authorization, content-type', 'Content-Type': 'application/json' };
 const out = (data: unknown, status = 200) => new Response(JSON.stringify({ errors: status >= 400 ? { errorCode: 'STUDIO_ERROR', errorMessage: String(data) } : null, data: status >= 400 ? null : data }), { status, headers: cors });
@@ -34,10 +35,11 @@ Deno.serve(async req => {
     const reserve = await spend(50); if (!reserve?.ok) throw new Error('Your Pholama Studio weekly allowance is used up.');
     const system = 'You are Pholama Studio, a careful website-building AI. Return a complete, self-contained HTML document when the user asks for a website. Use inline CSS and JavaScript only. Do not claim to deploy or access files. Keep the result practical and editable. If the user asks for a change, return the complete updated document.';
     const messages = [{ role: 'system', content: system }, ...(previous ? [{ role: 'user', content: 'Existing project output:\n' + previous.slice(0, 30000) }] : []), { role: 'user', content: prompt.slice(0, 12000) }];
-    const r = await fetch(FREE_AI, { method: 'POST', headers: { Authorization: 'Bearer ' + aiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: MODEL, messages, temperature: 0.2, max_tokens: 12000 }) });
-    const j = await r.json().catch(() => ({}));
-    if (!r.ok) throw new Error('Studio AI could not answer.');
-    const text = String(j?.choices?.[0]?.message?.content || '').trim(); if (!text) throw new Error('Studio AI returned an empty result.');
+    const request = async (model: string) => { const response = await fetch(FREE_AI, { method: 'POST', headers: { Authorization: 'Bearer ' + aiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ model, messages, temperature: 0.2, max_tokens: 12000 }) }); return { response, json: await response.json().catch(() => ({})) }; };
+    let attempt = await request(PREFERRED_MODEL);
+    if (!attempt.response.ok && attempt.json?.error?.code === 'premium_requires_purchase') attempt = await request(FREE_MODEL);
+    if (!attempt.response.ok) throw new Error('Studio AI could not answer.');
+    const text = String(attempt.json?.choices?.[0]?.message?.content || '').trim(); if (!text) throw new Error('Studio AI returned an empty result.');
     const seconds = (Date.now() - started) / 1000;
     const cost = seconds <= 20 ? 50 : Math.max(200, Math.ceil(seconds / 60) * 200);
     if (cost > 50) await spend(cost - 50).catch(() => {});
