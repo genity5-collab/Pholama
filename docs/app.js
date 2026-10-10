@@ -1231,12 +1231,13 @@ $('#clearHistBtn').onclick = () => {
 // ---------- views: the Dashboard is the landing page, Chat is one tap away ----------
 function showView(name) {
   if (siteOnly() && name === 'chat') name = 'plat';            // the website has no chat
-  const dh = name === 'dash', ph = name === 'plat';
-  document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph);
-  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph;
-  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vChat', !dh && !ph]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  const dh = name === 'dash', ph = name === 'plat', ch = name === 'cloudstudio';
+  document.body.classList.toggle('dash-on', dh || ph || ch); document.body.classList.toggle('plat-on', ph); document.body.classList.toggle('cloudstudio-on', ch);
+  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph; const cz = $('#cloudStudio'); if (cz) cz.hidden = !ch;
+  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vStudioCloud', ch], ['#vChat', !dh && !ph && !ch]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
   if (dh) paintDashboard();
   if (ph) paintPlatform();
+  if (ch) paintCloudStudio();
 }
 // The website (no PC server) is only the Platform and info pages. Chat, tools and big models are in the PC app.
 const siteOnly = () => !server;
@@ -1255,6 +1256,12 @@ async function paintWhoami(name) {
   const u = Account.user(); if (!u) { b.style.display = 'none'; return; }
   let n = name; if (!n) { try { const m = await import('./platform.js'); const p = await m.makePlatform(Account, () => window.PHOLAMA || {}).profile(); n = p && p.platform_name; } catch {} }
   b.textContent = 'Logged in as ' + (n || Account.name() || 'you'); b.style.display = ''; b.onclick = () => showView('plat');
+}
+let cloudStudioMod = null, cloudStudio = null;
+async function paintCloudStudio() {
+  const host = $('#cloudStudioHost'); if (!host) return;
+  try { cloudStudioMod = cloudStudioMod || await import('./cloudstudio.js'); if (!cloudStudio) cloudStudio = cloudStudioMod.mountCloudStudio(host, { Account, cfg: () => window.PHOLAMA || {} }); else await cloudStudio.refresh(); }
+  catch (e) { host.textContent = 'Pholama Studio could not load: ' + (e && e.message || e); }
 }
 let dashMod = null;
 async function paintDashboard() {
