@@ -2,6 +2,8 @@
 // Prompt-driven autonomous workspace view for PC web app.
 
 // Pure exported helpers
+import { diffRows, plainRows, makeTabs, renderCode, renderBreadcrumb, renderTabs } from './studioeditor.js';
+
 export function fmtMs(ms) {
   if (ms == null || isNaN(ms)) return '0ms';
   const n = Number(ms);
@@ -277,10 +279,13 @@ export function createWorkspace(host, env) {
   let promptEl, projSelEl, newProjInputEl, modelSelEl, modeSelEl, modeNoteEl, attachmentsEl, startBtnEl, resolveAskEl;
   let dashCardsEl, taskHistEl, searchInputEl, searchHitsEl, treeContainerEl, newFileBtn, newFolderBtn, editorAreaEl, editorSaveBtn, editorTitleEl;
   let stageBarEl, planContainerEl, stepsTimelineEl, changesDiffEl, reportCardEl;
+  let chatEl, chatFeedEl, composerEl, patchesEl, ideEl, treeColEl, editorColEl, tabsHostEl, crumbHostEl, codeHostEl, splitTEl;
+  const tabs = makeTabs(), dirty = new Set();
   let tabHeaderEl, tabControlsEl, tabContentEl, tabSearchEl, tabFilterFailedEl, tabCopyBtn;
 
   function buildShell() {
     host.replaceChildren();
+    host.classList.add('ide-host');
 
     // Top Controls
     promptEl = el('textarea', { className: 'ws-prompt', placeholder: 'Describe what you want to build or change...' });
@@ -309,22 +314,11 @@ export function createWorkspace(host, env) {
       }
     };
 
-    topEl = el('div', { className: 'ws-top' }, [
-      el('div', { className: 'ws-prompt-row' }, [promptEl]),
-      el('div', { className: 'ws-controls-row' }, [
-        el('label', { textContent: 'Project: ' }, [projSelEl, newProjInputEl]),
-        el('label', { textContent: 'Model: ' }, [modelSelEl]),
-        el('label', { textContent: 'Mode: ' }, [modeSelEl, modeNoteEl]),
-        el('label', { textContent: 'Files: ' }, [attachmentsEl]),
-        startBtnEl
-      ]),
-      resolveAskEl
-    ]);
 
-    // Left Panel
+    // ---- IDE layout: AI chat (left) | file tree | editor with tabs, breadcrumb and numbered code (right) ----
     dashCardsEl = el('div', { className: 'ws-section' }, [el('div', { className: 'ws-section-title', textContent: 'Dashboard Projects' })]);
     taskHistEl = el('div', { className: 'ws-section' }, [el('div', { className: 'ws-section-title', textContent: 'Task History' })]);
-    
+
     searchInputEl = el('input', { type: 'text', className: 'ws-input', placeholder: 'Search in project...' });
     searchHitsEl = el('div', { className: 'ws-tree-children' });
     searchInputEl.oninput = debounceSearch;
@@ -333,52 +327,57 @@ export function createWorkspace(host, env) {
     newFolderBtn = el('button', { className: 'ws-btn', textContent: '+ Folder', onclick: handleNewFolder });
     treeContainerEl = el('div', { className: 'ws-tree-children' });
 
-    editorTitleEl = el('div', { style: { fontWeight: '600', fontSize: '13px' }, textContent: 'Editor' });
-    editorAreaEl = el('textarea', { className: 'ws-prompt', style: { minHeight: '120px', fontFamily: 'monospace' } });
+    editorTitleEl = el('div', { className: 'ide-title', textContent: 'No file open' });
+    editorAreaEl = el('textarea', { className: 'ide-edit', spellcheck: 'false', hidden: true });
     editorSaveBtn = el('button', { className: 'ws-btn ws-btn-primary', textContent: 'Save File', onclick: handleSaveFile, disabled: true });
+    editorAreaEl.addEventListener('input', () => { if (S.openFile) { dirty.add(S.openFile.name); paintTabs(); } });
 
-    const explorerSection = el('div', { className: 'ws-section' }, [
-      el('div', { className: 'ws-section-title' }, [
-        el('span', { textContent: 'File Explorer' }),
-        el('div', { style: { display: 'flex', gap: '4px' } }, [newFileBtn, newFolderBtn])
+    // chat panel: messages (plan, steps, report), the patches card, and the composer at the bottom
+    chatFeedEl = el('div', { className: 'ide-feed' }, [planContainerEl = el('div', { className: 'ide-msg' }), stepsTimelineEl = el('div', { className: 'ide-msg' }), reportCardEl = el('div', { className: 'ide-msg' })]);
+    patchesEl = el('div', { className: 'ide-patches' });
+    changesDiffEl = el('div', { className: 'ws-section', hidden: true });
+    stageBarEl = el('div', { className: 'ws-stage-bar' });
+    composerEl = el('div', { className: 'ide-composer' }, [
+      resolveAskEl,
+      promptEl,
+      el('div', { className: 'ide-composer-row' }, [
+        el('button', { className: 'ide-plus', textContent: '+', title: 'Attach files', onclick: () => { attachmentsEl.hidden = !attachmentsEl.hidden; } }),
+        modelSelEl, projSelEl, newProjInputEl, modeSelEl,
+        startBtnEl
       ]),
-      searchInputEl,
-      searchHitsEl,
-      treeContainerEl,
-      el('div', { style: { marginTop: '10px', display: 'flex', flexDirection: 'column', gap: '6px' } }, [
-        el('div', { style: { display: 'flex', justifyContent: 'space-between', alignItems: 'center' } }, [editorTitleEl, editorSaveBtn]),
-        editorAreaEl
-      ])
+      attachmentsEl, modeNoteEl
     ]);
+    attachmentsEl.hidden = true;
+    promptEl.placeholder = 'Write a message';
+    startBtnEl.textContent = ''; startBtnEl.append(el('span', { className: 'ide-send-ico', textContent: '\u27A4', 'aria-hidden': 'true' }), el('span', { className: 'ide-send-label', textContent: 'Start building' })); startBtnEl.title = 'Send'; startBtnEl.className = 'ide-send';
+    modelSelEl.classList.add('ide-pill'); projSelEl.classList.add('ide-pill'); modeSelEl.classList.add('ide-pill');
 
-    leftEl = el('div', { className: 'ws-left', style: { width: S.leftWidth + 'px' } }, [
-      dashCardsEl,
-      taskHistEl,
-      explorerSection
+    chatEl = el('div', { className: 'ws-left ide-chat', style: { width: S.leftWidth + 'px' } }, [
+      el('div', { className: 'ide-chat-head' }, [el('span', { textContent: 'PHOLAMA AI ASSISTANT' })]),
+      stageBarEl, chatFeedEl, patchesEl, changesDiffEl, composerEl
     ]);
+    leftEl = chatEl;
 
-    // Splitter Horizontal
     splitHEl = el('div', { className: 'ws-split-h', onpointerdown: onSplitHDown });
 
-    // Centre Panel
-    stageBarEl = el('div', { className: 'ws-stage-bar' });
-    planContainerEl = el('div', { className: 'ws-section' });
-    stepsTimelineEl = el('div', { className: 'ws-section' });
-    changesDiffEl = el('div', { className: 'ws-section' });
-    reportCardEl = el('div', { className: 'ws-section' });
-
-    centreEl = el('div', { className: 'ws-centre' }, [
-      stageBarEl,
-      planContainerEl,
-      stepsTimelineEl,
-      changesDiffEl,
-      reportCardEl
+    // file tree column (collapsible) with project dashboard and history folded under it
+    treeColEl = el('div', { className: 'ide-tree' }, [
+      el('div', { className: 'ide-tree-head' }, [el('span', { textContent: 'EXPLORER' }), el('div', { className: 'ide-tree-btns' }, [newFileBtn, newFolderBtn])]),
+      searchInputEl, searchHitsEl, treeContainerEl, dashCardsEl, taskHistEl
     ]);
 
-    // Splitter Vertical
+    // editor column
+    tabsHostEl = el('div', { className: 'ide-tabs-host' });
+    crumbHostEl = el('div', { className: 'ide-crumb-host' });
+    codeHostEl = el('div', { className: 'ide-code-host' }, [el('div', { className: 'ide-empty', textContent: 'Open a file from the explorer, or ask the assistant to change something.' })]);
+    editorColEl = el('div', { className: 'ide-editor' }, [
+      tabsHostEl, crumbHostEl,
+      el('div', { className: 'ide-editor-bar' }, [editorTitleEl, editorSaveBtn]),
+      codeHostEl, editorAreaEl
+    ]);
+
     splitVEl = el('div', { className: 'ws-split-v', onpointerdown: onSplitVDown });
 
-    // Bottom Panel Tabs
     const tabNames = [
       { id: 'activity', label: 'Agent Activity' },
       { id: 'tools', label: 'Tool Logs' },
@@ -386,51 +385,22 @@ export function createWorkspace(host, env) {
       { id: 'problems', label: 'Problems' },
       { id: 'tests', label: 'Tests' }
     ];
-
     tabHeaderEl = el('div', { className: 'ws-bottom-tabs' }, tabNames.map(t =>
-      el('button', {
-        className: 'ws-tab-btn' + (S.activeTab === t.id ? ' active' : ''),
-        textContent: t.label,
-        onclick: () => { S.activeTab = t.id; renderBottomTab(); }
-      })
+      el('button', { className: 'ws-tab-btn' + (S.activeTab === t.id ? ' active' : ''), textContent: t.label, onclick: () => { S.activeTab = t.id; renderBottomTab(); } })
     ));
-
     tabSearchEl = el('input', { type: 'text', className: 'ws-input', placeholder: 'Filter tab content...', style: { width: '180px' } });
     tabSearchEl.oninput = () => { S.tabFilter.q = tabSearchEl.value; renderBottomTabContent(); };
-
-    tabFilterFailedEl = el('button', {
-      className: 'ws-btn',
-      textContent: 'All / Failed',
-      onclick: () => { S.tabFilter.failedOnly = !S.tabFilter.failedOnly; renderBottomTabContent(); }
-    });
-
+    tabFilterFailedEl = el('button', { className: 'ws-btn', textContent: 'All / Failed', onclick: () => { S.tabFilter.failedOnly = !S.tabFilter.failedOnly; renderBottomTabContent(); } });
     tabCopyBtn = el('button', { className: 'ws-btn', textContent: 'Copy', onclick: handleCopyTabContent });
-
-    tabControlsEl = el('div', { className: 'ws-tab-controls' }, [
-      tabSearchEl,
-      tabFilterFailedEl,
-      tabCopyBtn
-    ]);
-
+    tabControlsEl = el('div', { className: 'ws-tab-controls' }, [tabSearchEl, tabFilterFailedEl, tabCopyBtn]);
     tabContentEl = el('div', { className: 'ws-tab-content' });
+    bottomEl = el('div', { className: 'ws-bottom', style: { height: S.bottomHeight + 'px' } }, [tabHeaderEl, tabControlsEl, tabContentEl]);
 
-    bottomEl = el('div', { className: 'ws-bottom', style: { height: S.bottomHeight + 'px' } }, [
-      tabHeaderEl,
-      tabControlsEl,
-      tabContentEl
-    ]);
-
-    centreWrapEl = el('div', { className: 'ws-centre-wrap' }, [
-      centreEl,
-      splitVEl,
-      bottomEl
-    ]);
-
-    mainEl = el('div', { className: 'ws-main' }, [
-      leftEl,
-      splitHEl,
-      centreWrapEl
-    ]);
+    centreEl = el('div', { className: 'ws-centre ide-centre' }, [editorColEl]);
+    centreWrapEl = el('div', { className: 'ws-centre-wrap' }, [centreEl, splitVEl, bottomEl]);
+    ideEl = el('div', { className: 'ide-body' }, [treeColEl, centreWrapEl]);
+    topEl = el('div', { hidden: true });
+    mainEl = el('div', { className: 'ws-main ide-main' }, [chatEl, splitHEl, ideEl]);
 
     host.append(topEl, mainEl);
   }
@@ -703,24 +673,52 @@ export function createWorkspace(host, env) {
     }
   }
 
+  // ---- editor: tabs, breadcrumb, numbered code with red/green changed lines ----
+  const fileCache = {};   // name -> text last loaded, so switching tabs is instant
+  function paintTabs() {
+    tabsHostEl.replaceChildren(renderTabs(tabs.list, tabs.active, dirty, (n) => showTab(n), (n) => closeTab(n)));
+  }
+  function changeFor(name) {
+    const d = S.diff && S.diff.changes ? S.diff.changes : [];
+    return d.find(c => c.file === name) || null;
+  }
+  function paintCode() {
+    const name = tabs.active;
+    crumbHostEl.replaceChildren();
+    codeHostEl.replaceChildren();
+    if (!name) {
+      editorTitleEl.textContent = 'No file open'; editorAreaEl.hidden = true; editorSaveBtn.disabled = true; S.openFile = null;
+      codeHostEl.append(el('div', { className: 'ide-empty', textContent: 'Open a file from the explorer, or ask the assistant to change something.' }));
+      return;
+    }
+    crumbHostEl.append(renderBreadcrumb(name));
+    editorTitleEl.textContent = name;
+    const text = fileCache[name] ?? '';
+    const ch = changeFor(name);
+    const before = ch && typeof ch.before === 'string' ? ch.before : null;
+    S.openFile = { name, content: text };
+    editorSaveBtn.disabled = false;
+    if (S.editing) { editorAreaEl.hidden = false; editorAreaEl.value = text; return; }
+    editorAreaEl.hidden = true;
+    const rows = (before != null && before !== text) ? diffRows(before, text) : plainRows(text);
+    const code = renderCode(rows);
+    code.addEventListener('dblclick', () => { S.editing = true; paintCode(); editorAreaEl.focus(); });
+    codeHostEl.append(code);
+  }
+  function showTab(name) { tabs.active = name; S.editing = false; paintTabs(); paintCode(); }
+  function closeTab(name) { tabs.close(name); dirty.delete(name); S.editing = false; paintTabs(); paintCode(); }
+
   async function openFileInEditor(filePath, scrollToLine = null) {
     if (!S.selectedProject) return;
     try {
       const projData = await reqJson(`../../projects/${encodeURIComponent(S.selectedProject)}`);
       const fileObj = (projData.files || []).find(f => f.name === filePath);
-      S.openFile = { name: filePath, content: fileObj ? fileObj.content : '' };
-      editorTitleEl.textContent = 'Editing: ' + filePath;
-      editorAreaEl.value = S.openFile.content;
-      editorSaveBtn.disabled = false;
-
+      fileCache[filePath] = fileObj ? fileObj.content : '';
+      tabs.open(filePath); S.editing = false;
+      paintTabs(); paintCode();
       if (scrollToLine && Number(scrollToLine) > 0) {
-        const lines = editorAreaEl.value.split('\n');
-        let charPos = 0;
-        for (let i = 0; i < Math.min(lines.length, scrollToLine - 1); i++) {
-          charPos += lines[i].length + 1;
-        }
-        editorAreaEl.focus();
-        editorAreaEl.setSelectionRange(charPos, charPos + (lines[scrollToLine - 1] || '').length);
+        const row = codeHostEl.querySelectorAll('.ide-line')[Number(scrollToLine) - 1];
+        if (row && row.scrollIntoView) { row.scrollIntoView({ block: 'center' }); row.classList.add('ide-flash'); }
       }
     } catch (e) {
       alert('Could not open file: ' + e.message);
@@ -729,14 +727,15 @@ export function createWorkspace(host, env) {
 
   async function handleSaveFile() {
     if (!S.selectedProject || !S.openFile) return;
+    if (!S.editing) { S.editing = true; paintCode(); editorAreaEl.focus(); return; }   // first press switches to editing
     try {
       await reqJson(`../../projects/${encodeURIComponent(S.selectedProject)}/file`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ file: S.openFile.name, content: editorAreaEl.value })
       });
-      S.openFile.content = editorAreaEl.value;
-      alert('File saved successfully.');
+      S.openFile.content = editorAreaEl.value; fileCache[S.openFile.name] = editorAreaEl.value; dirty.delete(S.openFile.name); S.editing = false;
+      paintTabs(); paintCode();
       refreshProjectTree();
     } catch (e) {
       alert('Could not save file: ' + e.message);
@@ -805,6 +804,49 @@ export function createWorkspace(host, env) {
     }
   }
 
+  // ---- patches: every file the run changed waits here for Accept or Reject (review first) ----
+  async function reviewCall(action, file) {
+    const run = S.currentRun; if (!run) return;
+    try {
+      await reqJson(`runs/${encodeURIComponent(run.id)}/review`, { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ action, file }) });
+    } catch (e) { alert('Could not do that: ' + e.message); }
+    await loadReview(); refreshProjectTree();
+    if (tabs.active) { try { await openFileInEditor(tabs.active); } catch {} }
+  }
+  async function loadReview() {
+    const run = S.currentRun; if (!run) { S.review = null; renderPatches(); return; }
+    try { S.review = await reqJson(`runs/${encodeURIComponent(run.id)}/review`); } catch { S.review = null; }
+    try { S.diff = await reqJson(`runs/${encodeURIComponent(run.id)}/diff`); } catch {}
+    renderPatches();
+  }
+  function renderPatches() {
+    patchesEl.replaceChildren();
+    const rv = S.review, run = S.currentRun;
+    if (!run || !rv || !rv.files || !rv.files.length) return;
+    const busy = run.status === 'running' || run.status === 'waiting';
+    const pend = rv.files.filter(f => f.decision === 'pending').length;
+    patchesEl.append(el('div', { className: 'ide-patches-title', textContent: 'Patches' }));
+    for (const f of rv.files) {
+      const state = f.decision === 'accepted' ? ' ide-accepted' : f.decision === 'rejected' ? ' ide-rejected' : '';
+      const row = el('div', { className: 'ide-patch' + state, 'data-file': f.file }, [
+        el('span', { className: 'ide-patch-name', textContent: f.file, title: 'Open ' + f.file, onclick: () => openFileInEditor(f.file) }),
+        el('span', { className: 'ide-patch-add', textContent: '+' + (f.added || 0) }),
+        el('span', { className: 'ide-patch-del', textContent: '\u2212' + (f.removed || 0) }),
+        f.decision === 'pending'
+          ? el('span', { className: 'ide-patch-btns' }, [
+              el('button', { className: 'ide-x', textContent: '\u2717', title: 'Reject', disabled: busy, onclick: () => reviewCall('reject', f.file) }),
+              el('button', { className: 'ide-ok', textContent: '\u2713', title: 'Accept', disabled: busy, onclick: () => reviewCall('accept', f.file) })
+            ])
+          : el('span', { className: 'ide-patch-state', textContent: f.decision === 'accepted' ? 'Accepted' : 'Rejected' })
+      ]);
+      patchesEl.append(row);
+    }
+    if (pend) patchesEl.append(el('div', { className: 'ide-patch-all' }, [
+      el('button', { className: 'ide-all', textContent: 'Accept all', disabled: busy, onclick: () => reviewCall('accept-all') }),
+      el('button', { className: 'ide-all', textContent: 'Reject all', disabled: busy, onclick: () => reviewCall('reject-all') })
+    ]));
+  }
+
   function renderRunDetails() {
     renderStageBar();
     renderPlan();
@@ -812,6 +854,7 @@ export function createWorkspace(host, env) {
     renderChangesDiff();
     renderReportCard();
     renderBottomTab();
+    if (S.currentRun && S.currentRun.status !== 'running' && S.currentRun.status !== 'queued') loadReview(); else renderPatches();
   }
 
   function renderStageBar() {

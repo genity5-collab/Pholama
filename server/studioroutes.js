@@ -88,6 +88,22 @@ async function handle(req, res, u, deps) {
     if (seg[0] === 'runs' && seg[1] && seg[2] === 'diff' && req.method === 'GET') return json(res, 200, ws.runDiff(runs.load(seg[1])));
     if (seg[0] === 'runs' && seg[1] && seg[2] === 'revert' && req.method === 'POST') { const b = await body(req), r = runs.load(seg[1]); if (eng.isActive(seg[1])) return json(res, 409, { error: 'Stop the run first.' }); return json(res, 200, b.file ? ws.revertFile(r, String(b.file)) : ws.revertRun(r)); }
 
+    // ---- review first: the changes of a run wait for you; accept keeps a file, reject puts it back ----
+    if (seg[0] === 'runs' && seg[1] && seg[2] === 'review') {
+      const r = runs.load(seg[1]); const rv = require('./studioreview');
+      if (req.method === 'GET') return json(res, 200, rv.list(r));
+      if (req.method === 'POST') {
+        if (eng.isActive(seg[1])) return json(res, 409, { error: 'Wait for the run to finish, or stop it first.' });
+        const b = await body(req), act = String(b.action || ''); let out;
+        if (act === 'accept') out = rv.accept(r, String(b.file || ''));
+        else if (act === 'reject') out = rv.reject(r, String(b.file || ''));
+        else if (act === 'accept-all') out = rv.acceptAll(r);
+        else if (act === 'reject-all') out = rv.rejectAll(r);
+        else return json(res, 400, { error: 'Choose accept, reject, accept-all or reject-all.' });
+        runs.save(r); return json(res, 200, Object.assign({}, out, { review: rv.list(r) }));
+      }
+    }
+
     // ---- project views ----
     const project = u.searchParams.get('project') || '';
     if (seg[0] === 'search' && req.method === 'GET') return json(res, 200, { hits: ws.search(project, u.searchParams.get('q'), +u.searchParams.get('limit') || 60) });

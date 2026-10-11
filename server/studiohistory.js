@@ -70,9 +70,9 @@ function compare(stu, project, id, otherId) {
   const before = load(stu, project, id).files, after = otherId ? load(stu, project, otherId).files : files(stu, project), out = [];
   for (const name of [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()) {
     const a = before[name], b = after[name];
-    if (a === undefined) out.push({ file: name, status: 'added', ...diffLines('', String(b)) });
-    else if (b === undefined) out.push({ file: name, status: 'removed', ...diffLines(String(a), '') });
-    else if (a !== b) out.push({ file: name, status: 'changed', ...diffLines(String(a), String(b)) });
+    if (a === undefined) out.push({ file: name, status: 'added', before: '', ...diffLines('', String(b)) });
+    else if (b === undefined) out.push({ file: name, status: 'removed', before: String(a), ...diffLines(String(a), '') });
+    else if (a !== b) out.push({ file: name, status: 'changed', before: String(a), ...diffLines(String(a), String(b)) });
   }
   return out;
 }

@@ -19,5 +19,11 @@ for (const dir of ['docs', 'web']) {   // docs = the website (phones), web = the
 // 4. the logo animation module is shared: docs/logointro.js must be byte-identical to web/logointro.js.
 { const a = path.join(root, 'web/logointro.js'), b = path.join(root, 'docs/logointro.js'); let same = false; try { same = fs.readFileSync(a, 'utf8') === fs.readFileSync(b, 'utf8'); } catch {}
   if (!same) { problems.push('docs/logointro.js differs from web/logointro.js'); if (!check) { fs.copyFileSync(a, b); problems.pop(); console.log('Copied web/logointro.js to docs/'); } } }
+// 5. studio workspace module and CSS are shared: docs/studioworkspace.* must be byte-identical to web/studioworkspace.*.
+for (const f of ['studioworkspace.js', 'studioworkspace.css', 'studioeditor.js']) {
+  const a = path.join(root, 'web', f), b = path.join(root, 'docs', f);
+  let same = false; try { same = fs.readFileSync(a, 'utf8') === fs.readFileSync(b, 'utf8'); } catch {}
+  if (!same) { problems.push(`docs/${f} differs from web/${f}`); if (!check) { fs.copyFileSync(a, b); problems.pop(); console.log(`Copied web/${f} to docs/`); } }
+}
 if (check) { if (problems.length) { console.log('Website is out of date:\n - ' + problems.join('\n - ') + '\nRun: node scripts/sync-site.js'); process.exit(1); } console.log('Website matches the app (' + pc.length + ' PC models, v' + rel.latest + ').'); }
 else console.log(problems.length ? 'Updated the website: ' + problems.join('; ') : 'Already in sync.');
