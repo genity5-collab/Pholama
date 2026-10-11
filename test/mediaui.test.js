@@ -300,7 +300,7 @@ const ok = (name, cond, info) => {
 
     const file = { name: 'vacation.jpg', type: 'image/jpeg', size: 150000 };
     const input = picker.node.querySelector('input[type="file"]');
-    input.files = [file];
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
     input.onchange();
 
     ok('attachPicker accepts valid image file', picker.get() === file && selected === file && err === null);
@@ -320,7 +320,7 @@ const ok = (name, cond, info) => {
     ok('attachPicker accept attribute lists image types only', input.accept === 'image/png,image/jpeg,image/webp,image/gif');
 
     const vidFile = { name: 'clip.mp4', type: 'video/mp4', size: 2000000 };
-    input.files = [vidFile];
+    Object.defineProperty(input, 'files', { value: [vidFile], configurable: true });
     input.onchange();
 
     ok('attachPicker accept="image" rejects video file', picker.get() === null && typeof err === 'string' && err.length > 0);
@@ -338,14 +338,14 @@ const ok = (name, cond, info) => {
     // SVG
     err = null;
     const svgFile = { name: 'icon.svg', type: 'image/svg+xml', size: 1000 };
-    input.files = [svgFile];
+    Object.defineProperty(input, 'files', { value: [svgFile], configurable: true });
     input.onchange();
     ok('svg rejected with onError', picker.get() === null && typeof err === 'string' && /picture/i.test(err));
 
     // 30MB video
     err = null;
     const bigVid = { name: 'heavy.mp4', type: 'video/mp4', size: 30 * 1024 * 1024 };
-    input.files = [bigVid];
+    Object.defineProperty(input, 'files', { value: [bigVid], configurable: true });
     input.onchange();
     ok('30MB video rejected with onError', picker.get() === null && typeof err === 'string' && /25 MB|shorter/i.test(err));
   }
@@ -359,7 +359,7 @@ const ok = (name, cond, info) => {
 
     const file = { name: 'pic.png', type: 'image/png', size: 50000 };
     const input = picker.node.querySelector('input[type="file"]');
-    input.files = [file];
+    Object.defineProperty(input, 'files', { value: [file], configurable: true });
     input.onchange();
 
     ok('picker holds file before clear', picker.get() === file);
@@ -414,7 +414,7 @@ const ok = (name, cond, info) => {
     ok('lightbox contains full-size img', lightbox && lightbox.querySelector('img')?.src === 'https://example.com/photo.jpg');
 
     // Close on Escape key
-    document.dispatchEvent({ type: 'keydown', key: 'Escape' });
+    document.dispatchEvent(new (document.defaultView.KeyboardEvent)('keydown', { key: 'Escape' }));
     const closedLightbox = document.body.querySelector('.pmed-lightbox');
     ok('lightbox closes on Escape key press', closedLightbox === null);
 
@@ -428,7 +428,7 @@ const ok = (name, cond, info) => {
 
     const picker = m.attachPicker();
     const input = picker.node.querySelector('input[type="file"]');
-    input.files = [hostileFile];
+    Object.defineProperty(input, 'files', { value: [hostileFile], configurable: true });
     input.onchange();
 
     const filenameSpan = picker.node.querySelector('.pmed-filename');

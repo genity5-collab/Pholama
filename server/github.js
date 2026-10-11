@@ -4,6 +4,8 @@
 const crypto = require('crypto');
 const API = 'https://api.github.com';
 const slug = s => { s = String(s || '').trim(); if (!/^[A-Za-z0-9_.-]{1,100}\/[A-Za-z0-9_.-]{1,100}$/.test(s)) throw new Error('repo must look like owner/name'); return s; };
+const branch = b => { b = String(b == null ? '' : b).trim(); if (!b) return ''; if (!/^[A-Za-z0-9._\/-]{1,100}$/.test(b) || /\.\.|\/\/|^\/|\/$|\.lock$/.test(b)) throw new Error('bad branch name'); return b; };
+const TEXT_EXT = /\.(html?|css|m?js|json|md|txt|svg|csv)$/i;
 const clip = (s, n) => String(s == null ? '' : s).replace(/\s+/g, ' ').trim().slice(0, n);
 
 async function gh(token, path, opts = {}) {
@@ -27,6 +29,19 @@ const READ = {
       const q = clip(a.query, 200); if (!q) throw new Error('query required');
       const j = await gh(t, '/search/repositories?per_page=5&q=' + encodeURIComponent(q));
       return (j.items || []).map((r, i) => `${i + 1}. ${r.full_name} (${r.stargazers_count} stars, ${r.language || 'n/a'}) ${clip(r.description, 120)}\n   ${r.html_url}`).join('\n') || 'No repositories found.';
+    } },
+  github_list_branches: {
+    desc: 'List the branches of a repo. args: {"repo":"owner/name"}',
+    run: async (t, a) => {
+      const j = await gh(t, `/repos/${slug(a.repo)}/branches?per_page=30`);
+      return j.map(b => b.name + (b.protected ? ' (protected)' : '')).join('\n') || 'No branches.';
+    } },
+  github_repo_tree: {
+    desc: 'List the files of a repo on a branch. args: {"repo":"owner/name","branch":string (optional)}',
+    run: async (t, a) => {
+      const repo = slug(a.repo), br = branch(a.branch) || (await gh(t, '/repos/' + repo)).default_branch || 'main';
+      const j = await gh(t, `/repos/${repo}/git/trees/${encodeURIComponent(br)}?recursive=1`);
+      const files = (j.tree || []).filter(x => x.type === 'blob'); return `Branch ${br}: ${files.length} file(s)${j.truncated ? ' (list cut by GitHub)' : ''}\n` + files.slice(0, 80).map(f => f.path + ' (' + f.size + ' bytes)').join('\n');
     } },
   github_read_file: {
     desc: 'Read a text file from a repo. args: {"repo":"owner/name","path":string}',
@@ -69,11 +84,11 @@ const WRITE = {
     summary: a => `Create the ${a.private ? 'private' : 'public'} repository "${a.name}" on your GitHub`,
     run: (t, a) => gh(t, '/user/repos', { method: 'POST', body: { name: a.name, description: clip(a.description, 300), private: a.private === true, auto_init: true } }).then(j => 'Created ' + j.full_name + ' ' + j.html_url) },
   github_publish_project: {
-    desc: 'Upload ALL files of a Studio project to a repo in ONE commit (asks the user to approve first). args: {"repo":"owner/name","files":[{"path":string,"content":string}],"message":string}',
+    desc: 'Upload ALL files of a Studio project to a repo in ONE commit (asks the user to approve first). args: {"repo":"owner/name","files":[{"path":string,"content":string}],"message":string,"branch":string (optional)}',
     check: a => { slug(a.repo); if (!Array.isArray(a.files) || !a.files.length || a.files.length > 80) throw new Error('1 to 80 files required'); for (const f of a.files) { if (!/^[^\0]{1,200}$/.test(String(f.path || '')) || /(^|\/)\.\.?(\/|$)/.test(f.path) || String(f.path).startsWith('/')) throw new Error('bad path ' + clip(f.path, 40)); if (f.content == null) throw new Error('content required for ' + f.path); } },
     summary: a => `Publish ${a.files.length} file${a.files.length === 1 ? '' : 's'} to ${a.repo} in one commit: "${clip(a.message || 'Publish from Pholama Studio', 60)}"`,
     run: async (t, a) => {
-      const repo = slug(a.repo), info = await gh(t, '/repos/' + repo), br = info.default_branch || 'main';
+      const repo = slug(a.repo), info = await gh(t, '/repos/' + repo), br = branch(a.branch) || info.default_branch || 'main';
       let baseSha = null, baseTree = null;
       try { const ref = await gh(t, `/repos/${repo}/git/ref/heads/${br}`); baseSha = ref.object.sha; baseTree = (await gh(t, `/repos/${repo}/git/commits/${baseSha}`)).tree.sha; } catch (e) { if (!/Not found/.test(e.message)) throw e; }   // empty repo: no branch yet
       const tree = [];
@@ -81,7 +96,9 @@ const WRITE = {
       const nt = await gh(t, `/repos/${repo}/git/trees`, { method: 'POST', body: baseTree ? { base_tree: baseTree, tree } : { tree } });
       const c = await gh(t, `/repos/${repo}/git/commits`, { method: 'POST', body: { message: clip(a.message || 'Publish from Pholama Studio', 200), tree: nt.sha, parents: baseSha ? [baseSha] : [] } });
       if (baseSha) await gh(t, `/repos/${repo}/git/refs/heads/${br}`, { method: 'PATCH', body: { sha: c.sha } }); else await gh(t, `/repos/${repo}/git/refs`, { method: 'POST', body: { ref: 'refs/heads/' + br, sha: c.sha } });
-      return `Published ${a.files.length} files to ${repo} (commit ${c.sha.slice(0, 7)}) ${info.html_url}`;
+      const check = await gh(t, `/repos/${repo}/git/ref/heads/${encodeURIComponent(br)}`);
+      if (!check.object || check.object.sha !== c.sha) throw new Error('GitHub did not confirm the push to ' + br + '. Nothing is claimed as updated.');
+      return `Published ${a.files.length} files to ${repo}@${br} (commit ${c.sha.slice(0, 7)}, confirmed by GitHub) ${info.html_url}`;
     } },
   github_write_file: {
     desc: 'Create or update a file in a repo (asks the user to approve first). args: {"repo":"owner/name","path":string,"content":string,"message":string}',
@@ -94,6 +111,31 @@ const WRITE = {
       return 'Saved ' + a.path + ' (commit ' + String(j.commit && j.commit.sha).slice(0, 7) + ')';
     } },
 };
+
+
+// Import: read the text files of a repo branch. Returns {branch, files:[{path,content}], skipped:[...]}. Nothing is written here;
+// the caller (the Studio) decides where the files go and shows the user what came in.
+async function importRepo(token, repoName, branchName) {
+  const repo = slug(repoName), info = await gh(token, '/repos/' + repo), br = branch(branchName) || info.default_branch || 'main';
+  const tree = await gh(token, `/repos/${repo}/git/trees/${encodeURIComponent(br)}?recursive=1`);
+  const files = [], skipped = [];
+  for (const f of (tree.tree || []).filter(x => x.type === 'blob')) {
+    if (!TEXT_EXT.test(f.path) || /(^|\/)\./.test(f.path) || f.path.split('/').length > 5) { skipped.push(f.path + ' (not a supported text file)'); continue; }
+    if (f.size > 200000) { skipped.push(f.path + ' (too large)'); continue; }
+    if (files.length >= 60) { skipped.push(f.path + ' (limit of 60 files)'); continue; }
+    const b = await gh(token, `/repos/${repo}/git/blobs/${f.sha}`);
+    if (b.encoding !== 'base64') { skipped.push(f.path + ' (unreadable)'); continue; }
+    files.push({ path: f.path, content: Buffer.from(b.content, 'base64').toString('utf8') });
+  }
+  return { repo, branch: br, files, skipped: skipped.slice(0, 40) };
+}
+// Review: compare local files with a branch BEFORE anything is committed. Pure read.
+async function reviewDiff(token, repoName, branchName, localFiles) {
+  const imp = await importRepo(token, repoName, branchName), remote = new Map(imp.files.map(f => [f.path, f.content])), out = [];
+  for (const f of localFiles) { if (!remote.has(f.path)) out.push({ path: f.path, status: 'added' }); else if (remote.get(f.path) !== f.content) out.push({ path: f.path, status: 'changed' }); remote.delete(f.path); }
+  for (const p of remote.keys()) out.push({ path: p, status: 'only on GitHub' });
+  return { repo: imp.repo, branch: imp.branch, changes: out };
+}
 
 const pending = new Map();   // id -> { tool, args, summary, at }
 const TTL = 10 * 60 * 1000;
@@ -122,4 +164,5 @@ async function confirm(token, id, approve) {
   if (!approve) return 'Cancelled. Nothing was changed.';
   return WRITE[p.name].run(token, p.args);
 }
-module.exports = { tools, isGithub, run, confirm, _pending: pending };
+const READ_BRANCHES = (token, repo) => READ.github_list_branches.run(token, { repo });
+module.exports = { tools, isGithub, run, confirm, importRepo, reviewDiff, branch, READ_BRANCHES, _pending: pending };

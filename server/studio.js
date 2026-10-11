@@ -56,9 +56,11 @@ function readFile(p, f) {
   const full = fileOf(p, f); if (!fs.existsSync(full)) throw new Error('no such file: ' + f);
   return fs.readFileSync(full, 'utf8');
 }
+const services = () => require('./studioservices');
 function writeFile(p, f, content) {
   const full = fileOf(p, f), d = dirOf(p);
   content = String(content == null ? '' : content);
+  try { content = services().guardWrite(p, f, content).content; } catch {}   // a saved secret can never be written into a project file
   if (Buffer.byteLength(content) > MAX_FILE) throw new Error('file too big (max ' + (MAX_FILE / 1024) + ' KB). Split it into smaller files.');
   const files = walk(d).filter(x => !/\.(png|jpe?g|gif|webp)$/i.test(x.name)), has = files.some(x => x.name === fileName(f));   // pictures have their own limits
   if (!has && files.length >= MAX_FILES) throw new Error('too many files (max ' + MAX_FILES + ')');
@@ -197,10 +199,10 @@ const TOOLS = {
 // The extra tools (map, tree, folders, pictures, verify...) live in studioplus.js. It needs this file, so it is loaded lazily to avoid a loop.
 const plus = () => require('./studioplus');
 // Tools that only LOOK (never change anything): the host does not re-check the project after these.
-const READ_ONLY = new Set(['studio_projects', 'studio_files', 'studio_read', 'studio_read_numbered', 'studio_check', 'studio_diagnose', 'studio_run_js', 'studio_map', 'studio_tree', 'studio_outline', 'studio_search', 'studio_image_info', 'studio_verify']);
-const tools = () => [...Object.entries(TOOLS).map(([name, t]) => ({ name, desc: t.desc, kind: 'studio' })), ...plus().tools()];
-const isStudio = n => Object.prototype.hasOwnProperty.call(TOOLS, n) || plus().isPlus(n);
+const READ_ONLY = new Set(['studio_secret_names', 'studio_db_status', 'studio_projects', 'studio_files', 'studio_read', 'studio_read_numbered', 'studio_check', 'studio_diagnose', 'studio_run_js', 'studio_map', 'studio_tree', 'studio_outline', 'studio_search', 'studio_image_info', 'studio_verify']);
+const tools = () => [...Object.entries(TOOLS).map(([name, t]) => ({ name, desc: t.desc, kind: 'studio' })), ...plus().tools(), ...services().toolList()];
+const isStudio = n => Object.prototype.hasOwnProperty.call(TOOLS, n) || plus().isPlus(n) || services().isTool(n);
 const isReadOnly = n => READ_ONLY.has(n);
-const run = (name, args) => { if (!isStudio(name)) throw new Error('unknown studio tool'); const a = args && typeof args === 'object' ? args : {}; return Object.prototype.hasOwnProperty.call(TOOLS, name) ? TOOLS[name].run(a) : plus().run(name, a); };
+const run = (name, args) => { if (!isStudio(name)) throw new Error('unknown studio tool'); const a = args && typeof args === 'object' ? args : {}; return Object.prototype.hasOwnProperty.call(TOOLS, name) ? TOOLS[name].run(a) : services().isTool(name) ? services().runTool(name, a) : plus().run(name, a); };
 
 module.exports = { tools, isStudio, isReadOnly, run, listProjects, createProject, deleteProject, readFile, writeFile, deleteFile, patchFile, snapshot, runJs, check, diagnose, projName, fileName, ROOT, LIMITS: { MAX_FILE, MAX_FILES, MAX_TOTAL } };

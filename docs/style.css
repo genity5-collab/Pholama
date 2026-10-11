@@ -361,3 +361,281 @@ button,select{border-color:var(--line);border-radius:10px}button:hover,select:ho
 .cloudstudio-head{align-items:center}.cloudstudio-credits{padding:8px 12px;border:1px solid var(--line);border-radius:999px;background:var(--card);font-size:12px;font-weight:700;color:var(--mut);margin-left:auto}.cloudstudio-workspace{padding:0;overflow:hidden}.cloudstudio-workbar{display:flex;align-items:center;gap:12px;padding:13px 15px;border-bottom:1px solid var(--line)}.cloudstudio-workbar strong{font-size:15px}.cloudstudio-split{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);min-height:520px}.cloudstudio-editor{width:100%;min-height:520px;resize:vertical;box-sizing:border-box;border:0;border-right:1px solid var(--line);border-radius:0;background:var(--card2);color:var(--fg);font:13px/1.55 ui-monospace,SFMono-Regular,Menlo,monospace;padding:16px;outline:none}.cloudstudio-editor:focus{box-shadow:inset 0 0 0 2px var(--acc)}.cloudstudio-screen{min-width:0;background:var(--bg)}.cloudstudio-screen-title{padding:8px 12px;border-bottom:1px solid var(--line);color:var(--mut);font-size:12px;font-weight:700}.cloudstudio-screen iframe{display:block;width:100%;height:480px;border:0;background:var(--bg)}.cloudstudio-editor-actions{display:flex;gap:8px;flex-wrap:wrap;padding:12px 15px;border-top:1px solid var(--line)}.cloudstudio-chat{display:flex;flex-direction:column;gap:10px}.cloudstudio-transcript{min-height:45px;padding:10px 12px;border:1px solid var(--line);border-radius:10px;background:var(--card2)}.cloudstudio-transcript p{margin:4px 0}.cloudstudio-user{font-weight:700}.cloudstudio-ai{color:var(--ok)}@media(max-width:800px){.cloudstudio-head{align-items:flex-start;flex-wrap:wrap}.cloudstudio-credits{order:3;margin-left:0}.cloudstudio-split{grid-template-columns:1fr}.cloudstudio-editor{min-height:300px;border-right:0;border-bottom:1px solid var(--line)}.cloudstudio-screen iframe{height:420px}}
 /* Studio: live running project, builder messages, versions. */
 .cloudstudio-live{display:block;width:100%;height:560px;border:0;background:var(--bg)}.cloudstudio-wait{padding:44px 20px;text-align:center;color:var(--mut)}.cloudstudio-transcript{max-height:260px;overflow:auto}.cloudstudio-bad{color:var(--warn)}.cloudstudio-versions .cloudstudio-version{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:8px 0;border-top:1px solid var(--line)}.cloudstudio-status a{margin-left:auto}@media(max-width:800px){.cloudstudio-live{height:440px}}
+
+/* Autonomous Workspace Cloud Studio Extensions */
+.cloudstudio-cloud-note {
+  margin: 10px 0;
+  padding: 8px 12px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  font-size: 13px;
+  color: var(--mut);
+}
+.cloudstudio-pc-link {
+  color: var(--fg);
+  font-weight: 600;
+  text-decoration: underline;
+}
+.cloudstudio-prompt-card {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px;
+  margin-bottom: 12px;
+}
+.cloudstudio-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.cloudstudio-picker, .cloudstudio-mode-select {
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.cloudstudio-name-input {
+  flex: 1;
+  min-width: 160px;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 8px 12px;
+}
+.cloudstudio-prompt {
+  width: 100%;
+  box-sizing: border-box;
+  background: var(--card);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  padding: 10px 12px;
+  font-family: inherit;
+  resize: vertical;
+}
+.cloudstudio-prompt-actions {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+.cloudstudio-estimate {
+  font-size: 13px;
+  margin-left: auto;
+}
+.cloudstudio-history-list {
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+  align-items: center;
+  margin-top: 4px;
+}
+.cloudstudio-hist-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.cloudstudio-hist-item {
+  font-size: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cloudstudio-stages {
+  display: flex;
+  gap: 6px;
+  justify-content: space-between;
+  overflow-x: auto;
+  padding: 10px;
+}
+.cloudstudio-stage-step {
+  flex: 1;
+  min-width: 90px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding: 8px 6px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  text-align: center;
+}
+.cloudstudio-stage-label {
+  font-size: 12px;
+  font-weight: 600;
+}
+.cloudstudio-stage-badge {
+  font-size: 10px;
+  margin-top: 3px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: var(--line);
+  color: var(--mut);
+}
+.cloudstudio-stage-running {
+  border-color: var(--acc);
+  box-shadow: 0 0 0 1px var(--acc);
+}
+.cloudstudio-stage-running .cloudstudio-stage-badge {
+  background: var(--acc);
+  color: var(--acct);
+}
+.cloudstudio-stage-done {
+  border-color: var(--ok);
+}
+.cloudstudio-stage-done .cloudstudio-stage-badge {
+  background: var(--ok);
+  color: #fff;
+}
+.cloudstudio-stage-failed {
+  border-color: var(--err);
+}
+.cloudstudio-stage-failed .cloudstudio-stage-badge {
+  background: var(--err);
+  color: #fff;
+}
+.cloudstudio-splitter {
+  height: 8px;
+  background: var(--line);
+  cursor: row-resize;
+  margin: 8px 0;
+  border-radius: 4px;
+  transition: background .15s;
+}
+.cloudstudio-splitter:hover {
+  background: var(--fg);
+}
+.cloudstudio-bottom-panel {
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: var(--card);
+  overflow: hidden;
+  height: 380px;
+  min-height: 180px;
+}
+.cloudstudio-tabs {
+  display: flex;
+  gap: 2px;
+  border-bottom: 1px solid var(--line);
+  background: var(--card2);
+  padding: 4px 6px;
+  overflow-x: auto;
+}
+.cloudstudio-tab {
+  border: 0;
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 600;
+  background: transparent;
+  color: var(--mut);
+}
+.cloudstudio-tab.on {
+  background: var(--card);
+  color: var(--fg);
+  box-shadow: 0 1px 3px rgba(0,0,0,.08);
+}
+.cloudstudio-tab-contents {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+}
+.cloudstudio-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cloudstudio-act-bar {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+.cloudstudio-act-search {
+  flex: 1;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 10px;
+  font-size: 13px;
+}
+.cloudstudio-act-entry {
+  padding: 8px 10px;
+  border-bottom: 1px solid var(--line);
+  cursor: pointer;
+}
+.cloudstudio-act-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+.cloudstudio-act-chip {
+  font-size: 11px;
+  font-weight: 700;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+}
+.cloudstudio-chip-error {
+  background: var(--err);
+  color: #fff;
+}
+.cloudstudio-chip-success {
+  background: var(--ok);
+  color: #fff;
+}
+.cloudstudio-chip-building {
+  background: var(--acc);
+  color: var(--acct);
+}
+.cloudstudio-diff-link {
+  display: block;
+  font-size: 12px;
+  color: var(--acc);
+  margin-top: 4px;
+}
+.cloudstudio-terminal-note {
+  padding: 8px 12px;
+  background: var(--card2);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  font-size: 13px;
+  color: var(--mut);
+}
+.cloudstudio-raw-logs {
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  white-space: pre-wrap;
+  background: var(--card2);
+  padding: 10px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  overflow: auto;
+  max-height: 250px;
+}
+.cloudstudio-problem-card {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+}
+@media (max-width: 800px) {
+  .cloudstudio-controls {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .cloudstudio-stages {
+    flex-direction: column;
+  }
+  .cloudstudio-bottom-panel {
+    height: auto !important;
+  }
+}

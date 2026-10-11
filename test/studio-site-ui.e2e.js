@@ -1,52 +1,47 @@
-// Real Chrome on the WEBSITE copy (docs/): the Studio shows credits, launches a project, streams builder messages, then shows the live screen.
+// REAL browser, REAL website page, REAL router. Only the database and the AI are doubles. A person builds a page through the Studio screen.
 const { spawn, spawnSync } = require('child_process'), fs = require('fs'), os = require('os'), path = require('path'); const wait = ms => new Promise(r => setTimeout(r, ms));
+const tc = (name, args) => '<tool_call>' + JSON.stringify({ name, arguments: args }) + '</tool_call>';
 (async () => {
   if (spawnSync(process.env.CHROME_BIN || 'google-chrome', ['--version'], { stdio: 'ignore' }).status !== 0) { console.log('SKIPPED: Chrome is not installed here'); process.exit(0); }
-  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ph-st-')); const port = 33000 + Math.floor(Math.random() * 2000), dbg = 9800 + Math.floor(Math.random() * 500);
+  const backend = await require('./helpers/sitebackend')({ script: ['["Add a welcome heading"]', tc('studio_read', { file: 'index.html' }), tc('studio_patch', { file: 'index.html', find: '<h1>cafe</h1>', replace: '<h1>Welcome to the cafe</h1>' }), 'Done.'] });
+  const home = fs.mkdtempSync(path.join(os.tmpdir(), 'ph-site-')), port = 36000 + Math.floor(Math.random() * 1500), dbg = 10400 + Math.floor(Math.random() * 400);
   const srv = spawn('python3', ['-m', 'http.server', String(port), '--bind', '127.0.0.1', '--directory', path.join(__dirname, '..', 'docs')], { stdio: 'ignore' });
   for (let i = 0; i < 60; i++) { try { if ((await fetch(`http://127.0.0.1:${port}/index.html`)).ok) break; } catch {} await wait(250); }
-  const ch = spawn(process.env.CHROME_BIN || 'google-chrome', ['--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${dbg}`, `--user-data-dir=${home}/chrome`, 'about:blank'], { stdio: 'ignore' });
+  const ch = spawn(process.env.CHROME_BIN || 'google-chrome', ['--headless=new', '--no-sandbox', '--disable-gpu', `--remote-debugging-port=${dbg}`, `--user-data-dir=${home}`, 'about:blank'], { stdio: 'ignore' });
   let tabs; for (let i = 0; i < 40; i++) { try { tabs = await (await fetch(`http://127.0.0.1:${dbg}/json`)).json(); if (tabs.length) break; } catch {} await wait(250); }
   const ws = new WebSocket(tabs.find(t => t.type === 'page').webSocketDebuggerUrl); await new Promise(r => ws.onopen = r);
-  let id = 0; const pend = new Map(), logs = [];
-  ws.onmessage = e => { const m = JSON.parse(e.data); if (m.id && pend.has(m.id)) { pend.get(m.id)(m.result || m.error); pend.delete(m.id); }
-    if (m.method === 'Runtime.exceptionThrown') logs.push('EXC ' + (m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text).slice(0, 220)); };
+  let id = 0; const pend = new Map(), errs = []; ws.onmessage = e => { const m = JSON.parse(e.data); if (m.id && pend.has(m.id)) { pend.get(m.id)(m.result || m.error); pend.delete(m.id); } if (m.method === 'Runtime.exceptionThrown') errs.push((m.params.exceptionDetails.exception?.description || m.params.exceptionDetails.text).slice(0, 200)); };
   const send = (method, params = {}) => new Promise(r => { const i = ++id; pend.set(i, r); ws.send(JSON.stringify({ id: i, method, params })); });
   const ev = async expr => { const r = await send('Runtime.evaluate', { expression: expr, awaitPromise: true, returnByValue: true }); return r.result ? r.result.value : r; };
+  let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : '  -> ' + String(x).slice(0, 400))); if (!c) bad++; };
   await send('Runtime.enable'); await send('Page.enable');
-  await send('Page.navigate', { url: `http://127.0.0.1:${port}/` }); await wait(3000);
-  let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : '  -> ' + String(x).slice(0, 300))); if (!c) bad++; };
-  // Mount the real client in a fresh box with a stubbed network.
-  await ev(`(async () => {
-    window.__st = { projects: [], phase: 'init', calls: [] };
-    window.fetch = async (u, o) => { const b = JSON.parse(o.body); const S = window.__st; S.calls.push(b.action); const r = d => ({ ok: true, json: async () => ({ errors: null, data: d }) });
-      if (b.action === 'credits') return r({ credits: 41 });
-      if (b.action === 'projects') return r(S.projects);
-      if (b.action === 'launch') { S.projects = [{ projectId: 'ab12cd34-gps', label: b.label, status: 'init' }]; return r({ projectId: 'ab12cd34-gps', started: true }); }
-      if (b.action === 'status') return r(S.phase === 'init' ? { projectId: 'ab12cd34-gps', label: 'GPS', status: 'init', done: false, expectedMinutes: 9, messages: [{ text: 'Planning the map screen', type: 'building' }], previewUrl: '' } : { projectId: 'ab12cd34-gps', label: 'GPS', status: 'done', done: true, creditsSpent: 7.5, messages: [{ text: 'All done', type: 'finished' }], previewUrl: 'about:blank#live', productionUrl: '' });
-      if (b.action === 'versions') return r([{ id: 'v_abc123', name: 'First build', createdAt: '2026-10-10T00:00:00Z' }]);
-      if (b.action === 'prompt') return r({ status: 'init' });
-      return r({}); };
-    const host = document.createElement('div'); host.id = 'st_host'; document.body.append(host);
-    const m = await import('./cloudstudio.js'); window.__studio = m.mountCloudStudio(host, { Account: { token: () => 'tok' }, cfg: () => ({ STUDIO_URL: 'https://x.test/f' }), setInterval: (fn, ms) => setInterval(fn, 300) });
-  })()`); await wait(900);
-  ok('credits are shown in the header', /Build credits: 41/.test(await ev("document.querySelector('.cloudstudio-credits').textContent")), await ev("document.querySelector('.cloudstudio-credits').textContent"));
-  ok('the empty state offers a new project form', /Create your first project/.test(await ev("document.querySelector('#st_host').textContent") || ''), await ev("document.querySelector('#st_host').textContent"));
-  await ev("document.querySelector('#st_host input').value='GPS app'; document.querySelector('#st_host textarea').value='a gps app with free maps'; [...document.querySelectorAll('#st_host button')].find(b=>b.textContent==='Launch project').click()"); await wait(1500);
-  ok('launching opens the project workspace', /GPS/.test(await ev("document.querySelector('.cloudstudio-project-head h2')?.textContent || ''")), await ev("document.querySelector('#st_host').innerText.slice(0,300)"));
-  ok('the live builder message streams into the chatbot', /Planning the map screen/.test(await ev("document.querySelector('.cloudstudio-transcript').textContent")));
-  ok('while building: waiting note shown, live screen hidden, Stop shown', (await ev("!document.querySelector('.cloudstudio-wait').hidden")) && (await ev("document.querySelector('.cloudstudio-live').hidden")) && (await ev("!document.querySelector('.cloudstudio-project-head button:nth-of-type(2)').hidden")));
-  ok('Publish is locked while building', await ev("[...document.querySelectorAll('.cloudstudio-project-head button')].find(b=>b.textContent==='Publish').disabled"));
-  await ev("window.__st.phase='done'"); await wait(1200);
-  ok('when the builder finishes, the live screen appears', (await ev("!document.querySelector('.cloudstudio-live').hidden")) && (await ev("document.querySelector('.cloudstudio-wait').hidden")));
-  ok('the live screen points at the project preview URL', /about:blank/.test(await ev("document.querySelector('.cloudstudio-live').src")), await ev("document.querySelector('.cloudstudio-live').src"));
-  ok('Open in new tab is enabled next to the iframe', (await ev("[...document.querySelectorAll('.cloudstudio-project-head button')].find(b=>b.textContent==='Open in new tab').disabled")) === false);
-  ok('credits used by the last run are shown', /7\.5 credits/.test(await ev("document.querySelector('.cloudstudio-status').textContent")));
-  ok('Publish unlocks once there is a preview', (await ev("[...document.querySelectorAll('.cloudstudio-project-head button')].find(b=>b.textContent==='Publish').disabled")) === false);
-  ok('version history lists the first build with Restore', /First build/.test(await ev("document.querySelector('.cloudstudio-versions').textContent")) && (await ev("!![...document.querySelectorAll('.cloudstudio-versions button')].find(b=>b.textContent==='Restore')")));
-  await ev("document.querySelector('.cloudstudio-chat textarea').value='add a search box'; [...document.querySelectorAll('.cloudstudio-chat button')].find(b=>b.textContent==='Send to builder').click()"); await wait(700);
-  ok('a chat change is sent to the builder and echoed', (await ev('window.__st.calls.includes("prompt")')) && /add a search box/.test(await ev("document.querySelector('.cloudstudio-transcript').textContent")));
-  ok('polling stops after the run finishes (no endless requests)', await (async () => { const a = await ev('window.__st.calls.filter(c=>c==="status").length'); await wait(1200); const b = await ev('window.__st.calls.filter(c=>c==="status").length'); return b - a <= 8; })());
-  ok('no errors in the console', logs.length === 0, logs.join(' | '));
-  console.log(bad ? bad + ' FAILED' : 'ALL PASSED'); ch.kill(); srv.kill(); process.exit(bad ? 1 : 0);
+  await send('Page.navigate', { url: `http://127.0.0.1:${port}/` }); await wait(2500);
+  // sign in AFTER the page's own startup has run, then mount the Studio exactly the way app.js does
+  await ev(`localStorage.setItem('pholama.session', JSON.stringify({ access_token: 'good-token', refresh_token: 'r', expires_at: ${Math.floor(Date.now() / 1000) + 3600}, user: { id: 'aaaaaaaa-0000-0000-0000-000000000001', email: 'kim@example.com', app_metadata: { provider: 'github' }, user_metadata: { name: 'Kim' } } }))`);
+  const mounted = await ev(`(async () => { window.PHOLAMA = Object.assign(window.PHOLAMA || {}, { STUDIO_URL: ${JSON.stringify(backend.url)} }); const host = document.createElement('div'); host.id = 'st_host'; document.body.append(host); const acct = await import('./account.js'); await acct.Account.load(); const m = await import('./cloudstudio.js'); window.__alerts = []; window.alert = t => window.__alerts.push(String(t)); window.__h = m.mountCloudStudio(host, { Account: acct.Account, cfg: () => window.PHOLAMA }); await window.__h.ready; return !!document.querySelector('#st_host .ws-prompt'); })()`);
+  ok('the real Studio screen mounts on the website page', mounted === true, mounted);
+  await wait(800);
+  ok('it asked the cloud function for its capabilities with the login', backend.requests.some(r => /capabilities/.test(r) && !/no\/invalid/.test(r)), backend.requests.join(' | '));
+  ok('the model picker shows the one cloud agent and the mode picker shows 4 modes', (await ev(`(() => { const s = [...document.querySelectorAll('#st_host .ws-select')]; return JSON.stringify({ models: [...s[1].options].map(o => o.textContent), modes: [...s[2].options].length }); })()`)) === '{"models":["Pholama cloud agent"],"modes":4}', await ev(`document.querySelector('#st_host').innerText.slice(0,200)`));
+  // create the project and run, through the screen
+  await ev(`(() => { const s = document.querySelector('#st_host .ws-select'); s.value = '__new__'; s.dispatchEvent(new Event('change')); })()`); await wait(200);
+  await ev(`(() => { const i = document.querySelector('#st_host input[placeholder^="New project"]'); i.value = 'cafe'; i.dispatchEvent(new Event('input')); const p = document.querySelector('#st_host .ws-prompt'); p.value = 'Add a welcome heading'; p.dispatchEvent(new Event('input')); })()`);
+  await ev(`document.querySelector('#st_host .ws-btn-primary').click()`);
+  let status = 'working'; for (let i = 0; i < 25; i++) { await wait(1000); status = await ev(`(() => { const c = [...document.querySelectorAll('#st_host .ws-stage-chip')]; if (!c.length) return 'working'; if (c.some(x => x.classList.contains('failed'))) return 'failed'; const rep = c[c.length - 1]; return /report/i.test(rep.innerText) && rep.classList.contains('completed') ? 'done' : 'working'; })()`); if (status !== 'working') break; }
+  ok('the run finishes on screen after real polling (no stream was opened)', status === 'done', status + ' alerts=' + (await ev('JSON.stringify(window.__alerts)')) + ' :: ' + (await ev(`document.querySelector('#st_host').innerText.slice(0, 500)`)));
+  ok('the screen polled the run (GET runs/<id>) instead of opening a stream', backend.requests.filter(r => /GET .*\/runs\/r/.test(r)).length >= 2 && !backend.requests.some(r => /\/stream/.test(r)), backend.requests.join(' | '));
+  ok('no EventSource was used on the website', !(await ev(`performance.getEntriesByType('resource').some(r => /\\/stream/.test(r.name))`)));
+  const saved = await require('./helpers/sitecore')('siteStudioSupabase.ts').then(S => S.makeStore(S.makeRest('https://x.supabase.co', 'svc', backend.pg.fetch), 'aaaaaaaa-0000-0000-0000-000000000001').getFile('cafe', 'index.html'));
+  ok('the file really changed in the member\'s own project', /Welcome to the cafe/.test(saved || ''), saved);
+  const text = await ev(`document.querySelector('#st_host').innerText`);
+  ok('the screen shows the steps the AI took (read, edit, build check)', /studio_read|Read|Reading/i.test(text) && /Edit|patch|Editing/i.test(text) && /build/i.test(text), text.slice(0, 600));
+  ok('nothing technical, provider or key is on screen', !/free\.ai|totalum|supabase|openrouter|api[_-]?key|Bearer|good-token/i.test(text), text.slice(0, 300));
+  ok('the browser raised no script errors', errs.length === 0, errs.join(' | '));
+  ok('every request carried the login (none were rejected)', !backend.requests.some(r => /no\/invalid/.test(r)), backend.requests.filter(r => /no\/invalid/.test(r)).join());
+  // logged-out: the screen shows a login message, not a crash
+  const before = backend.requests.length; await ev(`localStorage.removeItem('pholama.session')`); await send('Page.navigate', { url: `http://127.0.0.1:${port}/` }); await wait(2500);
+  const out = await ev(`(async () => { window.PHOLAMA = Object.assign(window.PHOLAMA || {}, { STUDIO_URL: ${JSON.stringify(backend.url)} }); const host = document.createElement('div'); host.id = 'st2'; document.body.append(host); const acct = await import('./account.js'); await acct.Account.load(); const m = await import('./cloudstudio.js'); const h = m.mountCloudStudio(host, { Account: acct.Account, cfg: () => window.PHOLAMA }); await h.ready; await new Promise(r => setTimeout(r, 800)); return host.innerText.slice(0, 300); })()`);
+  ok('the report says the work was verified', /Verified/.test(text) || /Verified/.test(await ev(`document.querySelector('#st_host').innerText`)));
+  ok('logged out: the screen asks the person to log in (and calls nothing)', /Log in to use Pholama Studio/.test(out) && !backend.requests.slice(before).length, out + ' :: ' + backend.requests.slice(before).join());
+  ch.kill(); srv.kill(); await backend.close(); console.log(bad ? bad + ' FAILED' : 'ALL PASSED'); process.exit(bad ? 1 : 0);
 })();

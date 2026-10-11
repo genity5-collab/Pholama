@@ -893,6 +893,14 @@ const server = http.createServer(async (req, res) => {
     if (p === '/v1/models') return json(res, 200, { object: 'list', data: (await listModels()).map(m => ({ id: m.name, object: 'model', owned_by: 'pholama' })) });
     if (p === '/v1/chat/completions' && req.method === 'POST') return openaiChat(req, res, await body(req));
     if (p === '/api/caps') { const m = u.searchParams.get('model') || ''; const c = await modelCaps(m); return json(res, 200, { ...c, nativeThinking: !!c.thinking, thinking: true, search: c.tools, mcp: c.tier === 'good', github: c.tools }); }   // thinking works on every model now: models without a native mode get the host reasoning pass
+    if (p.startsWith('/api/studio/ws')) {   // Studio workspace: runs, activity, diffs, problems, tests (studioroutes.js)
+      const sr = require('./studioroutes');
+      const models = (await listModels().catch(() => [])).map(m => ({ id: m.name, name: m.name, tools: m.tools !== false }));
+      const callModel = model => async (messages, o = {}) => { let text = ''; await streamTurnBase(model, messages, { temperature: 0.2, num_predict: 2500 }, t => { text += t; }, (o && o.signal) || AbortSignal.timeout(180000)); return text; };
+      let toolDefs = []; try { toolDefs = (await agent.buildTools({ ...agent.allowed(), inStudio: true })).tools; } catch {}
+      const tctx = { toolCalls: 0, maxToolCalls: 60, userId: 'local' };
+      return sr.handle(req, res, u, { json, body, models, terminal: !!(agent.allowed().terminal), callModel, parseTool: agent.parseTool, toolNames: toolDefs.map(t => t.name), runTool: (name, args) => agent.runTool(toolDefs, name, args, tctx) });
+    }
     if (p.startsWith('/api/studio/')) {
       const stu = require('./studio'); const seg = p.split('/').slice(3).map(decodeURIComponent);
       try {
@@ -1167,6 +1175,7 @@ try { require('./update').setRestartHandler(() => { if (process.env.PHOLAMA_TEST
 
 // Pholama for PC is made for Windows. On another system it still starts (so it can be tested), but says plainly what to expect.
 if (process.platform !== 'win32' && process.env.PHOLAMA_QUIET_OS !== '1' && !process.env.PHOLAMA_HOME) console.log('  Note: Pholama for PC is made for Windows. It may start here, but automatic setup (model engine, Python) and updates are only supported on Windows.');
+try { require('./studiorun').recover(); } catch {}   // a run left "running" by a crash is not running any more
 server.listen(PORT, HOST, () => {
   const h = hardware();
   console.log(`\n  Pholama running\n  Chat UI:  http://localhost:${PORT}\n  RAM: ${h.ramGB} GB${h.gpu ? '  GPU: ' + h.gpu + (h.vramGB ? ' (' + h.vramGB + ' GB)' : '') : ''}\n  Models folder: ${MODELS_DIR}\n`);

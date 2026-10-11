@@ -1,0 +1,522 @@
+/* Pholama Studio Workspace CSS */
+#workspace {
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 60px);
+  width: 100%;
+  overflow: hidden;
+  background: var(--bg, #090b10);
+  color: var(--fg, #edf1f7);
+  font-family: ui-sans-serif, system-ui, -apple-system, sans-serif;
+  box-sizing: border-box;
+}
+
+#workspace * {
+  box-sizing: border-box;
+}
+
+.ws-top {
+  padding: 12px 16px;
+  background: var(--card, #11151d);
+  border-bottom: 1px solid var(--line, #252c39);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  flex-shrink: 0;
+}
+
+.ws-prompt-row {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.ws-prompt {
+  flex: 1;
+  min-height: 54px;
+  max-height: 120px;
+  background: var(--bg, #090b10);
+  border: 1px solid var(--line, #252c39);
+  border-radius: 12px;
+  padding: 10px 14px;
+  color: var(--fg, #edf1f7);
+  font-size: 14px;
+  outline: none;
+  resize: vertical;
+  line-height: 1.4;
+}
+
+.ws-prompt:focus {
+  border-color: var(--acc, #8d7aff);
+}
+
+.ws-controls-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.ws-select, .ws-input {
+  background: var(--bg, #090b10);
+  color: var(--fg, #edf1f7);
+  border: 1px solid var(--line, #252c39);
+  border-radius: 8px;
+  padding: 6px 12px;
+  font-size: 13px;
+  outline: none;
+}
+
+.ws-select:focus, .ws-input:focus {
+  border-color: var(--acc, #8d7aff);
+}
+
+.ws-btn {
+  background: var(--card2, #181e29);
+  color: var(--fg, #edf1f7);
+  border: 1px solid var(--line, #252c39);
+  border-radius: 8px;
+  padding: 6px 14px;
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.ws-btn:hover {
+  background: color-mix(in srgb, var(--card2, #181e29) 80%, white);
+}
+
+.ws-btn-primary {
+  background: var(--acc, #8d7aff);
+  color: var(--acct, #0a0b10);
+  border-color: var(--acc, #8d7aff);
+  font-weight: 600;
+}
+
+.ws-btn-primary:hover {
+  opacity: 0.9;
+}
+
+.ws-btn-danger {
+  color: var(--err, #ff7186);
+  border-color: color-mix(in srgb, var(--err, #ff7186) 40%, transparent);
+}
+
+.ws-mode-note {
+  font-size: 12px;
+  color: var(--mut, #8d96a6);
+  margin-left: 4px;
+}
+
+.ws-main {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+  position: relative;
+}
+
+.ws-left {
+  width: 320px;
+  min-width: 220px;
+  max-width: 500px;
+  display: flex;
+  flex-direction: column;
+  background: var(--card, #11151d);
+  border-right: 1px solid var(--line, #252c39);
+  overflow-y: auto;
+  overflow-x: hidden;
+  flex-shrink: 0;
+}
+
+.ws-split-h {
+  width: 6px;
+  cursor: col-resize;
+  background: var(--line, #252c39);
+  flex-shrink: 0;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.ws-split-h:hover, .ws-split-h.dragging {
+  background: var(--acc, #8d7aff);
+}
+
+.ws-centre-wrap {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  min-width: 300px;
+}
+
+.ws-centre {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  overflow-y: auto;
+  padding: 14px;
+  gap: 16px;
+}
+
+.ws-split-v {
+  height: 6px;
+  cursor: row-resize;
+  background: var(--line, #252c39);
+  flex-shrink: 0;
+  transition: background 0.15s;
+  user-select: none;
+}
+
+.ws-split-v:hover, .ws-split-v.dragging {
+  background: var(--acc, #8d7aff);
+}
+
+.ws-bottom {
+  height: 280px;
+  min-height: 140px;
+  max-height: 500px;
+  display: flex;
+  flex-direction: column;
+  background: var(--card, #11151d);
+  border-top: 1px solid var(--line, #252c39);
+  flex-shrink: 0;
+}
+
+.ws-bottom-tabs {
+  display: flex;
+  background: var(--card2, #181e29);
+  border-bottom: 1px solid var(--line, #252c39);
+  overflow-x: auto;
+}
+
+.ws-tab-btn {
+  padding: 8px 16px;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
+  color: var(--mut, #8d96a6);
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.ws-tab-btn.active {
+  color: var(--acc, #8d7aff);
+  border-bottom-color: var(--acc, #8d7aff);
+  font-weight: 600;
+  background: var(--card, #11151d);
+}
+
+.ws-tab-controls {
+  display: flex;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--line, #252c39);
+  align-items: center;
+  flex-wrap: wrap;
+  background: var(--card, #11151d);
+}
+
+.ws-tab-content {
+  flex: 1;
+  overflow: auto;
+  padding: 12px;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+/* Section cards */
+.ws-section {
+  background: var(--card, #11151d);
+  border: 1px solid var(--line, #252c39);
+  border-radius: 12px;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ws-section-title {
+  font-size: 14px;
+  font-weight: 650;
+  color: var(--fg, #edf1f7);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+/* Stage Bar */
+.ws-stage-bar {
+  display: flex;
+  gap: 6px;
+  background: var(--card2, #181e29);
+  padding: 8px 12px;
+  border-radius: 12px;
+  border: 1px solid var(--line, #252c39);
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ws-stage-chip {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 20px;
+  font-size: 12px;
+  background: var(--card, #11151d);
+  border: 1px solid var(--line, #252c39);
+  color: var(--mut, #8d96a6);
+}
+
+.ws-stage-chip.completed {
+  border-color: var(--ok, #42d6a4);
+  color: var(--ok, #42d6a4);
+}
+
+.ws-stage-chip.running {
+  border-color: var(--acc, #8d7aff);
+  color: var(--acc, #8d7aff);
+  font-weight: 600;
+}
+
+.ws-stage-chip.failed {
+  border-color: var(--err, #ff7186);
+  color: var(--err, #ff7186);
+}
+
+.ws-stage-chip.skipped {
+  opacity: 0.5;
+}
+
+/* Status Chips */
+.ws-status-completed {
+  color: var(--ok, #42d6a4);
+  background: color-mix(in srgb, var(--ok, #42d6a4) 15%, transparent);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ws-status-running {
+  color: var(--acc, #8d7aff);
+  background: color-mix(in srgb, var(--acc, #8d7aff) 15%, transparent);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ws-status-failed {
+  color: var(--err, #ff7186);
+  background: color-mix(in srgb, var(--err, #ff7186) 15%, transparent);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.ws-status-cancelled {
+  color: var(--warn, #f0b45b);
+  background: color-mix(in srgb, var(--warn, #f0b45b) 15%, transparent);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.ws-status-waiting {
+  color: var(--warn, #f0b45b);
+  background: color-mix(in srgb, var(--warn, #f0b45b) 15%, transparent);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.ws-status-pending {
+  color: var(--mut, #8d96a6);
+  background: color-mix(in srgb, var(--mut, #8d96a6) 15%, transparent);
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px;
+}
+
+.ws-dot-pulse {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--acc, #8d7aff);
+  animation: wsPulse 1.2s infinite ease-in-out;
+}
+
+@keyframes wsPulse {
+  0%, 100% { transform: scale(0.8); opacity: 0.4; }
+  50% { transform: scale(1.2); opacity: 1; }
+}
+
+/* Explorer Tree */
+.ws-tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  font-size: 13px;
+  user-select: none;
+  color: var(--fg, #edf1f7);
+}
+
+.ws-tree-item:hover {
+  background: var(--card2, #181e29);
+}
+
+.ws-tree-item.active {
+  background: color-mix(in srgb, var(--acc, #8d7aff) 20%, transparent);
+  color: var(--acc, #8d7aff);
+  font-weight: 500;
+}
+
+.ws-tree-dir {
+  font-weight: 600;
+  color: var(--fg, #edf1f7);
+}
+
+.ws-tree-children {
+  padding-left: 14px;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Diff Viewer */
+.ws-diff-line-add {
+  background: color-mix(in srgb, var(--ok, #42d6a4) 18%, transparent);
+  color: var(--ok, #42d6a4);
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: 2px 6px;
+}
+
+.ws-diff-line-del {
+  background: color-mix(in srgb, var(--err, #ff7186) 18%, transparent);
+  color: var(--err, #ff7186);
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: 2px 6px;
+}
+
+.ws-diff-line-ctx {
+  color: var(--mut, #8d96a6);
+  font-family: monospace;
+  white-space: pre-wrap;
+  word-break: break-all;
+  padding: 2px 6px;
+}
+
+.ws-diff-side {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+}
+
+/* Dashboard cards */
+.ws-card {
+  background: var(--card2, #181e29);
+  border: 1px solid var(--line, #252c39);
+  border-radius: 10px;
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.ws-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  font-weight: 600;
+  font-size: 13px;
+}
+
+.ws-card-body {
+  font-size: 12px;
+  color: var(--mut, #8d96a6);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+/* Entry item (steps, logs, etc.) */
+.ws-entry {
+  border: 1px solid var(--line, #252c39);
+  border-radius: 8px;
+  background: var(--card2, #181e29);
+  margin-bottom: 6px;
+  overflow: hidden;
+}
+
+.ws-entry-head {
+  padding: 8px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 13px;
+}
+
+.ws-entry-head:hover {
+  background: color-mix(in srgb, var(--card2, #181e29) 70%, white);
+}
+
+.ws-entry-body {
+  padding: 10px;
+  border-top: 1px solid var(--line, #252c39);
+  background: var(--card, #11151d);
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.ws-entry-box {
+  background: var(--bg, #090b10);
+  border: 1px solid var(--line, #252c39);
+  border-radius: 6px;
+  padding: 8px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 200px;
+  overflow: auto;
+}
+
+/* Responsive breakpoint */
+@media (max-width: 800px) {
+  .ws-main {
+    flex-direction: column;
+    overflow-y: auto;
+  }
+  .ws-left {
+    width: 100% !important;
+    max-width: 100% !important;
+    border-right: 0;
+    border-bottom: 1px solid var(--line, #252c39);
+  }
+  .ws-split-h, .ws-split-v {
+    display: none;
+  }
+  .ws-bottom {
+    height: auto !important;
+    border-top: 1px solid var(--line, #252c39);
+  }
+}

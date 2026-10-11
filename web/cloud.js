@@ -8,7 +8,8 @@ export const EFFORT = {
   long:   { label: 'Long',   hint: 'Fuller, more careful answers. +10 credits on your own models.' },
   max:    { label: 'Max',    hint: 'Deepest reasoning. +25 credits, and +25 more if Thinking is on too.' },
 };
-export const MAX_NAME = 'Agent Max', MAX_DAY = 10, MAX_MONTH = 30;
+import { agentName } from './agentname.js';
+export const MAX_NAME = agentName(), MAX_DAY = 10, MAX_MONTH = 30;   // no fixed product name: the member's chosen name, or a random one
 export const effortKeys = () => Object.keys(EFFORT);
 export const cleanEffort = e => (EFFORT[e] ? e : 'normal');
 

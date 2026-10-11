@@ -1149,8 +1149,9 @@ function paintFallback() {
 let studio = null, studioLoading = false;
 function showView(name) {
   const st = name === 'studio', dh = name === 'dash';
-  document.body.classList.toggle('studio-on', st); document.body.classList.toggle('dash-on', dh); $('#studio').hidden = !st; const dz = $('#dash'); if (dz) dz.hidden = !dh;
-  for (const [id, on] of [['#vDash', dh], ['#vChat', name === 'chat'], ['#vStudio', st]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  const ws = name === 'workspace';
+  document.body.classList.toggle('studio-on', st || ws); document.body.classList.toggle('dash-on', dh); $('#studio').hidden = !st; const wz = $('#workspace'); if (wz) wz.hidden = !ws; const dz = $('#dash'); if (dz) dz.hidden = !dh;
+  for (const [id, on] of [['#vDash', dh], ['#vChat', name === 'chat'], ['#vStudio', st], ['#vWorkspace', ws]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
   if (dh) paintDashboard();
   try { localStorage.setItem('pholama_view', name); } catch {}
 }
@@ -1183,14 +1184,28 @@ async function openStudio() {
   } catch (e) { $('#studio').textContent = 'Studio could not load: ' + (e && e.message || e); console.warn(e); }
   finally { studioLoading = false; }
 }
+let workspace = null, workspaceLoading = false;
+async function openWorkspace() {
+  showView('workspace');
+  if (workspace || workspaceLoading) { if (workspace) workspace.open(); return; }
+  workspaceLoading = true;
+  try {
+    let mod; try { mod = await import('./studioworkspace.js'); } catch (e1) { mod = await import('./studioworkspace.js?fresh=' + Date.now()); }
+    workspace = mod.createWorkspace($('#workspace'), { api, getModels: () => pcModelNames().filter(v => !/^(web|cpu|cloud):/.test(v)).map(v => ({ id: v, name: v.replace(/^(gguf|ollama):/, '') })) });
+    await workspace.open();
+  } catch (e) { $('#workspace').textContent = 'The workspace could not load: ' + (e && e.message || e); console.warn(e); }
+  finally { workspaceLoading = false; }
+}
 function studioTab(onPc) {
   const b = $('#vStudio'); if (!b) return;
   b.style.display = onPc ? '' : 'none';
-  if (!onPc && document.body.classList.contains('studio-on')) showView('chat');
+  const w = $('#vWorkspace'); if (w) w.style.display = onPc ? '' : 'none';
+  if (!onPc && (document.body.classList.contains('studio-on'))) showView('chat');
 }
 $('#vDash').onclick = () => showView('dash');
 $('#vChat').onclick = () => showView('chat');
 $('#vStudio').onclick = () => openStudio();
+const vw = $('#vWorkspace'); if (vw) vw.onclick = () => openWorkspace();
 
 // The welcome screen on the user's own PC: real facts about this machine, nothing invented.
 function paintPcWelcome() {
