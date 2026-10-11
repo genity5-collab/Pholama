@@ -131,6 +131,12 @@ export async function handle(req: Req, d: Deps): Promise<Res> {
       if (seg[2] === 'cancel' && method === 'POST') { if (E.isDone(run)) return ok({ ok: false }); (run as any).cancelRequested = true; await runs.save(run); return ok({ ok: true }); }
       if (seg[2] === 'plan' && method === 'PUT') { if (!E.isDone(run) && run.status === 'running') return err('The plan is locked while the run is working.', 409); R.editPlan(run, body?.tasks || []); await runs.save(run); return ok({ run }); }
       if (seg[2] === 'diff' && method === 'GET') return ok(await E.runDiff(c, cps, run));
+      if (seg[2] === 'review' && method === 'GET') return ok(await E.reviewList(c, cps, run));
+      if (seg[2] === 'review' && method === 'POST') {
+        if (!E.isDone(run)) return err('Wait for the run to finish, or stop it first.', 409);
+        let out: any; try { out = await E.reviewAct(c, cps, run, String(body?.action || ''), body?.file); } catch (e) { return err(String((e as Error).message || 'That did not work.'), 400); }
+        await runs.save(run); return ok({ ...out, review: await E.reviewList(c, cps, run) });
+      }
       if (seg[2] === 'revert' && method === 'POST') { if (!E.isDone(run)) return err('Stop the run first.', 409); return ok(body?.file ? await E.revertFile(c, cps, run, body.file) : await E.revertRun(c, cps, run)); }
     }
 

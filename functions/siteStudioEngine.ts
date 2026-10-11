@@ -23,7 +23,7 @@ export function compareFiles(before: Record<string, string>, after: Record<strin
   const out: any[] = [];
   for (const name of [...new Set([...Object.keys(before), ...Object.keys(after)])].sort()) {
     const a = before[name], b = after[name];
-    if (a === undefined) out.push({ file: name, status: 'added', ...diffLines('', String(b)) }); else if (b === undefined) out.push({ file: name, status: 'removed', ...diffLines(String(a), '') }); else if (a !== b) out.push({ file: name, status: 'changed', ...diffLines(String(a), String(b)) });
+    if (a === undefined) out.push({ file: name, status: 'added', before: '', ...diffLines('', String(b)) }); else if (b === undefined) out.push({ file: name, status: 'removed', before: String(a), ...diffLines(String(a), '') }); else if (a !== b) out.push({ file: name, status: 'changed', before: String(a), ...diffLines(String(a), String(b)) });
   }
   return out;
 }
@@ -73,6 +73,29 @@ export async function revertFile(c: Ctx, cps: CheckpointStore, run: R.Run, file:
   await cps.save(run.project, 'Before reverting ' + name, await c.store.allFiles(run.project));
   if (Object.prototype.hasOwnProperty.call(cp.files, name)) { await c.store.putFile(run.project, name, String(cp.files[name])); return { ok: true, text: 'Put back ' + name }; }
   await c.store.delFile(run.project, name); return { ok: true, text: 'Removed ' + name + ' (it did not exist before this run)' };
+}
+
+// ---------- review first: every changed file waits for the user; Accept keeps it, Reject puts it back as it was before the run ----------
+const decisionsOf = (run: R.Run): Record<string, string> => ((run as any).review || {}) as Record<string, string>;
+const markReview = (run: R.Run, file: string, decision: string) => { (run as any).review = { ...decisionsOf(run), [file]: decision }; };
+export async function reviewList(c: Ctx, cps: CheckpointStore, run: R.Run) {
+  const d = await runDiff(c, cps, run), done = decisionsOf(run);
+  return { available: d.available, note: (d as any).note || null, files: (d.changes || []).map((x: any) => ({ ...x, decision: done[x.file] || 'pending' })) };
+}
+export async function reviewAct(c: Ctx, cps: CheckpointStore, run: R.Run, action: string, file?: string) {
+  const l = await reviewList(c, cps, run);
+  if (action === 'accept' || action === 'reject') {
+    const name = String(file || ''), f = l.files.find((x: any) => x.file === name);
+    if (!f) throw new Error('That file has no change to ' + action + '.');
+    if (action === 'accept') { markReview(run, name, 'accepted'); return { ok: true, text: 'Kept ' + name }; }
+    const r = await revertFile(c, cps, run, name); markReview(run, name, 'rejected'); return r;
+  }
+  if (action === 'accept-all' || action === 'reject-all') {
+    const pending = l.files.filter((x: any) => x.decision === 'pending');
+    for (const f of pending) { if (action === 'reject-all') await revertFile(c, cps, run, f.file); markReview(run, f.file, action === 'reject-all' ? 'rejected' : 'accepted'); }
+    return { ok: true, count: pending.length, text: (action === 'reject-all' ? 'Put back ' : 'Kept ') + pending.length + ' file' + (pending.length === 1 ? '' : 's') };
+  }
+  throw new Error('Choose accept, reject, accept-all or reject-all.');
 }
 
 // ---------- tools the AI may use (a fixed list; the project is forced to be THIS one) ----------

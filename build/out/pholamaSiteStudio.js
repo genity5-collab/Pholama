@@ -457,9 +457,9 @@ function compareFiles(before, after) {
   const out = [];
   for (const name of [.../* @__PURE__ */ new Set([...Object.keys(before), ...Object.keys(after)])].sort()) {
     const a = before[name], b = after[name];
-    if (a === void 0) out.push({ file: name, status: "added", ...diffLines("", String(b)) });
-    else if (b === void 0) out.push({ file: name, status: "removed", ...diffLines(String(a), "") });
-    else if (a !== b) out.push({ file: name, status: "changed", ...diffLines(String(a), String(b)) });
+    if (a === void 0) out.push({ file: name, status: "added", before: "", ...diffLines("", String(b)) });
+    else if (b === void 0) out.push({ file: name, status: "removed", before: String(a), ...diffLines(String(a), "") });
+    else if (a !== b) out.push({ file: name, status: "changed", before: String(a), ...diffLines(String(a), String(b)) });
   }
   return out;
 }
@@ -538,6 +538,37 @@ async function revertFile(c, cps, run, file) {
   }
   await c.store.delFile(run.project, name);
   return { ok: true, text: "Removed " + name + " (it did not exist before this run)" };
+}
+var decisionsOf = (run) => run.review || {};
+var markReview = (run, file, decision) => {
+  run.review = { ...decisionsOf(run), [file]: decision };
+};
+async function reviewList(c, cps, run) {
+  const d = await runDiff(c, cps, run), done = decisionsOf(run);
+  return { available: d.available, note: d.note || null, files: (d.changes || []).map((x) => ({ ...x, decision: done[x.file] || "pending" })) };
+}
+async function reviewAct(c, cps, run, action, file) {
+  const l = await reviewList(c, cps, run);
+  if (action === "accept" || action === "reject") {
+    const name = String(file || ""), f = l.files.find((x) => x.file === name);
+    if (!f) throw new Error("That file has no change to " + action + ".");
+    if (action === "accept") {
+      markReview(run, name, "accepted");
+      return { ok: true, text: "Kept " + name };
+    }
+    const r = await revertFile(c, cps, run, name);
+    markReview(run, name, "rejected");
+    return r;
+  }
+  if (action === "accept-all" || action === "reject-all") {
+    const pending = l.files.filter((x) => x.decision === "pending");
+    for (const f of pending) {
+      if (action === "reject-all") await revertFile(c, cps, run, f.file);
+      markReview(run, f.file, action === "reject-all" ? "rejected" : "accepted");
+    }
+    return { ok: true, count: pending.length, text: (action === "reject-all" ? "Put back " : "Kept ") + pending.length + " file" + (pending.length === 1 ? "" : "s") };
+  }
+  throw new Error("Choose accept, reject, accept-all or reject-all.");
 }
 var EDIT_TOOLS = /* @__PURE__ */ new Set(["studio_write", "studio_patch", "studio_lines", "studio_delete"]);
 var READ_TOOLS = /* @__PURE__ */ new Set(["studio_files", "studio_read", "studio_read_numbered", "studio_check", "studio_diagnose", "studio_search"]);
@@ -1389,6 +1420,7 @@ async function handle(req, d) {
       let project2 = String(body?.project || "").trim();
       if (body?.newProject) project2 = (await createProject(c, String(body.newProject))).name;
       if (!project2) return err("Pick a project, or name a new one.");
+      if (!await store.hasProject(projName(project2))) project2 = (await createProject(c, project2)).name;
       project2 = await own(project2);
       const active = (await runs.list(project2)).find((r) => !isDone(r) && now() - (r.updatedAt || 0) < 5 * 6e4);
       if (active) return err("This project already has a run working. Wait for it to finish or stop it.", 409);
@@ -1437,6 +1469,18 @@ async function handle(req, d) {
         return ok({ run });
       }
       if (seg[2] === "diff" && method === "GET") return ok(await runDiff(c, cps, run));
+      if (seg[2] === "review" && method === "GET") return ok(await reviewList(c, cps, run));
+      if (seg[2] === "review" && method === "POST") {
+        if (!isDone(run)) return err("Wait for the run to finish, or stop it first.", 409);
+        let out;
+        try {
+          out = await reviewAct(c, cps, run, String(body?.action || ""), body?.file);
+        } catch (e) {
+          return err(String(e.message || "That did not work."), 400);
+        }
+        await runs.save(run);
+        return ok({ ...out, review: await reviewList(c, cps, run) });
+      }
       if (seg[2] === "revert" && method === "POST") {
         if (!isDone(run)) return err("Stop the run first.", 409);
         return ok(body?.file ? await revertFile(c, cps, run, body.file) : await revertRun(c, cps, run));
