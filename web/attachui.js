@@ -30,12 +30,14 @@ export function initAttach({ model, note }) {
 async function add(files) {
   const fresh = checkFiles(files, getModel());   // only the newly picked files are checked; what is already attached stays
   if (fresh.problems.length) notify(fresh.problems.join('\n'));
+  let imageCount = picked.filter(p => p.kind === 'image').length;
   for (const f of fresh.files) {
     if (picked.length >= 4) break;
+    if (f.kind === 'image' && imageCount >= 3) { notify('Up to 3 images can be attached to one message.'); continue; }
     const it = { file: f.file, kind: f.kind, name: f.file.name, size: f.file.size };
     if (f.kind === 'text') { try { it.text = await f.file.text(); } catch { notify(`${it.name} could not be read.`); continue; } }
     else { it.url = URL.createObjectURL(f.file); }
-    picked.push(it);
+    picked.push(it); if (it.kind === 'image') imageCount++;
   }
   paint();
 }
@@ -54,6 +56,8 @@ function paint() {
 
 export const hasAttachments = () => picked.length > 0;
 export const attachedNames = () => picked.map(p => p.name);
+export const attachedFiles = () => picked.map(({ file, kind, name, size, text }) => ({ file, kind, name, size, text }));
+export async function addAttachmentFiles(files) { await add([...(files || [])]); }
 export const needsReader = () => picked.some(p => p.kind === 'image');
 export function clearAttachments() { picked.forEach(p => p.url && URL.revokeObjectURL(p.url)); picked = []; paint(); }
 

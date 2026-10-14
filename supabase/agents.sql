@@ -15,27 +15,35 @@ drop policy if exists "agent profile read own" on public.pholama_agent_profile;
 create policy "agent profile read own" on public.pholama_agent_profile for select using (auth.uid() = user_id);
 revoke insert, update, delete on public.pholama_agent_profile from anon, authenticated;
 
--- ---------- credits: one balance per member, spent atomically so two requests cannot both spend the last credits ----------
+-- ---------- credits: one daily balance per member, spent atomically so two requests cannot both spend the last credits ----------
 create table if not exists public.pholama_credits (
   user_id uuid primary key references auth.users(id) on delete cascade,
-  balance integer not null default 60 check (balance >= 0),
-  refill_on date not null default ((date_trunc('month', now() at time zone 'utc') + interval '1 month')::date),
+  balance integer not null default 12 check (balance >= 0),
+  period_start date not null default ((now() at time zone 'utc')::date),
+  refill_on date not null default (((now() at time zone 'utc')::date + 1)),
   updated_at timestamptz not null default now()
 );
+-- Idempotent migration for accounts created by the old 60-credit monthly policy.
+alter table public.pholama_credits add column if not exists period_start date not null default ((now() at time zone 'utc')::date);
+alter table public.pholama_credits alter column balance set default 12;
+alter table public.pholama_credits alter column refill_on set default (((now() at time zone 'utc')::date + 1));
 alter table public.pholama_credits enable row level security;
 drop policy if exists "credits read own" on public.pholama_credits;
 create policy "credits read own" on public.pholama_credits for select using (auth.uid() = user_id);
 revoke insert, update, delete on public.pholama_credits from anon, authenticated;
 
--- Spend n credits. Refills at the start of a new month. Returns {ok, balance, refill_on}. Never goes below zero.
+-- Spend n credits. Each account gets 12 credits per UTC day.
+-- Existing balances above 12 are capped on the first spend after this migration. Returns {ok, balance, refill_on}.
 create or replace function public.pholama_credits_spend(p_user uuid, p_cost integer) returns jsonb
 language plpgsql security definer set search_path = public as $$
-declare c int := greatest(0, least(coalesce(p_cost, 0), 200)); r public.pholama_credits; monthly int := 60;
+declare c int := greatest(0, least(coalesce(p_cost, 0), 200)); r public.pholama_credits; daily int := 12; today_utc date := (now() at time zone 'utc')::date;
 begin
   insert into public.pholama_credits(user_id) values (p_user) on conflict (user_id) do nothing;
   select * into r from public.pholama_credits where user_id = p_user for update;
-  if r.refill_on <= (now() at time zone 'utc')::date then
-    update public.pholama_credits set balance = monthly, refill_on = ((date_trunc('month', now() at time zone 'utc') + interval '1 month')::date), updated_at = now() where user_id = p_user returning * into r;
+  if r.period_start < today_utc then
+    update public.pholama_credits set balance = daily, period_start = today_utc, refill_on = (today_utc + 1), updated_at = now() where user_id = p_user returning * into r;
+  elsif r.balance > daily or r.refill_on <> (today_utc + 1) then
+    update public.pholama_credits set balance = least(balance, daily), refill_on = (today_utc + 1), updated_at = now() where user_id = p_user returning * into r;
   end if;
   if r.balance < c then return jsonb_build_object('ok', false, 'balance', r.balance, 'refill_on', r.refill_on); end if;
   update public.pholama_credits set balance = balance - c, updated_at = now() where user_id = p_user returning * into r;
@@ -47,7 +55,7 @@ grant execute on function public.pholama_credits_spend(uuid, integer) to service
 -- Give credits back when a call fails after being charged.
 create or replace function public.pholama_credits_refund(p_user uuid, p_amount integer) returns void
 language sql security definer set search_path = public as $$
-  update public.pholama_credits set balance = least(500, balance + greatest(0, least(coalesce(p_amount, 0), 200))), updated_at = now() where user_id = p_user
+  update public.pholama_credits set balance = least(12, balance + greatest(0, least(coalesce(p_amount, 0), 200))), updated_at = now() where user_id = p_user
 $$;
 revoke all on function public.pholama_credits_refund(uuid, integer) from public, anon, authenticated;
 grant execute on function public.pholama_credits_refund(uuid, integer) to service_role;

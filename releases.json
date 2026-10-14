@@ -1,6 +1,17 @@
 {
- "latest": "0.9.40",
+ "latest": "0.9.41",
  "releases": [
+  {
+   "version": "0.9.41",
+   "date": "2026-10-14",
+   "title": "Chat-first Pholama Platform with safe RetroStudio previews",
+   "notes": [
+    "The website now opens on a chat-first experience with saved conversations, account-backed Free.ai agent packs, and text or image attachments (up to 3 images per message).",
+    "New Roblox: RetroStudio chat plugin creates separate Luau script tabs and a static allowlisted part preview. Lua is never executed and the mock does not connect to Roblox or run a real playtest.",
+    "Cloud agents receive 12 credits each UTC day. Specialist actions can cost more; truncated or long replies can be continued explicitly for 2 credits, and failed provider calls are refunded.",
+    "Fixed conversation rollback so failed or cancelled requests cannot remove a previous chat turn."
+   ]
+  },
   {
    "version": "0.9.40",
    "date": "2026-10-06",

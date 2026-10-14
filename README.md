@@ -2,8 +2,8 @@
 
 Run AI chat **on your own PC**. Free and private.
 
-> **Phone support has ended.** Models are no longer installed on phones or in the browser. Pholama is built for the **PC app**: bigger models, tools, web search, programming languages and Roblox Studio.
-> On a phone you can still open the website for **Agent Max** (the cloud assistant, nothing to download), the Platform (posts, projects, support tickets), or open your own PC app from the phone over your network.
+> Phone and browser model installs have ended. Pholama PC remains the local runtime; the website offers account-backed Free.ai chat, the Platform, and a simulated Roblox: RetroStudio scripting plugin.
+> On a phone you can use the website chat, keep conversations, attach up to three images per message, or open your own PC app over your network.
 
 ## Get started on your PC
 
@@ -30,13 +30,13 @@ Open **Settings > Usage > Programming languages** to see what Pholama found on y
 
 ### Pholama Platform (the website)
 
-The website is now **Pholama Platform**. The AI lives in the PC app, and the site is where you log in, keep a profile and meet other people.
+The website combines **Pholama Platform** with a chat-first Free.ai assistant. Sign in to choose an agent pack, return to saved conversations, and use the safe Roblox: RetroStudio mock plugin for separate Luau script tabs and static part previews. The preview never executes Lua, connects to Roblox, or performs a real playtest.
 
 - **Logged in as** your own Platform name, in the header on PC and phone. You choose the name and picture, and they are not your Discord or GitHub name or email.
 - **Communities** with posts. **Every post disappears after 3 hours.** React with Like, Love, Haha, Wow or Fire.
 - **Moderation:** report a post. Three reports hide it until a moderator looks. Links and secret keys are blocked in posts, and the database enforces this, not the page.
 - **Your last local AIs:** when the PC app opens, it sends only the **names** of your downloaded models, once, when your PC is idle. No files and no chats.
-- **One small assistant on the site.** It can chat, and it cannot use tools or files. Bigger models and tools are in the PC app.
+- **Cloud chat allowance:** 12 credits per account per UTC day. Specialist actions can cost extra; continuing a long or truncated reply costs 2 credits. The browser supports text attachments and up to **3 images per message**.
 
 **Sign in with GitHub:** press **Continue with GitHub** in Settings > Account, on the site or the PC app. It replaces pasting a token, and every write to GitHub still asks you first. Use the **same GitHub account on both** and the PC app adds **250 credits**, once per account.
 

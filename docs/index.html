@@ -4,11 +4,10 @@
 <meta name="theme-color" content="#000000"><link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icon.svg"><link rel="icon" type="image/png" sizes="192x192" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png"><title>Pholama Platform</title>
 <link rel="stylesheet" href="style.css">
-<link rel="stylesheet" href="studioworkspace.css">
 </head><body class="site-shell">
 <header>
   <div class="brand"><img class="brand-mark" src="icon-512.png" alt="Pholama"><span>Pholama</span></div>
-  <div class="viewsw" id="viewSw" role="tablist" aria-label="View"><button id="vDash" role="tab" aria-selected="false">Guides</button><button id="vStudioCloud" role="tab" aria-selected="false">Pholama Studio</button><button id="vPlat" role="tab" aria-selected="false">Platform</button><button id="vChat" role="tab" aria-selected="false">Chat</button></div>
+  <div class="viewsw" id="viewSw" role="tablist" aria-label="View"><button id="vDash" role="tab" aria-selected="false">Guides</button><button id="vPlat" role="tab" aria-selected="false">Platform</button><button id="vChat" role="tab" aria-selected="false">Chat</button></div>
   <button class="whoami" id="whoami" style="display:none" title="Your Platform profile"></button><span class="pcbadge" id="pcBadge" style="display:none" title="You are running Pholama on your own PC">PC</span><span class="sp"></span>
   <span class="pill" id="updPill" style="display:none;cursor:pointer" title="A new version was downloaded">Update ready</span>
   <span class="pill" id="cr" title="Daily credits" style="display:none"></span>
@@ -19,16 +18,31 @@
   <button id="acct" style="display:none"></button>
 </header>
 
-<div id="sunset" class="sunset" role="status"><b>Phone support has ended.</b> Pholama now lives on the PC app: bigger models, tools, web search and Roblox Studio. This website is becoming an information site.<a href="https://github.com/genity5-collab/Pholama#on-your-pc-more-power-tools-web-search" target="_blank" rel="noopener">Get Pholama PC</a></div>
+<div id="sunset" class="sunset" role="status"><b>Cloud chat is back.</b> Pick an agent pack, attach up to three images, or enable Roblox: RetroStudio for a chat-first script workspace. Its viewport is a safe mock—not official Roblox Studio.</div>
 <div id="dash"></div>
-<div id="cloudStudio" hidden><div id="cloudStudioHost"></div></div>
 <div id="plat" hidden><div id="platHost"></div></div>
 <div id="chat">
-  <div id="aiwarn" class="aiwarn" role="alert"><b>The AI on this site might stop working.</b> The browser AI is no longer being improved and may be removed or break at any time. For reliable chat, tools and files, use the <a href="https://github.com/genity5-collab/Pholama#on-your-pc-more-power-tools-web-search" target="_blank" rel="noopener">Pholama PC app</a>. This site will keep the update log, guides and API help.</div>
+  <div id="retroWorkspace" class="retro-workspace" hidden>
+    <div class="retro-head"><div><b>Roblox: RetroStudio</b><span>Chat-linked mock workspace</span></div><span class="retro-sim-badge">SIMULATED</span></div>
+    <div class="retro-grid">
+      <section class="retro-code-card" aria-label="Generated Luau scripts">
+        <div class="retro-card-head"><b>Scripts</b><button type="button" id="retroDownload">Download active .lua</button></div>
+        <div id="retroTabs" class="retro-tabs" role="tablist" aria-label="Scripts in this response"></div>
+        <textarea id="retroCode" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Active Luau script" placeholder="Ask the chat to create a Roblox Luau script. Each returned Lua block gets its own tab."></textarea>
+        <div class="retro-actions"><button type="button" id="retroPreview" class="p">Run safe preview</button><button type="button" id="retroScreenshot">Attach preview screenshot to chat</button></div>
+        <div id="retroLog" class="retro-log" role="status" aria-live="polite">No script yet. Ask the chat to build one.</div>
+      </section>
+      <section class="retro-view-card" aria-label="Simulated part preview">
+        <div class="retro-card-head"><b>Viewport</b><span>Static, allowlisted preview only</span></div>
+        <canvas id="retroCanvas" aria-label="Simulated 3D parts"></canvas>
+        <p>Only simple Part creation and listed properties are visualized. No Lua is executed; no live Roblox playtest or remote project access.</p>
+      </section>
+    </div>
+  </div>
   <div id="hero">
     <div id="heroLogo"></div>
-    <h1>Chat with Pholama</h1>
-    <p>Chat with the cloud assistant here. Model downloads on the website have ended. For models on your own computer, get the Pholama PC app.</p>
+    <h1>Chat, create, preview</h1>
+    <p>Choose a Free.ai agent pack, attach text or up to three images, and—when the Roblox: RetroStudio plugin is on—get separate script tabs with a safe simulated preview.</p>
     <div id="pcStatus" class="pcstatus" style="display:none"></div>
     <div class="chips" id="heroChips"></div>
     <div id="pcPromo" class="promo" hidden>
@@ -43,6 +57,13 @@
 <footer>
   <div class="toolbar">
     <div id="swrow" class="swrow" style="display:none"></div>
+    <div id="siteAgentBar" class="site-agentbar" hidden>
+      <label>Agent pack <select id="agentConfig" aria-label="Agent pack"><option value="one">Configuration 1 · Phi-3 Mini</option><option value="two">Configuration 2 · Mistral 7B</option></select></label>
+      <label>Specialist <select id="agentRole" aria-label="Optional specialist"><option value="chat">Chat only</option></select></label>
+      <button id="retroPluginBtn" type="button" aria-pressed="false" title="Enable the Roblox: RetroStudio mock scripting plugin">+ Roblox: RetroStudio</button>
+      <span id="agentCredits" class="agent-credit" role="status">Sign in to see daily credits</span>
+      <div id="pluginSuggest" class="plugin-suggest" role="listbox" aria-label="Plugin suggestions" hidden><button type="button" role="option" id="pluginSuggestRetro">Roblox: RetroStudio <small>Insert @Roblox:RetroStudio</small></button></div>
+    </div>
     <div class="tbr">
       <div class="effort" id="effort" role="group" aria-label="Think effort"></div>
       <button id="histBtn" class="ib" title="Chat history" aria-label="Chat history"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></button>
@@ -50,7 +71,7 @@
     </div>
   </div>
   <div class="composer">
-    <textarea id="in" rows="1" placeholder="Message Pholama..."></textarea>
+    <textarea id="in" rows="1" placeholder="Message Pholama... Use @ to pick a plugin" aria-label="Message Pholama"></textarea>
     <button id="crBox" class="pill" style="display:none" title="Usage" aria-label="Usage"></button>
     <button class="p" id="send" title="Send" aria-label="Send">&#8593;</button>
   </div>

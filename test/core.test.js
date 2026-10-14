@@ -239,7 +239,7 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
     ok('info: guides cover start, github, api and remote', ['start', 'github', 'api', 'remote'].every(id => info.GUIDES.some(g => g.id === id)));
     ok('info: never asks for a secret key', !info.KEY_FACTS.some(([, v]) => /enter your (api )?key here/i.test(v)) && info.KEY_FACTS.some(([, v]) => /never asks for or stores your keys/.test(v)));
     const idx = fs.readFileSync(path.join(root, 'docs', 'index.html'), 'utf8'), pcIdx = fs.readFileSync(path.join(root, 'web', 'index.html'), 'utf8');
-    ok('site: warns the AI might stop working', /id="aiwarn"/.test(idx) && /might stop working/.test(idx));
+    ok('site: announces the return of cloud chat and plugin support', /id="sunset"/.test(idx) && /Cloud chat is back/.test(idx) && /Roblox: RetroStudio/.test(idx));
     ok('pc app: has no site warning', !/id="aiwarn"/.test(pcIdx));
     ok('both: GitHub button present', /id="a_github"/.test(idx) && /id="a_github"/.test(pcIdx));
     ok('sql: table is protected by row-level security', /enable row level security/.test(fs.readFileSync(path.join(root, 'supabase', 'github_bonus.sql'), 'utf8')));
@@ -298,17 +298,17 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
     ok('bans: permanent, timed and expired text', /permanently/.test(PL.banText({ banned: true })) && /until/.test(PL.banText({ banned: true, banned_until: '2999-01-01T00:00:00Z' })) && PL.banText({ banned: true, banned_until: '2000-01-01T00:00:00Z' }) === '');
     ok('console: only known words are sent', PL.modCommandProblem('ban Zed 24 spam') === '' && !!PL.modCommandProblem('drop table x') && !!PL.modCommandProblem('') && PL.modCommandProblem('HELP') === '');
   }
-  // ---- the website is a dashboard: no chat, one model. The PC app keeps everything. ----
+  // ---- the website is chat-first; model management remains in the PC app. ----
   {
     const siteM = JSON.parse(fs.readFileSync(path.join(root, 'docs', 'models.json'), 'utf8')), pcM = JSON.parse(fs.readFileSync(path.join(root, 'web', 'models.json'), 'utf8'));
     const css = fs.readFileSync(path.join(root, 'docs', 'style.css'), 'utf8'), js = fs.readFileSync(path.join(root, 'docs', 'app.js'), 'utf8'), webJs = fs.readFileSync(path.join(root, 'web', 'app.js'), 'utf8');
     ok('phone support ended: no in-browser or phone models in any catalog', siteM.browser.length === 0 && siteM.cpu.length === 0 && pcM.browser.length === 0 && pcM.cpu.length === 0);
     ok('PC app keeps its full model list', (pcM.local || []).length > 10);
-    ok('website: chat, composer, model picker and Chat tab are removed', /body\.site-only #chat,body\.site-only footer,body\.site-only #vChat,body\.site-only #model/.test(css));
+    ok('website: Chat, composer, history and Chat tab are available; PC model picker stays hidden', /id="vChat"/.test(fs.readFileSync(path.join(root, 'docs', 'index.html'), 'utf8')) && /id="histBtn"/.test(fs.readFileSync(path.join(root, 'docs', 'index.html'), 'utf8')) && /body\.site-shell #model/.test(css) && !/body\.site-only #chat,body\.site-only footer/.test(css));
     ok('website: Models button is hidden (one model, nothing to pick)', /body\.site-only #mgr/.test(css));
     ok('website: the Models manager cannot be opened', /onclick = \(\) => \{ if \(siteOnly\(\)\) return; render\(\); dlg\.showModal/.test(js));
-    ok('website: the chat view can never be opened', /if \(siteOnly\(\) && name === 'chat'\) name = 'plat'/.test(js) && /const siteOnly = \(\) => !server/.test(js));
-    ok('website: Platform is the home screen', /showView\(siteOnly\(\) \? 'plat' : 'dash'\)/.test(js));
+    ok('website: Chat view can be opened on the site', /#vChat'\)\.onclick = \(\) => showView\('chat'\)/.test(js) && !/if \(siteOnly\(\) && name === 'chat'\)/.test(js));
+    ok('website: Chat is the home screen while the PC app opens on Guides', /showView\(siteOnly\(\) \? 'chat' : 'dash'\)/.test(js));
     ok('website: connecting to a PC brings chat back', /markSite\(\);\s*await refreshSelect\(\); render\(\);/.test(js));
     ok('PC app has no site-only switch', !/site-only/.test(webJs) && !/site-only/.test(fs.readFileSync(path.join(root, 'web', 'style.css'), 'utf8')));
   }

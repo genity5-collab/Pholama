@@ -35,7 +35,7 @@ Deno.serve(async req => {
   const balance = async () => { const r = await rpc('pholama_credits_spend', { p_user: uid, p_cost: 0 }); return { credits: Number(r?.balance ?? 0), refill_on: r?.refill_on || null }; };
 
   const free = async (path: string, payload: unknown) => {
-    const r = await fetch(FREE_AI + path, { method: 'POST', headers: { Authorization: 'Bearer ' + aiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(55000) });
+    const r = await fetch(FREE_AI + path, { method: 'POST', headers: { Authorization: 'Bearer ' + aiKey, 'Content-Type': 'application/json' }, body: JSON.stringify(payload), signal: AbortSignal.timeout(125000) });
     const j: any = await r.json().catch(() => ({})); return { ok: r.ok, status: r.status, j };
   };
 
@@ -71,6 +71,31 @@ Deno.serve(async req => {
     }
     if (action === 'poll') return out(await pollJob(aiKey, String(body.jobId || '')));
 
+    if (action === 'continue') {
+      if (!aiKey) return out('The cloud agent is not configured yet.', 503);
+      const p = await profile(), chat = findAgent(p.config, 'chat')!;
+      if (!isSelfHosted(chat.model)) return out('Only Free.ai\'s free models are allowed.', 400);
+      const history = (Array.isArray(body.history) ? body.history : []).slice(-8).map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 2000) }));
+      if (!history.length || history[history.length - 1].role !== 'assistant') return out('There is no assistant reply to continue.', 400);
+      const cost = 2, spent = await rpc('pholama_credits_spend', { p_user: uid, p_cost: cost });
+      if (!spent?.ok) return out({ error: 'You need 2 credits to continue (' + (spent?.balance ?? 0) + ' left).' + (spent?.refill_on ? ' They refill on ' + spent.refill_on + '.' : ''), code: 'credits', credits: spent?.balance ?? 0, refill_on: spent?.refill_on || null }, 402);
+      const startedAt = Date.now();
+      let r;
+      try {
+        r = await free('/chat/', { model: chat.model, messages: [{ role: 'system', content: systemPrompt(p.name, p.config, p.picked) }, ...history, { role: 'user', content: 'Continue the previous answer from exactly where it stopped. Do not repeat earlier text. If the answer is complete, say so briefly.' }], max_tokens: 1400 });
+      } catch {
+        await rpc('pholama_credits_refund', { p_user: uid, p_amount: cost }).catch(() => {});
+        return out('The cloud agent did not answer. You were not charged. Try again.', 502);
+      }
+      const reply = String(r.j?.choices?.[0]?.message?.content || '').trim();
+      if (!r.ok || !reply) {
+        await rpc('pholama_credits_refund', { p_user: uid, p_amount: cost }).catch(() => {});
+        return out('The cloud agent did not answer. You were not charged. Try again.', 502);
+      }
+      const finishReason = String(r.j?.choices?.[0]?.finish_reason || '');
+      return out({ reply, agent: p.name, model: chat.model, charged: cost, credits: Number(spent.balance ?? 0), refill_on: spent.refill_on || null, canContinue: finishReason === 'length' || Date.now() - startedAt >= 120000 });
+    }
+
     if (action === 'chat') {
       if (!aiKey) return out('The cloud agent is not configured yet.', 503);
       const text = String(body.text || '').trim(); if (!text) return out('Write a message first.', 400); if (text.length > MAX_TEXT) return out('That message is too long (max ' + MAX_TEXT + ' characters).', 400);
@@ -82,23 +107,32 @@ Deno.serve(async req => {
       }
       const chat = findAgent(p.config, 'chat')!; if (!isSelfHosted(chat.model)) return out('Only Free.ai\'s free models are allowed.', 400);
       const history = (Array.isArray(body.history) ? body.history : []).slice(-8).map((m: any) => ({ role: m.role === 'assistant' ? 'assistant' : 'user', content: String(m.content || '').slice(0, 2000) }));
+      // This is an in-app mock workspace, not a connection to Roblox Studio or the separate RetroStudio service.
+      const pluginPrompt = body.plugin === 'retrostudio' ? '\n\nRoblox: RetroStudio plugin is enabled. Help create and edit a Luau script for the Pholama in-app mock Studio. For previewable scenes, use only this static subset: one `local name = Instance.new("Part")` per line; simple `name.Name = "..."`, `name.Size = Vector3.new(x,y,z)`, `name.Position = Vector3.new(x,y,z)`, `name.CFrame = CFrame.new(x,y,z)`, `name.Color = Color3.fromRGB(r,g,b)`, `name.Material = Enum.Material.<Plastic|SmoothPlastic|Wood|Concrete|Metal|Glass|Neon|Brick|Grass|Fabric>`, `name.Anchored = true|false`, `name.CanCollide = true|false`, and `name.Parent = workspace`. Keep statements one per line. Explain unsupported Luau plainly. The preview only statically simulates those properties; it never executes Lua, controls official Roblox/RetroStudio, encodes scripts, or performs a real Roblox playtest. Never claim otherwise. Return the complete script in a fenced ```lua block and summarize what the mock can show.' : '';
       // A subagent is only reported as used if Free.ai really answered it. Nothing here is invented.
       const used: { role: string; label: string; model: string | null; ok: boolean; note: string }[] = [];
       for (const s of plan.use) {
         let note = '', ok = false;
-        if (s.type === 'translation') { const r = await free('/chat/', { model: 'mistral', messages: [{ role: 'system', content: 'You translate text. Reply with only the translation.' }, { role: 'user', content: text }], max_tokens: 500 }); ok = r.ok; note = ok ? String(r.j?.choices?.[0]?.message?.content || '').slice(0, 800) : 'The translation agent did not answer.'; }
+        if (s.type === 'translation') { const r = await free('/chat/', { model: 'mistral', messages: [{ role: 'system', content: 'You translate text. Reply with only the translation.' }, { role: 'user', content: text }], max_tokens: 500 }).catch(() => ({ ok: false, j: {} })); ok = r.ok; note = ok ? String(r.j?.choices?.[0]?.message?.content || '').slice(0, 800) : 'The translation agent did not answer.'; }
         else { note = 'Needs a file or an extra step, so this subagent was not run from text alone. Use the agent panel to send it a file.'; }
         used.push({ role: s.role, label: s.label, model: s.model, ok, note });
       }
       const ran = used.filter(u => u.ok), ctx = ran.length ? '\n\nSubagent results (real):\n' + ran.map(u => '- ' + u.label + ': ' + u.note).join('\n') : '';
-      const r = await free('/chat/', { model: chat.model, messages: [{ role: 'system', content: systemPrompt(p.name, p.config, p.picked) + ctx }, ...history, { role: 'user', content: text }], max_tokens: 900 });
+      const startedAt = Date.now();
+      let r;
+      try { r = await free('/chat/', { model: chat.model, messages: [{ role: 'system', content: systemPrompt(p.name, p.config, p.picked) + pluginPrompt + ctx }, ...history, { role: 'user', content: text }], max_tokens: 1400 }); }
+      catch {
+        await rpc('pholama_credits_refund', { p_user: uid, p_amount: total }).catch(() => {});
+        return out('The cloud agent did not answer. You were not charged. Try again.', 502);
+      }
       const reply = String(r.j?.choices?.[0]?.message?.content || '').trim();
       if (!r.ok || !reply) {   // charge nothing for an answer that never came
         await rpc('pholama_credits_refund', { p_user: uid, p_amount: total }).catch(() => {});
         return out('The cloud agent did not answer. You were not charged. Try again.', 502);
       }
       const left = Number(spent.balance ?? 0);
-      return out({ reply, agent: p.name, model: chat.model, asked: chat.asked, charged: total, credits: left, refill_on: spent.refill_on || null, subagents: used, skipped: plan.skipped, subagentsOff: plan.disabled });
+      const finishReason = String(r.j?.choices?.[0]?.finish_reason || '');
+      return out({ reply, agent: p.name, model: chat.model, asked: chat.asked, charged: total, credits: left, refill_on: spent.refill_on || null, subagents: used, skipped: plan.skipped, subagentsOff: plan.disabled, canContinue: finishReason === 'length' || Date.now() - startedAt >= 120000 });
     }
     return out('Unknown action.', 400);
   } catch (e) {

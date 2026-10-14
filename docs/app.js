@@ -13,9 +13,11 @@ import { loadReader, readerLoaded } from './reader.js';
 import { playSplash } from './logointro.js';
 import { DUO_KEY, DUO_HELPER_KEY, plan as duoPlanFn, helpers as duoHelpers, pickHelper, HELPER_SYSTEM as DUO_SYS, withNotes as duoWithNotes, cleanNotes as duoClean } from './duo.js';
 import { READER } from './attach.js';
-import { initAttach, hasAttachments, attachedNames, clearAttachments, prepare } from './attachui.js';
+import { initAttach, hasAttachments, attachedNames, attachedFiles, addAttachmentFiles, clearAttachments, prepare } from './attachui.js';
 import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 import { downloadDecision, readCached, writeCached } from './pclink.js';
+import { agentRequest, fileToBase64 } from './agentcloud.js';
+import { extractLuauBlocks, simulateLuau, drawPreview } from './retrostudio.js';
 
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
@@ -28,6 +30,7 @@ const deviceRam = () => navigator.deviceMemory || 0; // Chrome reports 0.25-8 (r
 let catalog = null, server = null, tab = 'browser', engine = null, engineModel = null, history = [], busy = false;
 let stopper = null, stopped = false, sessionId = 1;   // stopper() cancels whatever reply is running right now
 let effort = cleanEffort(localStorage.getItem('pholama.effort'));
+let agentState = null, retroEnabled = false, scriptDocuments = [], activeScript = 0;
 
 // Unified API fetch helper supporting remote PC connection
 async function api(path, opts = {}, bodyData) {
@@ -180,6 +183,7 @@ async function init() {
   if (server) { const tl = $('#tLocal'); if (tl) tl.textContent = 'Models on this PC'; }   // PC build: phone models are never offered
   if ('serviceWorker' in navigator && location.protocol.startsWith('http') && !server) navigator.serviceWorker.register('sw.js').catch(() => {});
   await refreshSelect();
+  initSiteAgentUi();
   { const L = llamaLoader(84); $('#heroLogo').appendChild(L.el); L.done(); L.el.classList.remove('ok'); L.el.style.color = 'var(--fg)';
     for (const q of ['Explain how a rocket works', 'Write a short poem', 'Help me plan my day']) { const b = document.createElement('button'); b.textContent = q; b.onclick = () => { inEl.value = q; send(); }; $('#heroChips').appendChild(b); } }
   add('sys', server ? 'Connected to your PC. Pick a model, or open Models to download one.' : 'Running in browser mode. Open Models to download a small model to this device.');
@@ -201,8 +205,120 @@ async function refreshSelect() {
     const t = await (await api('api/tags')).json();
     for (const m of t.models) sel.add(new Option('💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
   } catch {}
+  if (!server) sel.add(new Option('☁ Free.ai cloud agent', CLOUD_ID));
   const first = [...sel.options].findIndex(o => !o.disabled); if (first >= 0) sel.selectedIndex = first;
+  if (!server) sel.value = CLOUD_ID;
   paintSwitches(); paintEffort(); paintComposerPill();
+}
+
+// Website-only Free.ai profile controls. The API key never leaves the deployed function.
+function paintAgentCredits(data = agentState) {
+  const el = $('#agentCredits'); if (!el) return;
+  if (!Account.token()) { el.textContent = 'Sign in to see daily credits'; return; }
+  if (!data || !Number.isFinite(Number(data.credits))) { el.textContent = 'Daily balance unavailable'; return; }
+  const refill = data.refill_on ? `UTC ${data.refill_on}` : 'midnight UTC';
+  el.textContent = `${data.credits} / 12 daily credits · resets ${refill}`;
+  el.title = '12 credits per account each UTC day. Specialist actions can use additional credits. Resets at 00:00 UTC.';
+}
+function setRetroEnabled(on) {
+  retroEnabled = !!on;
+  const b = $('#retroPluginBtn'), panel = $('#retroWorkspace');
+  if (b) { b.setAttribute('aria-pressed', String(retroEnabled)); b.textContent = retroEnabled ? '✓ Roblox: RetroStudio' : '+ Roblox: RetroStudio'; }
+  if (panel) panel.hidden = !retroEnabled;
+  if (retroEnabled) renderRetroScript();
+}
+function renderScriptTabs() {
+  const tabs = $('#retroTabs'), code = $('#retroCode'); if (!tabs || !code) return;
+  if (!scriptDocuments.length) scriptDocuments = [{ name: 'Script 1', source: '' }];
+  activeScript = Math.max(0, Math.min(activeScript, scriptDocuments.length - 1));
+  tabs.textContent = '';
+  scriptDocuments.forEach((s, i) => {
+    const b = document.createElement('button'); b.type = 'button'; b.role = 'tab'; b.setAttribute('aria-selected', String(i === activeScript)); b.className = i === activeScript ? 'on' : ''; b.textContent = s.name || `Script ${i + 1}`;
+    b.onclick = () => { scriptDocuments[activeScript].source = code.value; activeScript = i; renderScriptTabs(); renderRetroScript(); saveCurrentSession(); };
+    tabs.appendChild(b);
+  });
+  code.value = scriptDocuments[activeScript].source || '';
+}
+function renderRetroScript() {
+  const code = $('#retroCode'), canvas = $('#retroCanvas'), log = $('#retroLog'); if (!code || !canvas || !log) return;
+  if (scriptDocuments.length) { if (!$('#retroTabs button')) renderScriptTabs(); else scriptDocuments[activeScript].source = code.value; }
+  const result = simulateLuau(code.value);
+  drawPreview(canvas, result.parts);
+  log.textContent = result.diagnostics.length ? `${result.created} part${result.created === 1 ? '' : 's'} recognized. ${result.diagnostics.join(' ')}` : `${result.created} supported part${result.created === 1 ? '' : 's'} simulated. No code was executed.`;
+}
+function setScriptsFromAnswer(text) {
+  const blocks = extractLuauBlocks(text);
+  if (!blocks.length) return false;
+  scriptDocuments = blocks.map((source, i) => ({ name: `Script ${i + 1}`, source })); activeScript = 0;
+  renderScriptTabs(); renderRetroScript(); saveCurrentSession();
+  return true;
+}
+function downloadActiveScript() {
+  const code = $('#retroCode'), active = scriptDocuments[activeScript]; if (!code || !active || !code.value.trim()) return;
+  active.source = code.value;
+  const url = URL.createObjectURL(new Blob([code.value], { type: 'text/plain;charset=utf-8' }));
+  const a = document.createElement('a'); a.href = url; a.download = (active.name || 'script').toLowerCase().replace(/[^a-z0-9_-]+/g, '-') + '.lua'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
+}
+function initSiteAgentUi() {
+  if (server) return;
+  const bar = $('#siteAgentBar'); if (bar) bar.hidden = false;
+  const config = $('#agentConfig'), role = $('#agentRole');
+  if (config) config.onchange = () => { populateAgentRoles({ ...(agentState || {}), config: config.value, picked: ['chat'] }); configureSiteAgent(); };
+  if (role) role.onchange = () => configureSiteAgent();
+  const plugin = $('#retroPluginBtn'); if (plugin) plugin.onclick = () => setRetroEnabled(!retroEnabled);
+  const code = $('#retroCode'); if (code) code.addEventListener('input', () => { if (scriptDocuments[activeScript]) scriptDocuments[activeScript].source = code.value; renderRetroScript(); saveCurrentSession(); });
+  const preview = $('#retroPreview'); if (preview) preview.onclick = renderRetroScript;
+  const download = $('#retroDownload'); if (download) download.onclick = downloadActiveScript;
+  const shot = $('#retroScreenshot'); if (shot) shot.onclick = async () => {
+    const canvas = $('#retroCanvas'); if (!canvas || !canvas.toBlob) return alert('This browser cannot capture the mock viewport.');
+    if (!Account.token()) { needLogin('use'); return; }
+    const source = scriptDocuments[activeScript]?.source || '';
+    canvas.toBlob(async blob => { if (!blob) return alert('Could not capture the preview.');
+      const before = attachedNames().length;
+      await addAttachmentFiles([new File([blob], `retrostudio-preview-${activeScript + 1}.png`, { type: 'image/png' })]);
+      if (attachedNames().length > before) { inEl.value = `Review this simulated RetroStudio preview against the active script and suggest a fix if needed.\n\n\`\`\`lua\n${source}\n\`\`\``; inEl.focus(); inEl.dispatchEvent(new Event('input')); }
+    }, 'image/png');
+  };
+  const suggestion = $('#pluginSuggestRetro');
+  if (suggestion) suggestion.onclick = () => {
+    const left = inEl.value.slice(0, inEl.selectionStart), m = /(?:^|\s)@[^\s]*$/.exec(left);
+    const start = m ? m.index + (m[0].startsWith(' ') ? 1 : 0) : inEl.selectionStart;
+    inEl.value = inEl.value.slice(0, start) + '@Roblox:RetroStudio ' + inEl.value.slice(inEl.selectionStart);
+    inEl.selectionStart = inEl.selectionEnd = start + '@Roblox:RetroStudio '.length;
+    $('#pluginSuggest').hidden = true; setRetroEnabled(true); inEl.focus();
+  };
+  inEl.addEventListener('input', () => {
+    const popup = $('#pluginSuggest'), left = inEl.value.slice(0, inEl.selectionStart);
+    const m = /(?:^|\s)@[^\s]*$/.exec(left); if (popup) popup.hidden = !m;
+  });
+  inEl.addEventListener('keydown', e => { if (e.key === 'Enter' && $('#pluginSuggest') && !$('#pluginSuggest').hidden) { e.preventDefault(); e.stopImmediatePropagation(); suggestion && suggestion.click(); } });
+  renderScriptTabs(); renderRetroScript();
+}
+async function configureSiteAgent() {
+  if (!Account.token()) { paintAgentCredits(null); needLogin('use'); return; }
+  const cfg = $('#agentConfig')?.value || 'one', chosen = $('#agentRole')?.value || 'chat';
+  try {
+    const data = await agentRequest('configure', { config: cfg, picked: chosen === 'chat' ? [] : [chosen], subagents: true }, Account.token());
+    agentState = { ...(agentState || {}), ...data, config: data.config, picked: data.picked };
+    const fresh = await agentRequest('state', {}, Account.token()); agentState = fresh; populateAgentRoles(fresh); paintAgentCredits(fresh);
+  } catch (e) { const el = $('#agentCredits'); if (el) el.textContent = e.message; }
+}
+function populateAgentRoles(data) {
+  const config = $('#agentConfig'), role = $('#agentRole'); if (!config || !role || !data) return;
+  config.value = data.config || 'one'; role.textContent = '';
+  const chosen = data.configs?.find(c => c.id === config.value);
+  const first = new Option('Chat only', 'chat'); role.add(first);
+  for (const a of chosen?.agents || []) if (a.role !== 'chat') {
+    const opt = new Option(`${a.label}${a.cost ? ` · ${a.cost} credits` : ''}${a.available ? '' : ' · unavailable'}`, a.role); opt.disabled = !a.available; role.add(opt);
+  }
+  role.value = (data.picked || []).find(r => r !== 'chat') || 'chat';
+}
+async function refreshSiteAgentState() {
+  const bar = $('#siteAgentBar'); if (!bar || server) return;
+  bar.hidden = false;
+  if (!Account.token()) { agentState = null; paintAgentCredits(); return; }
+  try { agentState = await agentRequest('state', {}, Account.token()); populateAgentRoles(agentState); paintAgentCredits(agentState); }
+  catch (e) { const el = $('#agentCredits'); if (el) el.textContent = e.message; }
 }
 
 // Same account on a PC: never download a model into this browser. Returns normally when allowed, throws a friendly error when not.
@@ -402,6 +518,35 @@ function stopGen() { if (busy && stopper) { stopped = true; try { stopper(); } c
 // PC models the user has installed (the dropdown is built from the PC server, so phone and cloud entries are filtered out by planFallback).
 const pcModelNames = () => [...sel.options].filter(o => !o.disabled).map(o => o.value);
 
+function offerSiteContinuation(msg, token, sessionAtStart, getAnswer, setAnswer) {
+  const button = document.createElement('button'); button.type = 'button'; button.className = 'continue-btn'; button.textContent = 'Continue · 2 credits';
+  button.onclick = async () => {
+    if (busy || sessionAtStart !== sessionId) return;
+    button.disabled = true; button.textContent = 'Continuing…'; setBusy(true); stopped = false;
+    const ac = new AbortController(), t0 = performance.now(); stopper = () => ac.abort();
+    try {
+      const r = await agentRequest('continue', { history: history.slice(-8) }, token, fetch, ac.signal);
+      if (sessionAtStart !== sessionId) return;
+      const more = String(r.reply || '').trim(); if (!more) throw new Error('The cloud agent returned no continuation.');
+      const full = `${getAnswer().replace(/\s+$/, '')}\n\n${more}`; setAnswer(full); msg.text(full);
+      const last = history[history.length - 1];
+      if (last && last.role === 'assistant') last.content = full; else history.push({ role: 'assistant', content: full });
+      if (retroEnabled) setScriptsFromAnswer(full);
+      if (r.credits != null) { agentState = { ...(agentState || {}), credits: r.credits, refill_on: r.refill_on || agentState?.refill_on }; paintAgentCredits(agentState); }
+      msg.log('result', `Continuation · charged ${r.charged || 2} credits · ${r.credits ?? agentState?.credits ?? '?'} of 12 daily credits left${r.refill_on ? ` · resets ${r.refill_on}` : ''}.`, +((performance.now() - t0) / 1000));
+      saveCurrentSession(); button.remove();
+      if (r.canContinue) offerSiteContinuation(msg, token, sessionAtStart, getAnswer, setAnswer);
+    } catch (e) {
+      if (sessionAtStart === sessionId) {
+        if (e && e.info && e.info.credits != null) { agentState = { ...(agentState || {}), credits: e.info.credits, refill_on: e.info.refill_on || agentState?.refill_on }; paintAgentCredits(agentState); }
+        msg.log(e && e.name === 'AbortError' ? 'step' : 'error', e && e.name === 'AbortError' ? 'Continuation stopped.' : e.message, +((performance.now() - t0) / 1000));
+        button.disabled = false; button.textContent = 'Continue · 2 credits';
+      }
+    } finally { if (sessionAtStart === sessionId) { stopper = null; setBusy(false); inEl.focus(); } }
+  };
+  msg.el.appendChild(button);
+}
+
 // Talks to the PC server and streams the answer. Shared by the normal PC path and the Max fallback.
 let pendingImages = 0;   // pictures attached to the message being sent (a count only). Cleared after the first PC call so a fallback never charges twice.
 async function pcChat(model, msg, onText) {
@@ -432,24 +577,51 @@ async function send() {
   const text = inEl.value.trim(); if (!text && !hasAttachments()) return;
   if (!sel.value) return alert('Open Models and download a model first.');
   if (needLogin('use')) return;
-  const isCloud = sel.value === CLOUD_ID, token = Account.token();
+  const isCloud = sel.value === CLOUD_ID, token = Account.token(), siteCloud = isCloud && !server;
+  const retroForMessage = siteCloud && (retroEnabled || /@(?:roblox\s*:\s*retro\s*studio|retrostudio)\b/i.test(text));
+  if (retroForMessage) setRetroEnabled(true);
   if (isCloud && !token) return needLogin('use');
   inEl.value = ''; inEl.style.height = 'auto'; setBusy(true); stopped = false;
-  const files = attachedNames();
+  const files = attachedNames(), fileRecords = attachedFiles();
   hideHero(); addUser(files.length ? (text ? text + '\n' : '') + '📎 ' + files.join(', ') : text);
-  const msg = makeMsg(); let acc = '', pendingUi = null, plan = null; const sessionAtStart = sessionId;
-  let shownText = text, attach = null;
+  const msg = makeMsg(); let acc = '', pendingUi = null, plan = null, canContinue = false; const sessionAtStart = sessionId;
+  let shownText = text, attach = null, historyAdded = false;
   try {
-    if (files.length) { attach = await prepare(text, history, m => msg.log('step', m, 0)); shownText = attach.content; }
+    if (files.length && siteCloud) {
+      const blocks = [];
+      for (const f of fileRecords) {
+        if (f.kind === 'text') { blocks.push(`[File: ${f.name}]\n${String(f.text || '').slice(0, 6000)}\n[End of file]`); continue; }
+        if (f.kind === 'image') {
+          if (f.size > 6 * 1024 * 1024) throw new Error(`${f.name} is too large for the cloud Vision agent (6 MB maximum).`);
+          msg.log('step', `Vision agent is reading ${f.name}...`, 0);
+          const vision = await agentRequest('run', { role: 'vision', file: await fileToBase64(f.file), mime: f.file.type || 'image/png', text }, token);
+          if (!vision.ok || !vision.text) throw new Error(vision.error || `The Vision agent could not read ${f.name}.`);
+          blocks.push(`[Image: ${f.name}]\n${vision.text}`);
+          if (vision.credits != null) paintAgentCredits({ ...(agentState || {}), credits: vision.credits });
+          msg.log('result', `Vision analyzed ${f.name} (${vision.charged || 3} credits).`, 0);
+        }
+      }
+      shownText = [blocks.join('\n\n'), text || (fileRecords.some(f => f.kind === 'image') ? 'Describe and answer based on the attached image.' : 'Read and summarize the attached file.')].filter(Boolean).join('\n\n');
+    } else if (files.length) { attach = await prepare(text, history, m => msg.log('step', m, 0)); shownText = attach.content; }
     pendingImages = attach && attach.hasImages ? Math.min(4, (attach.seen || []).length) : 0;
-    history.push({ role: 'user', content: shownText }); clearAttachments();
+    history.push({ role: 'user', content: shownText }); historyAdded = true; clearAttachments();
     saveCurrentSession();
     const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');
     if (local) { const ri = rememberIntent(text); if (ri && memOn) msg.log('result', await saveMemory(ri), 0); }
     if (!isCloud) await ensureEngine(sel.value);
     const base = attach && attach.hasImages ? attach.build(history.slice(0, -1)) : history;
     const mem = local ? memorySystem() : null, send_ = mem ? [mem, ...base] : base;
-    if (isCloud) {
+    if (siteCloud) {
+      msg.log('step', `Asking ${agentState?.name || 'your Free.ai agent'}${retroForMessage ? ' with Roblox: RetroStudio enabled' : ''}...`, 0);
+      const ac = new AbortController(); stopper = () => ac.abort();
+      const t0 = performance.now();
+      const r = await agentRequest('chat', { text: shownText, history: history.slice(0, -1), plugin: retroForMessage ? 'retrostudio' : '', subagents: true }, token, fetch, ac.signal);
+      acc = r.reply || ''; canContinue = !!r.canContinue; msg.text(acc);
+      for (const s of (r.subagents || [])) msg.log(s.ok ? 'result' : 'step', `${s.label || s.role}: ${s.note || (s.ok ? 'complete' : 'not run')}`, +((performance.now() - t0) / 1000));
+      msg.log('result', `${r.agent || agentState?.name || 'Cloud agent'} · ${r.model || 'Free.ai'} · charged ${r.charged || 1} credit(s) · ${r.credits ?? agentState?.credits ?? '?'} of 12 daily credits left${r.refill_on ? ` · resets ${r.refill_on}` : ''}.`, +((performance.now() - t0) / 1000));
+      if (r.credits != null) { agentState = { ...(agentState || {}), credits: r.credits, refill_on: r.refill_on || agentState?.refill_on }; paintAgentCredits(agentState); }
+      msg.usage({ in: Math.ceil((shownText.length + history.reduce((n, m) => n + String(m.content || '').length, 0)) / 4), out: Math.ceil(acc.length / 4), estimated: true, seconds: +((performance.now() - t0) / 1000).toFixed(1) });
+    } else if (isCloud) {
       msg.log('step', `Asking ${MAX_NAME}` + (effort !== 'normal' ? ` (effort: ${EFFORT[effort].label})` : '') + '...', 0);
       const ac = new AbortController(); stopper = () => ac.abort();
       const t0 = performance.now();
@@ -494,18 +666,20 @@ async function send() {
       await pcChat(sel.value, msg, t => { acc += t; msg.text(acc); });
     }
     if (sessionAtStart !== sessionId) return;                // a New session began while this ran: drop the late reply
+    if (retroForMessage && setScriptsFromAnswer(acc)) msg.log('result', `${scriptDocuments.length} separate script tab${scriptDocuments.length === 1 ? '' : 's'} ready in the mock workspace. Run safe preview to inspect supported parts.`, 0);
     const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
     if (stopped) {                                           // user pressed Stop: keep what was written, say so, no error
-      if (clean) history.push({ role: 'assistant', content: clean }); else history.pop();
+      if (clean) history.push({ role: 'assistant', content: clean }); else if (historyAdded) history.pop();
       msg.log('step', clean ? 'Stopped. Kept what was written so far.' : 'Stopped before any answer.'); msg.finish(true);
     } else { history.push({ role: 'assistant', content: clean }); msg.finish(true); }
     saveCurrentSession();
+    if (siteCloud && !stopped && canContinue) offerSiteContinuation(msg, token, sessionAtStart, () => acc, value => { acc = value; });
     if (pendingUi && sessionAtStart === sessionId && !stopped) runUiActions(pendingUi);   // after the reply is saved, so new_session cannot eat it
   } catch (e) {
     if (sessionAtStart !== sessionId) return;
     if (e && (e.name === 'AbortError' || stopped)) {         // aborted by Stop, not a failure
       const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
-      if (clean) history.push({ role: 'assistant', content: clean }); else history.pop();
+      if (clean) history.push({ role: 'assistant', content: clean }); else if (historyAdded) history.pop();
       msg.log('step', clean ? 'Stopped. Kept what was written so far.' : 'Stopped before any answer.'); msg.finish(true);
       saveCurrentSession();
     } else if (isCloud && (plan = planFallback({ err: e, isPc: !!server && !remoteBase(), models: pcModelNames(), isCloud })).use) {
@@ -518,15 +692,15 @@ async function send() {
       try {
         await pcChat(plan.model, msg, t => { acc += t; msg.text(acc); });
         const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
-        if (clean) history.push({ role: 'assistant', content: clean }); else history.pop();
+        if (clean) history.push({ role: 'assistant', content: clean }); else if (historyAdded) history.pop();
         msg.finish(true); saveCurrentSession();
       } catch (e2) {
-        history.pop();
+        if (historyAdded) history.pop();
         if (e2 && (e2.name === 'AbortError' || stopped)) { msg.log('step', 'Stopped.', 0); msg.finish(true); }
         else msg.fail('Max was unavailable and your PC model also failed: ' + e2.message);
       }
     } else {
-      history.pop();
+      if (historyAdded) history.pop();
       if (plan && plan.why) msg.log('step', plan.why, 0);
       if (e && e.code === 'login') { msg.fail(e.message); needLogin('use'); }
       else if (e && (e.code === 'limit-day' || e.code === 'limit-month')) { msg.fail(e.message); if (e.info) paintCloudLeft(e.info); }
@@ -544,6 +718,7 @@ async function afterAuth() {
   if (u) claimBonus();
   if (u) recordSiteLogin();
   if (u) { try { memOn = await Account.memoryOn(); if (memOn) memories = (await Account.list()).map(m => m.content); } catch {} }
+  if (!server) await refreshSiteAgentState();
 }
 function paintAcct() {
   const u = Account.user();
@@ -893,14 +1068,14 @@ $('#close').onclick = () => { dlg.close(); refreshSelect(); };
 // (the "In this browser" tab is gone: phone and browser models are no longer supported)
 $('#tLocal').onclick = () => { tab = 'local'; render(); };
 $('#send').onclick = send;
-initAttach({ model: () => { const v = sel.value, all = [...((catalog && catalog.browser) || []), ...((catalog && catalog.cpu) || [])]; const found = all.find(m => v === 'web:' + m.id || v === 'cpu:' + m.id || v.endsWith(m.id)) || { name: 'this model' }; return readerOn() ? { ...found, accepts: [...(found.accepts || []), 'image'] } : found; }, note: m => alert(m) });
+initAttach({ model: () => { const v = sel.value, all = [...((catalog && catalog.browser) || []), ...((catalog && catalog.cpu) || [])]; if (!server && v === CLOUD_ID) return { name: 'Free.ai cloud agent', accepts: ['image'] }; const found = all.find(m => v === 'web:' + m.id || v === 'cpu:' + m.id || v.endsWith(m.id)) || { name: 'this model' }; return readerOn() ? { ...found, accepts: [...(found.accepts || []), 'image'] } : found; }, note: m => alert(m) });
 
 // New session: stop any running reply, save current chat, clear, show welcome screen again.
 function newSession() {
   stopGen(); sessionId++; stopper = null; stopped = false;
   saveCurrentSession();
   currentSessionId = 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-  history = []; setBusy(false);
+  history = []; scriptDocuments = []; activeScript = 0; retroEnabled = false; setRetroEnabled(false); renderScriptTabs(); setBusy(false);
   chatEl.innerHTML = ''; chatEl.appendChild(heroEl); inEl.value = ''; paintCloudLeft(null); inEl.focus();
 }
 $('#newSess').onclick = () => { if (history.length && !confirm('Start a new session? This clears the current chat.')) return; newSession(); };
@@ -1137,6 +1312,8 @@ function saveCurrentSession() {
       model: modelName,
       ts: Date.now(),
       messages: trimmedMsgs,
+      retroScripts: scriptDocuments.slice(0, 6).map(s => ({ name: String(s.name || '').slice(0, 48), source: String(s.source || '').slice(0, 50000) })),
+      retroPlugin: retroEnabled,
     };
 
     const idx = sessions.findIndex(s => s.id === currentSessionId);
@@ -1193,8 +1370,11 @@ function paintHistoryList() {
         if (!confirm('Load this chat? Current chat is saved.')) return;
       }
       saveCurrentSession();
-      currentSessionId = s.id;
-      history = [...(s.messages || [])];
+      stopGen(); sessionId++; stopper = null; stopped = false; setBusy(false);
+          currentSessionId = s.id;
+          history = [...(s.messages || [])];
+          scriptDocuments = Array.isArray(s.retroScripts) ? s.retroScripts.slice(0, 6) : []; activeScript = 0;
+          setRetroEnabled(!!s.retroPlugin); renderScriptTabs(); renderRetroScript();
       chatEl.innerHTML = '';
       hideHero();
       for (const m of history) {
@@ -1228,18 +1408,16 @@ $('#clearHistBtn').onclick = () => {
   paintHistoryList();
 };
 
-// ---------- views: the Dashboard is the landing page, Chat is one tap away ----------
+// ---------- views: guides, platform and the chat-first mock Studio are separate views ----------
 function showView(name) {
-  if (siteOnly() && name === 'chat') name = 'plat';            // the website has no chat
-  const dh = name === 'dash', ph = name === 'plat', ch = name === 'cloudstudio';
-  document.body.classList.toggle('dash-on', dh || ph || ch); document.body.classList.toggle('plat-on', ph); document.body.classList.toggle('cloudstudio-on', ch);
-  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph; const cz = $('#cloudStudio'); if (cz) cz.hidden = !ch;
-  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vStudioCloud', ch], ['#vChat', !dh && !ph && !ch]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  const dh = name === 'dash', ph = name === 'plat', ch = name === 'chat';
+  document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph);
+  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph;
+  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vChat', ch]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
   if (dh) paintDashboard();
   if (ph) paintPlatform();
-  if (ch) paintCloudStudio();
 }
-// The website (no PC server) is only the Platform and info pages. Chat, tools and big models are in the PC app.
+// The public website uses account-backed Free.ai chat; the PC build continues to use its own local/cloud routing.
 const siteOnly = () => !server;
 function markSite() { document.body.classList.toggle('site-only', siteOnly()); }
 let platMod = null;
@@ -1257,12 +1435,6 @@ async function paintWhoami(name) {
   let n = name; if (!n) { try { const m = await import('./platform.js'); const p = await m.makePlatform(Account, () => window.PHOLAMA || {}).profile(); n = p && p.platform_name; } catch {} }
   b.textContent = 'Logged in as ' + (n || Account.name() || 'you'); b.style.display = ''; b.onclick = () => showView('plat');
 }
-let cloudStudioMod = null, cloudStudio = null;
-async function paintCloudStudio() {
-  const host = $('#cloudStudioHost'); if (!host) return;
-  try { cloudStudioMod = cloudStudioMod || await import('./cloudstudio.js'); if (!cloudStudio) cloudStudio = cloudStudioMod.mountCloudStudio(host, { Account, cfg: () => window.PHOLAMA || {} }); else await cloudStudio.refresh(); }
-  catch (e) { host.textContent = 'Pholama Studio could not load: ' + (e && e.message || e); }
-}
 let dashMod = null;
 async function paintDashboard() {
   const el = $('#dash'); if (!el) return;
@@ -1273,10 +1445,9 @@ async function paintDashboard() {
   } catch (e) { el.textContent = 'The dashboard could not load: ' + (e && e.message || e); }
 }
 $('#vDash').onclick = () => showView('dash');
-$('#vStudioCloud').onclick = () => showView('cloudstudio');
 $('#vChat').onclick = () => showView('chat');
 $('#vPlat').onclick = () => showView('plat');
-init().then(refreshCredits).then(() => { markSite(); showView(siteOnly() ? 'plat' : 'dash'); });
+init().then(refreshCredits).then(() => { markSite(); showView(siteOnly() ? 'chat' : 'dash'); });
 
 // ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----
 // ----- GitHub on both: the site only reports that you signed in here. The 250 is granted by the PC app once the database sees both. -----
