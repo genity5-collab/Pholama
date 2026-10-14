@@ -20,6 +20,10 @@ export function extractLuauBlocks(text) {
   return blocks.slice(0, 6).map(m => String(m[1] || '').slice(0, MAX_SOURCE_CHARS));
 }
 
+export function testLuau(source) {
+  const result = simulateLuau(source);
+  return { ok: result.diagnostics.length === 0, diagnostics: result.diagnostics, created: result.created, simulated: true };
+}
 export function simulateLuau(source) {
   const text = String(source || '').slice(0, MAX_SOURCE_CHARS);
   const parts = [], diagnostics = [], byVar = new Map();

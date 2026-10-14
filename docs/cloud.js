@@ -1,7 +1,7 @@
 // Pholama cloud model + think effort + who may use what. Pure logic, no page code, so it can be tested on its own.
 const FN = 'https://lyra-09dfabbf.base44.app/functions/pholamaCloud';
 
-// Think effort: how long and careful the answer is. On Agent Max every message counts as 1 whatever the effort.
+// Think effort: how long and careful the answer is. On Pholama Cloud every message counts as 1 whatever the effort.
 // On your own models nothing is ever charged.
 export const EFFORT = {
   normal: { label: 'Normal', hint: 'Quick, short answers.' },

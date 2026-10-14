@@ -239,7 +239,7 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
     ok('info: guides cover start, github, api and remote', ['start', 'github', 'api', 'remote'].every(id => info.GUIDES.some(g => g.id === id)));
     ok('info: never asks for a secret key', !info.KEY_FACTS.some(([, v]) => /enter your (api )?key here/i.test(v)) && info.KEY_FACTS.some(([, v]) => /never asks for or stores your keys/.test(v)));
     const idx = fs.readFileSync(path.join(root, 'docs', 'index.html'), 'utf8'), pcIdx = fs.readFileSync(path.join(root, 'web', 'index.html'), 'utf8');
-    ok('site: announces the return of cloud chat and plugin support', /id="sunset"/.test(idx) && /Cloud chat is back/.test(idx) && /Roblox: RetroStudio/.test(idx));
+    ok('site: announces Pholama Cloud and safe RetroStudio support', /id="sunset"/.test(idx) && /Agent Max/.test(idx) && /RetroStudio/.test(idx));
     ok('pc app: has no site warning', !/id="aiwarn"/.test(pcIdx));
     ok('both: GitHub button present', /id="a_github"/.test(idx) && /id="a_github"/.test(pcIdx));
     ok('sql: table is protected by row-level security', /enable row level security/.test(fs.readFileSync(path.join(root, 'supabase', 'github_bonus.sql'), 'utf8')));

@@ -16,7 +16,6 @@ import { READER } from './attach.js';
 import { initAttach, hasAttachments, attachedNames, attachedFiles, addAttachmentFiles, clearAttachments, prepare } from './attachui.js';
 import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 import { downloadDecision, readCached, writeCached } from './pclink.js';
-import { agentRequest, fileToBase64 } from './agentcloud.js';
 import { extractLuauBlocks, simulateLuau, drawPreview } from './retrostudio.js';
 
 const $ = s => document.querySelector(s);
@@ -30,7 +29,7 @@ const deviceRam = () => navigator.deviceMemory || 0; // Chrome reports 0.25-8 (r
 let catalog = null, server = null, tab = 'browser', engine = null, engineModel = null, history = [], busy = false;
 let stopper = null, stopped = false, sessionId = 1;   // stopper() cancels whatever reply is running right now
 let effort = cleanEffort(localStorage.getItem('pholama.effort'));
-let agentState = null, retroEnabled = false, scriptDocuments = [], activeScript = 0;
+let retroEnabled = false, scriptDocuments = [], activeScript = 0;
 
 // Unified API fetch helper supporting remote PC connection
 async function api(path, opts = {}, bodyData) {
@@ -147,7 +146,7 @@ function makeMsg() {
       renderAnswer(ans, r.answer);
       chatEl.scrollTop = 1e9;
     },
-    thought(text, seconds) {   // a finished reasoning text from Agent Max (not streamed)
+    thought(text, seconds) {   // a finished reasoning text from Pholama Cloud (not streamed)
       if (!text) return; tStop(); showThought(String(text).trim(), false, (+seconds || 0) * 1000); think.open = false;
     },
     usage(u) {            // u = {in, out, estimated, seconds}. Real counts come from the model backend; otherwise flagged as estimates.
@@ -205,25 +204,18 @@ async function refreshSelect() {
     const t = await (await api('api/tags')).json();
     for (const m of t.models) sel.add(new Option('💻 ' + m.name.replace(/^(gguf|ollama):/, ''), m.name));
   } catch {}
-  if (!server) sel.add(new Option('☁ Free.ai cloud agent', CLOUD_ID));
+  if (!server) sel.add(new Option('☁ Pholama Cloud · cloud', CLOUD_ID));
   const first = [...sel.options].findIndex(o => !o.disabled); if (first >= 0) sel.selectedIndex = first;
   if (!server) sel.value = CLOUD_ID;
   paintSwitches(); paintEffort(); paintComposerPill();
 }
 
-// Website-only Free.ai profile controls. The API key never leaves the deployed function.
-function paintAgentCredits(data = agentState) {
-  const el = $('#agentCredits'); if (!el) return;
-  if (!Account.token()) { el.textContent = 'Sign in to see daily credits'; return; }
-  if (!data || !Number.isFinite(Number(data.credits))) { el.textContent = 'Daily balance unavailable'; return; }
-  const refill = data.refill_on ? `UTC ${data.refill_on}` : 'midnight UTC';
-  el.textContent = `${data.credits} / 12 daily credits · resets ${refill}`;
-  el.title = '12 credits per account each UTC day. Specialist actions can use additional credits. Resets at 00:00 UTC.';
-}
+// The public site uses the same Pholama Cloud chat as the PC app.
+// RetroStudio is deliberately local and safe: it only previews an allowlisted subset of Luau.
 function setRetroEnabled(on) {
   retroEnabled = !!on;
   const b = $('#retroPluginBtn'), panel = $('#retroWorkspace');
-  if (b) { b.setAttribute('aria-pressed', String(retroEnabled)); b.textContent = retroEnabled ? '✓ Roblox: RetroStudio' : '+ Roblox: RetroStudio'; }
+  if (b) { b.setAttribute('aria-pressed', String(retroEnabled)); b.textContent = retroEnabled ? '✓ RetroStudio' : '+ RetroStudio'; }
   if (panel) panel.hidden = !retroEnabled;
   if (retroEnabled) renderRetroScript();
 }
@@ -238,6 +230,13 @@ function renderScriptTabs() {
     tabs.appendChild(b);
   });
   code.value = scriptDocuments[activeScript].source || '';
+}
+function runRetroSafeTest() {
+  const code = $('#retroCode'), log = $('#retroLog'); if (!code || !log) return false;
+  const result = simulateLuau(code.value);
+  const status = result.diagnostics.length ? `Safe test found ${result.diagnostics.length} issue${result.diagnostics.length === 1 ? '' : 's'}; nothing was executed.` : `Safe test passed: ${result.created} supported part${result.created === 1 ? '' : 's'} recognized; nothing was executed.`;
+  log.textContent = status + (result.diagnostics.length ? ' ' + result.diagnostics.join(' ') : '');
+  return !result.diagnostics.length;
 }
 function renderRetroScript() {
   const code = $('#retroCode'), canvas = $('#retroCanvas'), log = $('#retroLog'); if (!code || !canvas || !log) return;
@@ -260,17 +259,13 @@ function downloadActiveScript() {
   const a = document.createElement('a'); a.href = url; a.download = (active.name || 'script').toLowerCase().replace(/[^a-z0-9_-]+/g, '-') + '.lua'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 function initSiteAgentUi() {
-  if (server) return;
-  const bar = $('#siteAgentBar'); if (bar) bar.hidden = false;
-  const config = $('#agentConfig'), role = $('#agentRole');
-  if (config) config.onchange = () => { populateAgentRoles({ ...(agentState || {}), config: config.value, picked: ['chat'] }); configureSiteAgent(); };
-  if (role) role.onchange = () => configureSiteAgent();
   const plugin = $('#retroPluginBtn'); if (plugin) plugin.onclick = () => setRetroEnabled(!retroEnabled);
   const code = $('#retroCode'); if (code) code.addEventListener('input', () => { if (scriptDocuments[activeScript]) scriptDocuments[activeScript].source = code.value; renderRetroScript(); saveCurrentSession(); });
+  const test = $('#retroTest'); if (test) test.onclick = runRetroSafeTest;
   const preview = $('#retroPreview'); if (preview) preview.onclick = renderRetroScript;
   const download = $('#retroDownload'); if (download) download.onclick = downloadActiveScript;
   const shot = $('#retroScreenshot'); if (shot) shot.onclick = async () => {
-    const canvas = $('#retroCanvas'); if (!canvas || !canvas.toBlob) return alert('This browser cannot capture the mock viewport.');
+    const canvas = $('#retroCanvas'); if (!canvas || !canvas.toBlob) return alert('This browser cannot capture the preview.');
     if (!Account.token()) { needLogin('use'); return; }
     const source = scriptDocuments[activeScript]?.source || '';
     canvas.toBlob(async blob => { if (!blob) return alert('Could not capture the preview.');
@@ -279,46 +274,7 @@ function initSiteAgentUi() {
       if (attachedNames().length > before) { inEl.value = `Review this simulated RetroStudio preview against the active script and suggest a fix if needed.\n\n\`\`\`lua\n${source}\n\`\`\``; inEl.focus(); inEl.dispatchEvent(new Event('input')); }
     }, 'image/png');
   };
-  const suggestion = $('#pluginSuggestRetro');
-  if (suggestion) suggestion.onclick = () => {
-    const left = inEl.value.slice(0, inEl.selectionStart), m = /(?:^|\s)@[^\s]*$/.exec(left);
-    const start = m ? m.index + (m[0].startsWith(' ') ? 1 : 0) : inEl.selectionStart;
-    inEl.value = inEl.value.slice(0, start) + '@Roblox:RetroStudio ' + inEl.value.slice(inEl.selectionStart);
-    inEl.selectionStart = inEl.selectionEnd = start + '@Roblox:RetroStudio '.length;
-    $('#pluginSuggest').hidden = true; setRetroEnabled(true); inEl.focus();
-  };
-  inEl.addEventListener('input', () => {
-    const popup = $('#pluginSuggest'), left = inEl.value.slice(0, inEl.selectionStart);
-    const m = /(?:^|\s)@[^\s]*$/.exec(left); if (popup) popup.hidden = !m;
-  });
-  inEl.addEventListener('keydown', e => { if (e.key === 'Enter' && $('#pluginSuggest') && !$('#pluginSuggest').hidden) { e.preventDefault(); e.stopImmediatePropagation(); suggestion && suggestion.click(); } });
   renderScriptTabs(); renderRetroScript();
-}
-async function configureSiteAgent() {
-  if (!Account.token()) { paintAgentCredits(null); needLogin('use'); return; }
-  const cfg = $('#agentConfig')?.value || 'one', chosen = $('#agentRole')?.value || 'chat';
-  try {
-    const data = await agentRequest('configure', { config: cfg, picked: chosen === 'chat' ? [] : [chosen], subagents: true }, Account.token());
-    agentState = { ...(agentState || {}), ...data, config: data.config, picked: data.picked };
-    const fresh = await agentRequest('state', {}, Account.token()); agentState = fresh; populateAgentRoles(fresh); paintAgentCredits(fresh);
-  } catch (e) { const el = $('#agentCredits'); if (el) el.textContent = e.message; }
-}
-function populateAgentRoles(data) {
-  const config = $('#agentConfig'), role = $('#agentRole'); if (!config || !role || !data) return;
-  config.value = data.config || 'one'; role.textContent = '';
-  const chosen = data.configs?.find(c => c.id === config.value);
-  const first = new Option('Chat only', 'chat'); role.add(first);
-  for (const a of chosen?.agents || []) if (a.role !== 'chat') {
-    const opt = new Option(`${a.label}${a.cost ? ` · ${a.cost} credits` : ''}${a.available ? '' : ' · unavailable'}`, a.role); opt.disabled = !a.available; role.add(opt);
-  }
-  role.value = (data.picked || []).find(r => r !== 'chat') || 'chat';
-}
-async function refreshSiteAgentState() {
-  const bar = $('#siteAgentBar'); if (!bar || server) return;
-  bar.hidden = false;
-  if (!Account.token()) { agentState = null; paintAgentCredits(); return; }
-  try { agentState = await agentRequest('state', {}, Account.token()); populateAgentRoles(agentState); paintAgentCredits(agentState); }
-  catch (e) { const el = $('#agentCredits'); if (el) el.textContent = e.message; }
 }
 
 // Same account on a PC: never download a model into this browser. Returns normally when allowed, throws a friendly error when not.
@@ -483,7 +439,7 @@ function paintEffort() {
   }
 }
 
-// Agent Max can operate the page. The server only returns names from this fixed list; each one does what a tap would do.
+// Pholama Cloud can operate the page. The server only returns names from this fixed list; each one does what a tap would do.
 const UI_DO = {
   open_models: () => { if (!dlg.open) $('#mgr').click(); },
   open_tools: () => openSettings('tools'),
@@ -518,35 +474,6 @@ function stopGen() { if (busy && stopper) { stopped = true; try { stopper(); } c
 // PC models the user has installed (the dropdown is built from the PC server, so phone and cloud entries are filtered out by planFallback).
 const pcModelNames = () => [...sel.options].filter(o => !o.disabled).map(o => o.value);
 
-function offerSiteContinuation(msg, token, sessionAtStart, getAnswer, setAnswer) {
-  const button = document.createElement('button'); button.type = 'button'; button.className = 'continue-btn'; button.textContent = 'Continue · 2 credits';
-  button.onclick = async () => {
-    if (busy || sessionAtStart !== sessionId) return;
-    button.disabled = true; button.textContent = 'Continuing…'; setBusy(true); stopped = false;
-    const ac = new AbortController(), t0 = performance.now(); stopper = () => ac.abort();
-    try {
-      const r = await agentRequest('continue', { history: history.slice(-8) }, token, fetch, ac.signal);
-      if (sessionAtStart !== sessionId) return;
-      const more = String(r.reply || '').trim(); if (!more) throw new Error('The cloud agent returned no continuation.');
-      const full = `${getAnswer().replace(/\s+$/, '')}\n\n${more}`; setAnswer(full); msg.text(full);
-      const last = history[history.length - 1];
-      if (last && last.role === 'assistant') last.content = full; else history.push({ role: 'assistant', content: full });
-      if (retroEnabled) setScriptsFromAnswer(full);
-      if (r.credits != null) { agentState = { ...(agentState || {}), credits: r.credits, refill_on: r.refill_on || agentState?.refill_on }; paintAgentCredits(agentState); }
-      msg.log('result', `Continuation · charged ${r.charged || 2} credits · ${r.credits ?? agentState?.credits ?? '?'} of 12 daily credits left${r.refill_on ? ` · resets ${r.refill_on}` : ''}.`, +((performance.now() - t0) / 1000));
-      saveCurrentSession(); button.remove();
-      if (r.canContinue) offerSiteContinuation(msg, token, sessionAtStart, getAnswer, setAnswer);
-    } catch (e) {
-      if (sessionAtStart === sessionId) {
-        if (e && e.info && e.info.credits != null) { agentState = { ...(agentState || {}), credits: e.info.credits, refill_on: e.info.refill_on || agentState?.refill_on }; paintAgentCredits(agentState); }
-        msg.log(e && e.name === 'AbortError' ? 'step' : 'error', e && e.name === 'AbortError' ? 'Continuation stopped.' : e.message, +((performance.now() - t0) / 1000));
-        button.disabled = false; button.textContent = 'Continue · 2 credits';
-      }
-    } finally { if (sessionAtStart === sessionId) { stopper = null; setBusy(false); inEl.focus(); } }
-  };
-  msg.el.appendChild(button);
-}
-
 // Talks to the PC server and streams the answer. Shared by the normal PC path and the Max fallback.
 let pendingImages = 0;   // pictures attached to the message being sent (a count only). Cleared after the first PC call so a fallback never charges twice.
 async function pcChat(model, msg, onText) {
@@ -577,32 +504,17 @@ async function send() {
   const text = inEl.value.trim(); if (!text && !hasAttachments()) return;
   if (!sel.value) return alert('Open Models and download a model first.');
   if (needLogin('use')) return;
-  const isCloud = sel.value === CLOUD_ID, token = Account.token(), siteCloud = isCloud && !server;
-  const retroForMessage = siteCloud && (retroEnabled || /@(?:roblox\s*:\s*retro\s*studio|retrostudio)\b/i.test(text));
+  const isCloud = sel.value === CLOUD_ID, token = Account.token();
+  const retroForMessage = retroEnabled || /@(?:roblox\s*:\s*retro\s*studio|retrostudio)\b/i.test(text);
   if (retroForMessage) setRetroEnabled(true);
   if (isCloud && !token) return needLogin('use');
   inEl.value = ''; inEl.style.height = 'auto'; setBusy(true); stopped = false;
   const files = attachedNames(), fileRecords = attachedFiles();
   hideHero(); addUser(files.length ? (text ? text + '\n' : '') + '📎 ' + files.join(', ') : text);
-  const msg = makeMsg(); let acc = '', pendingUi = null, plan = null, canContinue = false; const sessionAtStart = sessionId;
+  const msg = makeMsg(); let acc = '', pendingUi = null, plan = null; const sessionAtStart = sessionId;
   let shownText = text, attach = null, historyAdded = false;
   try {
-    if (files.length && siteCloud) {
-      const blocks = [];
-      for (const f of fileRecords) {
-        if (f.kind === 'text') { blocks.push(`[File: ${f.name}]\n${String(f.text || '').slice(0, 6000)}\n[End of file]`); continue; }
-        if (f.kind === 'image') {
-          if (f.size > 6 * 1024 * 1024) throw new Error(`${f.name} is too large for the cloud Vision agent (6 MB maximum).`);
-          msg.log('step', `Vision agent is reading ${f.name}...`, 0);
-          const vision = await agentRequest('run', { role: 'vision', file: await fileToBase64(f.file), mime: f.file.type || 'image/png', text }, token);
-          if (!vision.ok || !vision.text) throw new Error(vision.error || `The Vision agent could not read ${f.name}.`);
-          blocks.push(`[Image: ${f.name}]\n${vision.text}`);
-          if (vision.credits != null) paintAgentCredits({ ...(agentState || {}), credits: vision.credits });
-          msg.log('result', `Vision analyzed ${f.name} (${vision.charged || 3} credits).`, 0);
-        }
-      }
-      shownText = [blocks.join('\n\n'), text || (fileRecords.some(f => f.kind === 'image') ? 'Describe and answer based on the attached image.' : 'Read and summarize the attached file.')].filter(Boolean).join('\n\n');
-    } else if (files.length) { attach = await prepare(text, history, m => msg.log('step', m, 0)); shownText = attach.content; }
+    if (files.length) { attach = await prepare(text, history, m => msg.log('step', m, 0)); shownText = attach.content; }
     pendingImages = attach && attach.hasImages ? Math.min(4, (attach.seen || []).length) : 0;
     history.push({ role: 'user', content: shownText }); historyAdded = true; clearAttachments();
     saveCurrentSession();
@@ -611,16 +523,6 @@ async function send() {
     if (!isCloud) await ensureEngine(sel.value);
     const base = attach && attach.hasImages ? attach.build(history.slice(0, -1)) : history;
     const mem = local ? memorySystem() : null, send_ = mem ? [mem, ...base] : base;
-    if (siteCloud) {
-      msg.log('step', `Asking ${agentState?.name || 'your Free.ai agent'}${retroForMessage ? ' with Roblox: RetroStudio enabled' : ''}...`, 0);
-      const ac = new AbortController(); stopper = () => ac.abort();
-      const t0 = performance.now();
-      const r = await agentRequest('chat', { text: shownText, history: history.slice(0, -1), plugin: retroForMessage ? 'retrostudio' : '', subagents: true }, token, fetch, ac.signal);
-      acc = r.reply || ''; canContinue = !!r.canContinue; msg.text(acc);
-      for (const s of (r.subagents || [])) msg.log(s.ok ? 'result' : 'step', `${s.label || s.role}: ${s.note || (s.ok ? 'complete' : 'not run')}`, +((performance.now() - t0) / 1000));
-      msg.log('result', `${r.agent || agentState?.name || 'Cloud agent'} · ${r.model || 'Free.ai'} · charged ${r.charged || 1} credit(s) · ${r.credits ?? agentState?.credits ?? '?'} of 12 daily credits left${r.refill_on ? ` · resets ${r.refill_on}` : ''}.`, +((performance.now() - t0) / 1000));
-      if (r.credits != null) { agentState = { ...(agentState || {}), credits: r.credits, refill_on: r.refill_on || agentState?.refill_on }; paintAgentCredits(agentState); }
-      msg.usage({ in: Math.ceil((shownText.length + history.reduce((n, m) => n + String(m.content || '').length, 0)) / 4), out: Math.ceil(acc.length / 4), estimated: true, seconds: +((performance.now() - t0) / 1000).toFixed(1) });
     } else if (isCloud) {
       msg.log('step', `Asking ${MAX_NAME}` + (effort !== 'normal' ? ` (effort: ${EFFORT[effort].label})` : '') + '...', 0);
       const ac = new AbortController(); stopper = () => ac.abort();
@@ -673,7 +575,6 @@ async function send() {
       msg.log('step', clean ? 'Stopped. Kept what was written so far.' : 'Stopped before any answer.'); msg.finish(true);
     } else { history.push({ role: 'assistant', content: clean }); msg.finish(true); }
     saveCurrentSession();
-    if (siteCloud && !stopped && canContinue) offerSiteContinuation(msg, token, sessionAtStart, () => acc, value => { acc = value; });
     if (pendingUi && sessionAtStart === sessionId && !stopped) runUiActions(pendingUi);   // after the reply is saved, so new_session cannot eat it
   } catch (e) {
     if (sessionAtStart !== sessionId) return;
@@ -718,7 +619,6 @@ async function afterAuth() {
   if (u) claimBonus();
   if (u) recordSiteLogin();
   if (u) { try { memOn = await Account.memoryOn(); if (memOn) memories = (await Account.list()).map(m => m.content); } catch {} }
-  if (!server) await refreshSiteAgentState();
 }
 function paintAcct() {
   const u = Account.user();
@@ -767,7 +667,7 @@ $('#a_outBtn').onclick = async () => { Account.logout(); await afterAuth(); pain
 
 // One question to a PC model with no chat history and no tools, so an edit never touches the conversation.
 async function pcOneShot(model, prompt) {
-  if (!server || remoteBase()) throw new Error('This needs the Pholama PC app, or pick Agent Max at the top.');
+  if (!server || remoteBase()) throw new Error('This needs the Pholama PC app, or pick Pholama Cloud at the top.');
   const r = await api('api/chat', { method: 'POST', body: JSON.stringify({ model, messages: [{ role: 'user', content: prompt }], agent: false, effort: 'normal' }) });
   if (!r.ok) { let m = 'The PC model had a problem.'; try { m = (await r.json()).error || m; } catch {} throw new Error(m); }
   const rd = r.body.getReader(), dec = new TextDecoder(); let buf = '', text = '';
@@ -821,7 +721,7 @@ $('#sc_go').onclick = async () => {
   if (!code.trim()) return msg.textContent = 'Paste a script first.';
   if (!ask) return msg.textContent = 'Say what should change.';
   const model = sel.value; if (!model) return msg.textContent = 'Pick a model at the top first.';
-  if (/^(web|cpu):/.test(model)) return msg.textContent = 'The editor needs Agent Max or a model on your PC. Pick one at the top.';
+  if (/^(web|cpu):/.test(model)) return msg.textContent = 'The editor needs Pholama Cloud or a model on your PC. Pick one at the top.';
   if (needLogin('use')) return;
   btn.disabled = true; btn.textContent = 'Editing...'; msg.textContent = 'Asking the model. Your script is not changed until you accept.'; $('#sc_diffbox').style.display = 'none';
   const prompt = editPrompt({ script: code, instruction: ask, lang: scLang() });
@@ -1068,7 +968,7 @@ $('#close').onclick = () => { dlg.close(); refreshSelect(); };
 // (the "In this browser" tab is gone: phone and browser models are no longer supported)
 $('#tLocal').onclick = () => { tab = 'local'; render(); };
 $('#send').onclick = send;
-initAttach({ model: () => { const v = sel.value, all = [...((catalog && catalog.browser) || []), ...((catalog && catalog.cpu) || [])]; if (!server && v === CLOUD_ID) return { name: 'Free.ai cloud agent', accepts: ['image'] }; const found = all.find(m => v === 'web:' + m.id || v === 'cpu:' + m.id || v.endsWith(m.id)) || { name: 'this model' }; return readerOn() ? { ...found, accepts: [...(found.accepts || []), 'image'] } : found; }, note: m => alert(m) });
+initAttach({ model: () => { const v = sel.value, all = [...((catalog && catalog.browser) || []), ...((catalog && catalog.cpu) || [])]; if (!server && v === CLOUD_ID) return { name: 'Pholama Cloud · cloud', accepts: ['image'] }; const found = all.find(m => v === 'web:' + m.id || v === 'cpu:' + m.id || v.endsWith(m.id)) || { name: 'this model' }; return readerOn() ? { ...found, accepts: [...(found.accepts || []), 'image'] } : found; }, note: m => alert(m) });
 
 // New session: stop any running reply, save current chat, clear, show welcome screen again.
 function newSession() {
@@ -1124,8 +1024,8 @@ function paintFallback() {
   box.style.display = onPc ? '' : 'none'; if (!onPc) return;
   const m = planFallback({ err: { code: 'limit-day' }, isPc: true, models: pcModelNames(), isCloud: true });
   note.textContent = m.use
-    ? `When Agent Max reaches its limit or cannot be reached, your own model (${m.model.replace(/^(gguf|ollama):/, '')}) answers instead. Free, no credits, and you will see a badge on those answers.`
-    : 'When Agent Max reaches its limit, your PC can answer instead. Download a model in Models to turn this on. It is automatic and free.';
+    ? `When Pholama Cloud reaches its limit or cannot be reached, your own model (${m.model.replace(/^(gguf|ollama):/, '')}) answers instead. Free, no credits, and you will see a badge on those answers.`
+    : 'When Pholama Cloud reaches its limit, your PC can answer instead. Download a model in Models to turn this on. It is automatic and free.';
 }
 // The welcome screen on the user's own PC: real facts about this machine, nothing invented.
 function paintPcWelcome() {
@@ -1139,7 +1039,7 @@ function paintPcWelcome() {
   box.append(chip('Tools', 'Free'));
   const h1 = document.querySelector('#hero h1'), p = document.querySelector('#hero p');
   if (h1) h1.textContent = 'Your AI, running on your own PC';
-  if (p) p.textContent = 'Private and free. Tools, web search and GitHub run right here, and if Agent Max runs out your own model takes over.';
+  if (p) p.textContent = 'Private and free. Tools, web search and GitHub run right here, and if Pholama Cloud runs out your own model takes over.';
   box.style.display = '';
 }
 function paintUsage() {
@@ -1149,7 +1049,7 @@ function paintUsage() {
   const textEl = $('#u_cloud_text');
   const barsEl = $('#u_cloud_bars');
   if (!uData || uData.day_used == null) {
-    if (textEl) textEl.textContent = 'Send a message to Agent Max to see your usage';
+    if (textEl) textEl.textContent = 'Send a message to Pholama Cloud to see your usage';
     if (barsEl) barsEl.style.display = 'none';
   } else {
     const dUsed = uData.day_used ?? 0, dCap = uData.day_cap ?? 10;
@@ -1191,7 +1091,7 @@ function paintComposerPill() {
     const dCap = uData ? (uData.day_cap ?? 10) : 10;
     cb.textContent = `Max ${dUsed}/${dCap} today`;
     cb.className = 'pill' + (dUsed >= dCap ? ' zero' : dUsed >= dCap * 0.8 ? ' low' : '');
-    cb.title = `Agent Max usage: ${dUsed} of ${dCap} used today. Tap to see usage in Settings.`;
+    cb.title = `Pholama Cloud usage: ${dUsed} of ${dCap} used today. Tap to see usage in Settings.`;
     cb.style.display = '';
   } else if (server && cred) {
     cb.textContent = cred.left;
@@ -1417,7 +1317,7 @@ function showView(name) {
   if (dh) paintDashboard();
   if (ph) paintPlatform();
 }
-// The public website uses account-backed Free.ai chat; the PC build continues to use its own local/cloud routing.
+// The public website and PC app use the same Pholama Cloud cloud route when cloud chat is selected.
 const siteOnly = () => !server;
 function markSite() { document.body.classList.toggle('site-only', siteOnly()); }
 let platMod = null;
