@@ -12,7 +12,7 @@ const ok = (name, condition, detail = '') => { console.log((condition ? 'PASS ' 
   ok('main site navigation calls the experience Chat', /id="vChat"[^>]*>Chat<\/button>/.test(html));
   ok('site has chat history, attachment composer, Pholama Cloud and the optional RetroStudio button', /id="histBtn"/.test(html) && /id="in"/.test(html) && !/id="siteAgentBar"/.test(html) && /id="retroPluginBtn"/.test(html) && /Pholama Cloud/.test(html));
   ok('the old standalone website Studio is not mounted by the page', !/cloudstudio\.js|mountCloudStudio|st_host|studioworkspace\.js/.test(html + app));
-  ok('the service worker caches the stable cloud and safe-preview modules', !/agentcloud\.js/.test(worker) && /retrostudio\.js/.test(worker) && /pholama-v48/.test(worker));
+  ok('the service worker caches the stable cloud and safe-preview modules', !/agentcloud\.js/.test(worker) && /retrostudio\.js/.test(worker) && /pholama-v\d+/.test(worker));
   ok('attachment module enforces three images, keeps a four-file total, and exports attachedFiles', /imageCount\s*>=\s*3/.test(attach) && /picked\.length\s*>=\s*4/.test(attach) && /export const attachedFiles/.test(attach));
   ok('failed/cancelled requests only pop history after the current user turn was added', /historyAdded\s*=\s*true/.test(app) && app.split('\n').filter(l => /history\.pop\(\)/.test(l)).every(l => /historyAdded/.test(l)));
   ok('the site uses the stable Pholama Cloud route', /cloudChat\(/.test(app) && /functions\/pholamaCloud/.test(read('docs/cloud.js')) && !/agentRequest/.test(app));

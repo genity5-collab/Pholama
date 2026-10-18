@@ -1,6 +1,6 @@
 // Pholama Studio on the website. It is the SAME workspace screen the PC app uses (docs/studioworkspace.js is a byte-for-byte copy of web/studioworkspace.js),
 // talking to Pholama's own cloud function. Every request carries the member's login; nothing here knows any provider or key.
-export function studioBase(cfg) { return String((cfg && (cfg.STUDIO_URL || cfg.CLOUD_STUDIO_URL)) || '').replace(/\/+$/, ''); }
+export function studioBase(cfg) { return String((cfg && cfg.STUDIO_URL) || '').replace(/\/+$/, ''); }
 
 // The screen asks for "api/studio/ws/<route>" (and "api/studio/projects/..."). Map that onto the cloud function and add the login.
 export function makeApi({ Account, cfg, fetchImpl }) {

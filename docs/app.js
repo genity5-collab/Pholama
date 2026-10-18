@@ -523,7 +523,7 @@ async function send() {
     if (!isCloud) await ensureEngine(sel.value);
     const base = attach && attach.hasImages ? attach.build(history.slice(0, -1)) : history;
     const mem = local ? memorySystem() : null, send_ = mem ? [mem, ...base] : base;
-    } else if (isCloud) {
+    if (isCloud) {
       msg.log('step', `Asking ${MAX_NAME}` + (effort !== 'normal' ? ` (effort: ${EFFORT[effort].label})` : '') + '...', 0);
       const ac = new AbortController(); stopper = () => ac.abort();
       const t0 = performance.now();

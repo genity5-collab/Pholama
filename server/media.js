@@ -36,7 +36,7 @@ async function imageSearch(topic, fetchImpl) {
   const q = cleanText(topic, 80).replace(/\b(?:photo|picture|image|pic)s?\b/gi, '').trim(); if (q.length < 2) return null;
   const f = fetchImpl || fetch, ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), 8000);
   try {
-    const r = process.env.PHOLAMA_TEST_WIKI ? { ok: true, json: async () => JSON.parse(require('fs').readFileSync(process.env.PHOLAMA_TEST_WIKI, 'utf8')) } : await f('https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=' + encodeURIComponent(q) + '&gsrlimit=5&prop=pageimages&piprop=original&format=json', { headers: { 'User-Agent': 'Pholama/0.9 (https://github.com/genity5-collab/Pholama-PC)' }, signal: ctl.signal });
+    const r = process.env.PHOLAMA_TEST_WIKI ? { ok: true, json: async () => JSON.parse(require('fs').readFileSync(process.env.PHOLAMA_TEST_WIKI, 'utf8')) } : await f('https://en.wikipedia.org/w/api.php?action=query&generator=search&gsrsearch=' + encodeURIComponent(q) + '&gsrlimit=5&prop=pageimages&piprop=original&format=json', { headers: { 'User-Agent': 'Pholama/0.9 (https://github.com/genity5-collab/Pholama)' }, signal: ctl.signal });
     if (!r.ok) return null; const j = await r.json(); const pages = Object.values((j && j.query && j.query.pages) || {}).sort((a, b) => (a.index || 9) - (b.index || 9));
     for (const pg of pages) { const u = pg && pg.original && pg.original.source; const ok = u && imageUrl(u); if (ok) return { url: ok, title: cleanText(pg.title, 120) }; }
     return null;

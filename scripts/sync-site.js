@@ -20,7 +20,7 @@ for (const dir of ['docs', 'web']) {   // docs = the website (phones), web = the
 { const a = path.join(root, 'web/logointro.js'), b = path.join(root, 'docs/logointro.js'); let same = false; try { same = fs.readFileSync(a, 'utf8') === fs.readFileSync(b, 'utf8'); } catch {}
   if (!same) { problems.push('docs/logointro.js differs from web/logointro.js'); if (!check) { fs.copyFileSync(a, b); problems.pop(); console.log('Copied web/logointro.js to docs/'); } } }
 // 5. studio workspace module and CSS are shared: docs/studioworkspace.* must be byte-identical to web/studioworkspace.*.
-for (const f of ['studioworkspace.js', 'studioworkspace.css', 'studioeditor.js']) {
+for (const f of ['studioworkspace.js', 'studioworkspace.css', 'studioeditor.js', 'ide-theme.css']) {
   const a = path.join(root, 'web', f), b = path.join(root, 'docs', f);
   let same = false; try { same = fs.readFileSync(a, 'utf8') === fs.readFileSync(b, 'utf8'); } catch {}
   if (!same) { problems.push(`docs/${f} differs from web/${f}`); if (!check) { fs.copyFileSync(a, b); problems.pop(); console.log(`Copied web/${f} to docs/`); } }

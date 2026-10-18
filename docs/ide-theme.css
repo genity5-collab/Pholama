@@ -1,0 +1,125 @@
+/* Pholama workbench theme. Loaded LAST on the website and the PC app so both look the same.
+   Goal: look like a code editor (flat, square, dense), not a generic AI chat template.
+   No pills, no glow, no gradients, no floating soft shadows, no purple. */
+
+:root, :root:not([data-x]) {
+  --bg: #1e1f22;        /* editor background */
+  --card: #252629;      /* side bar / panels */
+  --card2: #2b2d30;     /* raised controls */
+  --line: #393b40;      /* 1px dividers */
+  --fg: #dfe1e5;        /* text */
+  --mut: #9da0a8;       /* secondary text */
+  --acc: #3574f0;       /* one calm editor blue */
+  --acct: #ffffff;
+  --ok: #5fb865;        /* diff added */
+  --err: #f0626b;       /* diff removed */
+  --warn: #e0b04a;
+  --bubble: #2b2d30;
+  --r: 4px;
+  --ide-add: rgba(95, 184, 101, .16);
+  --ide-del: rgba(240, 98, 107, .16);
+  --ide-mono: ui-monospace, "Cascadia Code", "JetBrains Mono", Consolas, "SF Mono", Menlo, monospace;
+}
+/* One look in light and dark. Friends found the soft pastel light theme the most "AI" of all. */
+@media (prefers-color-scheme: light) {
+  :root, :root:not([data-x]) {
+    --bg: #1e1f22; --card: #252629; --card2: #2b2d30; --line: #393b40; --fg: #dfe1e5; --mut: #9da0a8;
+    --acc: #3574f0; --acct: #fff; --ok: #5fb865; --err: #f0626b; --warn: #e0b04a; --bubble: #2b2d30;
+  }
+}
+
+html, body { background: var(--bg); color: var(--fg); }
+body { font: 13.5px/1.5 ui-sans-serif, "Segoe UI", system-ui, -apple-system, Roboto, sans-serif; letter-spacing: 0; }
+::selection { background: #214283; color: #fff; }
+* { scrollbar-width: thin; scrollbar-color: #4e5157 transparent; }
+
+/* ---- title bar ---- */
+header { background: var(--card); border-bottom: 1px solid var(--line); padding: 0 8px; gap: 4px; min-height: 38px; box-shadow: none; backdrop-filter: none; }
+.brand { font: 600 12.5px var(--ide-mono); letter-spacing: .04em; text-transform: uppercase; gap: 8px; padding-right: 8px; }
+.brand-mark { width: 22px; height: 22px; border-radius: 3px; }
+
+/* ---- every control: flat, square, small ---- */
+select, button { border-radius: var(--r); min-height: 28px; padding: 3px 10px; font-size: 13px; background: var(--card2); border: 1px solid var(--line); box-shadow: none; }
+button:hover, select:hover { background: #35373b; border-color: #4e5157; }
+button:focus-visible, select:focus-visible, textarea:focus-visible, input:focus-visible { outline: 1px solid var(--acc); outline-offset: 0; }
+button.p, .p { background: var(--acc); border-color: var(--acc); color: #fff; }
+button.p:hover { background: #4a85f5; opacity: 1; }
+button.ghost { background: transparent; border-color: transparent; }
+button.ghost:hover { background: #35373b; }
+button.danger { color: var(--err); border-color: color-mix(in srgb, var(--err) 45%, transparent); background: transparent; }
+
+/* ---- view switch (Guides / Platform / Chat) becomes editor tabs ---- */
+.viewsw { display: inline-flex; gap: 0; background: transparent; border: 0; border-radius: 0; padding: 0; margin: 0 0 0 4px; align-self: stretch; align-items: stretch; }
+.viewsw button { border: 0; border-radius: 0; background: transparent; min-height: 37px; padding: 0 16px; color: var(--mut); border-bottom: 2px solid transparent; margin-bottom: -1px; }
+.viewsw button:hover { background: #2b2d30; color: var(--fg); }
+.viewsw button.on, .viewsw button[aria-selected="true"] { color: #fff; background: var(--bg); border-bottom-color: var(--acc); box-shadow: none; font-weight: 500; }
+
+/* ---- chat: a log, not bubbles ---- */
+#chat { padding: 10px 16px 16px; }
+.wrap, .m, .sys, .composer { max-width: 860px; }
+.m.u .bub { background: var(--card2); border: 1px solid var(--line); border-radius: var(--r); padding: 6px 12px; max-width: 92%; }
+.m.u { justify-content: flex-start; }
+.m.u::before { content: "you"; font: 11px var(--ide-mono); color: var(--mut); margin-right: 10px; padding-top: 8px; min-width: 28px; }
+.a { padding: 2px 0 2px 12px; border-left: 2px solid var(--line); }
+.sys { text-align: left; font: 12px var(--ide-mono); color: var(--mut); }
+#hero { margin-top: 6vh; text-align: left; max-width: 640px; }
+#hero h1 { font: 600 15px var(--ide-mono); letter-spacing: 0; color: var(--fg); margin: 0 0 4px; }
+#hero h1::before { content: "> "; color: var(--ok); }
+#hero p { font-size: 13px; color: var(--mut); }
+#hero .chips { justify-content: flex-start; }
+
+/* ---- composer: a docked input bar, not a floating pill ---- */
+footer { padding: 0; border-top: 1px solid var(--line); background: var(--card); }
+.composer { max-width: none; margin: 0; border-radius: 0; border: 0; background: var(--card); padding: 8px 12px; box-shadow: none; align-items: flex-end; gap: 8px; }
+.composer:focus-within { border: 0; box-shadow: inset 0 0 0 1px var(--acc); }
+textarea { font: 13.5px/1.5 var(--ide-mono); }
+.composer button.p { border-radius: var(--r); width: 32px; height: 32px; min-height: 32px; }
+
+/* ---- code and diffs, like the editor ---- */
+pre, code, kbd, samp { font-family: var(--ide-mono); }
+pre { background: #1a1b1e; border: 1px solid var(--line); border-radius: var(--r); padding: 10px 12px; font-size: 12.5px; line-height: 1.55; overflow: auto; box-shadow: none; }
+:not(pre) > code { background: var(--card2); border-radius: 3px; padding: 1px 5px; font-size: .92em; }
+.diff-add, .add, .ins, [data-diff="add"] { background: var(--ide-add); box-shadow: inset 3px 0 0 var(--ok); }
+.diff-del, .del, [data-diff="del"] { background: var(--ide-del); box-shadow: inset 3px 0 0 var(--err); }
+
+/* ---- panels, dialogs, rows, pills: squared off ---- */
+dialog { border-radius: 6px; border: 1px solid var(--line); background: var(--card); box-shadow: 0 8px 24px rgba(0, 0, 0, .5); }
+dialog::backdrop { background: rgba(0, 0, 0, .55); backdrop-filter: none; }
+.row { border-radius: var(--r); background: var(--card); }
+.pill, .chip, .badge, [class*="pill"] { border-radius: 3px; min-height: 0; padding: 1px 7px; font: 11.5px var(--ide-mono); background: var(--card2); }
+.tabs { border-radius: 0; background: transparent; padding: 0; border-bottom: 1px solid var(--line); }
+.tabs button { border-radius: 0; border: 0; border-bottom: 2px solid transparent; background: transparent; }
+.tabs button.on { background: transparent; border-bottom-color: var(--acc); box-shadow: none; }
+.bar, .bar i { border-radius: 0; }
+h4 { font: 600 11px var(--ide-mono); letter-spacing: .08em; }
+input, textarea, select { background: #1a1b1e; border-radius: var(--r); }
+input[type="checkbox"], input[type="radio"] { accent-color: var(--acc); }
+
+/* ---- kill the remaining "AI template" tells ---- */
+*, *::before, *::after { text-shadow: none !important; }
+[class*="glow"], [class*="shine"], [class*="aurora"] { background-image: none !important; box-shadow: none !important; filter: none !important; }
+
+/* ---- Studio workspace: reuse the same tokens, square it off ---- */
+#workspace, #ws { background: var(--bg); }
+.ws-top { background: var(--card); }
+.ws-prompt, .ws-select, .ws-input, .ws-btn, .ws-btn-primary { border-radius: var(--r) !important; }
+
+/* ---- blanket square-off: anything that was a pill or a big rounded card becomes a small-radius editor control.
+   True circles (status dots, avatars, bullets) are exempted below. ---- */
+button, select, input, textarea, dialog, summary, label.chip, .chip, .chipbtn, .pill, .row, .card-box, .dcard, .dpanel, .feature, .promo,
+.sunset, .aiwarn, .editlog, .live, .thinkcard, .cb, .cmdcard, .fbbox, .whoami, .dchip, .achip, .elchip, .pcchip, .dbadge, .fbadge, .pl-badge,
+.bc-msg, .bc-badge, .dpick, .effort, .ib, .icn, .mem, .sed, .sdiff, .site-agentbar, .plugin-suggest, .retro-workspace, .retro-code-card,
+.retro-view-card, .retro-sim-badge, .cloudstudio-preview iframe, .cloudstudio-credits, .cloudstudio-transcript, .platpane > .dcard, .plproj .dcard,
+.plimgs img, .pl-codebox button, dialog.bigchat, .s-tabs, .s-tabs button, .viewsw, .viewsw button, .tabs, .tabs button, .m.u .bub, .composer {
+  border-radius: var(--r) !important;
+}
+.dot, .tdot, .pavatar, .live .dot, .fbadge::before, .dbul li::before, .dbul li:before, input[type="radio"], input[type="checkbox"] { border-radius: 50% !important; }
+input[type="checkbox"] { border-radius: 3px !important; }
+#heroLogo .llama, .llama, .brand-mark { border-radius: 4px !important; }
+/* the three "view" tabs and settings tabs stay flat tabs, not boxed buttons */
+.viewsw button, .tabs button, .s-tabs button { background: transparent; }
+.viewsw button.on, .viewsw button[aria-selected="true"], .tabs button.on, .s-tabs button.on { background: var(--bg); }
+/* round the chat composer controls were overlapping before: keep the toolbar one tidy row */
+.composer, footer .composer { display: flex; align-items: flex-end; gap: 6px; flex-wrap: nowrap; }
+.chips, .composer-tools, #composerTools { display: flex; flex-wrap: wrap; gap: 6px; align-items: center; }
+.chips button, .chipbtn { white-space: nowrap; position: static !important; }
