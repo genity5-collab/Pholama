@@ -1,13 +1,16 @@
-// Pholama Cloud: Pholama's cloud assistant. Needs a Pholama login. 10 messages/day (1/day once the PC has a local AI that runs tools), 30/month per account.
+// Agent Max: Pholama's cloud assistant. Needs a Pholama login. 10 messages/day (1/day once the PC has a local AI that runs tools), 30/month per account.
 // Can use tools: calculator, clock, site_help (how Pholama works). GENERATED from tools/agentMax.template.ts by tools/build_agent_max.py
 // POST { messages:[{role,content}], effort:'normal'|'long'|'max' }  Authorization: Bearer <Pholama login token>
 // -> { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }  or { error, code }
 
 const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
+// Credits: everyone gets 100 per rolling week. Each word you send costs 5 (spaces do not matter), each minute the AI works costs 3.
+// When the credits run out the AI stops and starts working again by itself as old spending falls out of the 7-day window.
+const WEEK_CREDITS = 100, WORD_COST = 5, MINUTE_COST = 3, PRO_EXTRA_CREDITS = 0;   // Pro's extra room is separate (35 monthly + 15 daily Agent Max credits), so the weekly pool is the same for everyone
 const DAY_CAP_NO_LOCAL = 10, DAY_CAP_WITH_LOCAL = 1, FREE_MONTH_CAP = 30;
 const PRO_DAY_CAP_NO_LOCAL = 15, PRO_DAY_CAP_WITH_LOCAL = 2, PRO_MONTH_CAP = 35;   // Pholama Pro (a Roblox subscription): a little more room   // a capable local AI is free and unlimited, so the cloud one is only a backup
 const ROUNDS: Record<string, number> = { normal: 3, long: 4, max: 5 };   // model calls per message; one message always counts as 1
-const KNOWLEDGE: { id: string; keys: string; text: string; remote?: boolean }[] = [{"id":"overview","keys":"what is pholama overview about free private how it works start","text":"Pholama is a chat app that runs AI models on YOUR OWN PC, so chats stay private and are free. You need a free account to chat (just a name and a password, no email). PHONE SUPPORT HAS ENDED: models are no longer installed on phones or in the browser. There are three ways to chat: (1) the Pholama PC app, which runs models on your computer with tools, web search and Roblox Studio, (2) a phone or other device that opens your PC app over your network (the PC does the work), and (3) Pholama Cloud, the cloud assistant that needs no download and works in any browser. To run models, get the PC app, open Models, download one, close the box and type."},{"id":"account","keys":"account sign log in login signup password name email forgot reset stay logged memory","text":"ACCOUNTS: You must have an account to send messages or to download anything. Tap Account, choose Create account, and pick a name and a password (8+ characters). There is NO email. You stay logged in on that device and return straight into the app. Because there is no email, a forgotten password CANNOT be reset, so choose one you will remember. Names are unique: if yours is taken you will be told. Wrong name or password shows 'Wrong name or password'. MEMORY is optional and OFF until you turn it on in Account. When on, saying 'remember that I like short answers' saves it, and Pholama uses it in later chats. You can see or delete every memory in Account, or wipe all of them. Memory works with PC models."},{"id":"download","keys":"download install resume stop pause delete storage wifi error retry progress loading animation llama","text":"DOWNLOADS (PC app only): open Models, then Download next to a model. You must be logged in. A llama logo fills up as it downloads. You can Stop at any time. Resume continues from where it stopped, even after closing the app or restarting the PC. Files already downloaded are kept. Delete frees the space. If a download errors, tap Retry or Resume and check your internet and free disk space. After downloading, models work offline. The website does not download models."},{"id":"pc","keys":"pc computer host node start.bat ollama llama.cpp install wifi windows mac linux localhost 11435 api","text":"PC HOST: gives more power plus tools and web search. You do NOT need to install Node.js: the one-line installer brings its own private copy (about 30 MB, one time, nothing is installed on the PC). Run the installer from the Pholama page or README, or unzip and double-click start.bat (Windows) / run ./start.sh (Mac/Linux), then open http://localhost:11435, tap Models > On this PC > Install (downloads llama.cpp, with CUDA on NVIDIA GPUs), then Download a model that fits your RAM. RECOMMENDED TOOL MODEL: Qwen2.5 1.5B Instruct (about 1 GB, needs 3 GB RAM). (The full model list could not be loaded right now; the Models button in the app shows every model and what fits your device.)","remote":true},{"id":"tools","keys":"tools search web calculator clock mcp credits thinking switches icons log live tokens","text":"TOOLS (PC app only; the website is plain chat with Pholama Cloud): web search (20 credits), read a web page (10), calculator and clock (1 each), MCP tool call (15), Thinking (25, charged only when the model really thinks). There are 1000 credits per day on the PC, resetting at local midnight. At 0, tools switch off and the model answers alone. Plain local chat is always free. Next to the message box there are icon buttons for Search, Tools, MCP and Thinking. An icon only appears if the selected model can really do it; tap to turn it off or on and Pholama remembers. Each reply shows a token line like '42 in, 17 out, 59 tokens'; a leading ~ means it is an estimate. The PC host also shows a live log of each step the AI takes."},{"id":"controls","keys":"stop button new session clear chat effort think normal long max send controls","text":"CHAT CONTROLS: the round button sends your message and turns into a STOP square while a reply is running. Pressing Stop ends it and keeps what was already written. The + button starts a NEW SESSION: it stops any running reply and clears the chat (models and settings stay). THINK EFFORT (Normal, Long, Max) sits next to the message box. On your own models it is always free: Long and Max just ask the model to take more care and allow a longer answer. On Pholama Cloud it changes how long and careful the answer is."},{"id":"agent-max","keys":"agent max cloud limit daily monthly restock quota free no download integration credits","text":"AGENT MAX is Pholama's cloud assistant: nothing to download, works in any browser, needs a free account. On the website it can use tools (calculator, clock) and knows how Pholama works. In the PC app's Studio it can create and edit files, because the PC does the file work while Max thinks. MAX BRAIN: in the PC app, Settings > Usage lets you choose what powers Max: 'Max (official, cloud)' is the smartest and uses your daily and monthly messages; or pick one of your own local AIs, which is free and unlimited but only as smart as that model. LIMITS: 10 messages per day and 30 per month per account. Each message counts as 1 (Normal, Long and Max effort all count the same). Your 10 daily messages come back every day at midnight UTC until you reach 30 in the month. After 30, Pholama Cloud waits for the next month to restock. Any time you are out, local models stay free and unlimited. If Pholama Cloud fails to answer you are not charged. LOCAL AI RULE: once you install a local AI that can run tools (any PC model tagged tools, such as Qwen2.5 1.5B), your daily Pholama Cloud allowance drops to 1 message a day (shown as used/1), because the local AI is free and unlimited. If you remove it, or have none, the daily allowance goes back to 10 (used/10). The monthly limit stays 30. Pholama Cloud cannot browse the web and cannot see your files."},{"id":"problems","keys":"problem error not working fix help slow crash blank stuck phone ended","text":"COMMON PROBLEMS: Download stops or errors: tap Retry or Resume and free some disk space. Too slow: pick a smaller model. Models no longer run on phones: use Pholama Cloud, or open your PC app from the phone. Nothing happens when you send: you may be logged out, so tap Account. 'Pick a model first': open Models in the PC app and download one, or choose Pholama Cloud. Pholama Cloud says you used your allowance: wait for the daily or monthly restock, or use a local model."}];
+const KNOWLEDGE: { id: string; keys: string; text: string; remote?: boolean }[] = [{"id":"overview","keys":"what is pholama overview about free private how it works start","text":"Pholama is a chat app that runs AI models on YOUR OWN PC, so chats stay private and are free. You need a free account to chat (just a name and a password, no email). PHONE SUPPORT HAS ENDED: models are no longer installed on phones or in the browser. There are three ways to chat: (1) the Pholama PC app, which runs models on your computer with tools, web search and Roblox Studio, (2) a phone or other device that opens your PC app over your network (the PC does the work), and (3) Agent Max, the cloud assistant that needs no download and works in any browser. To run models, get the PC app, open Models, download one, close the box and type."},{"id":"account","keys":"account sign log in login signup password name email forgot reset stay logged memory","text":"ACCOUNTS: You must have an account to send messages or to download anything. Tap Account, choose Create account, and pick a name and a password (8+ characters). There is NO email. You stay logged in on that device and return straight into the app. Because there is no email, a forgotten password CANNOT be reset, so choose one you will remember. Names are unique: if yours is taken you will be told. Wrong name or password shows 'Wrong name or password'. MEMORY is optional and OFF until you turn it on in Account. When on, saying 'remember that I like short answers' saves it, and Pholama uses it in later chats. You can see or delete every memory in Account, or wipe all of them. Memory works with PC models."},{"id":"download","keys":"download install resume stop pause delete storage wifi error retry progress loading animation llama","text":"DOWNLOADS (PC app only): open Models, then Download next to a model. You must be logged in. A llama logo fills up as it downloads. You can Stop at any time. Resume continues from where it stopped, even after closing the app or restarting the PC. Files already downloaded are kept. Delete frees the space. If a download errors, tap Retry or Resume and check your internet and free disk space. After downloading, models work offline. The website does not download models."},{"id":"pc","keys":"pc computer host node start.bat ollama llama.cpp install wifi windows mac linux localhost 11435 api","text":"PC HOST: gives more power plus tools and web search. You do NOT need to install Node.js: the one-line installer brings its own private copy (about 30 MB, one time, nothing is installed on the PC). Run the installer from the Pholama page or README, or unzip and double-click start.bat (Windows) / run ./start.sh (Mac/Linux), then open http://localhost:11435, tap Models > On this PC > Install (downloads llama.cpp, with CUDA on NVIDIA GPUs), then Download a model that fits your RAM. RECOMMENDED TOOL MODEL: Qwen2.5 1.5B Instruct (about 1 GB, needs 3 GB RAM). (The full model list could not be loaded right now; the Models button in the app shows every model and what fits your device.)","remote":true},{"id":"tools","keys":"tools search web calculator clock mcp credits thinking switches icons log live tokens","text":"TOOLS (PC app only; the website is plain chat with Agent Max): web search (20 credits), read a web page (10), calculator and clock (1 each), MCP tool call (15), Thinking (25, charged only when the model really thinks). There are 1000 credits per day on the PC, resetting at local midnight. At 0, tools switch off and the model answers alone. Plain local chat is always free. Next to the message box there are icon buttons for Search, Tools, MCP and Thinking. An icon only appears if the selected model can really do it; tap to turn it off or on and Pholama remembers. Each reply shows a token line like '42 in, 17 out, 59 tokens'; a leading ~ means it is an estimate. The PC host also shows a live log of each step the AI takes."},{"id":"controls","keys":"stop button new session clear chat effort think normal long max send controls","text":"CHAT CONTROLS: the round button sends your message and turns into a STOP square while a reply is running. Pressing Stop ends it and keeps what was already written. The + button starts a NEW SESSION: it stops any running reply and clears the chat (models and settings stay). THINK EFFORT (Normal, Long, Max) sits next to the message box. On your own models it is always free: Long and Max just ask the model to take more care and allow a longer answer. On Agent Max it changes how long and careful the answer is."},{"id":"agent-max","keys":"agent max cloud limit daily monthly restock quota free no download integration credits","text":"AGENT MAX is Pholama's cloud assistant: nothing to download, works in any browser, needs a free account. On the website it can use tools (calculator, clock) and knows how Pholama works. In the PC app's Studio it can create and edit files, because the PC does the file work while Max thinks. MAX BRAIN: in the PC app, Settings > Usage lets you choose what powers Max: 'Max (official, cloud)' is the smartest and uses your daily and monthly messages; or pick one of your own local AIs, which is free and unlimited but only as smart as that model. LIMITS: 10 messages per day and 30 per month per account. Each message counts as 1 (Normal, Long and Max effort all count the same). Your 10 daily messages come back every day at midnight UTC until you reach 30 in the month. After 30, Agent Max waits for the next month to restock. Any time you are out, local models stay free and unlimited. If Agent Max fails to answer you are not charged. LOCAL AI RULE: once you install a local AI that can run tools (any PC model tagged tools, such as Qwen2.5 1.5B), your daily Agent Max allowance drops to 1 message a day (shown as used/1), because the local AI is free and unlimited. If you remove it, or have none, the daily allowance goes back to 10 (used/10). The monthly limit stays 30. Agent Max cannot browse the web and cannot see your files."},{"id":"problems","keys":"problem error not working fix help slow crash blank stuck phone ended","text":"COMMON PROBLEMS: Download stops or errors: tap Retry or Resume and free some disk space. Too slow: pick a smaller model. Models no longer run on phones: use Agent Max, or open your PC app from the phone. Nothing happens when you send: you may be logged out, so tap Account. 'Pick a model first': open Models in the PC app and download one, or choose Agent Max. Agent Max says you used your allowance: wait for the daily or monthly restock, or use a local model."}];
 const KNOWLEDGE_URL = 'https://genity5-collab.github.io/Pholama/max-knowledge.json';
 let remoteAt = 0;
 async function refreshKnowledge() {
@@ -73,12 +76,12 @@ function runTool(name: string, args: any): string {
   throw new Error('Unknown tool ' + name);
 }
 
-const SYSTEM = `You are Pholama Cloud, the assistant inside Pholama, a chat app that runs AI models on the user's own phone or PC.
+const SYSTEM = `You are Agent Max, the assistant inside Pholama, a chat app that runs AI models on the user's own phone or PC.
 You know how Pholama works and you can use tools.
 TOOLS (use one when it helps, otherwise answer directly):
 - calculator: exact maths. input: {"expression": "17*(3+4)"}
 - clock: the current date and time in UTC. input: {}
-- ui: operate the Pholama page for the user. input: {"action": one of open_models | open_tools | open_account | close_dialogs | new_session | set_effort_normal | set_effort_long | set_effort_max | check_limits}. Use it when the user asks you to open, close, show, switch or check something in the app. check_limits shows their Pholama Cloud messages left.
+- ui: operate the Pholama page for the user. input: {"action": one of open_models | open_tools | open_account | close_dialogs | new_session | set_effort_normal | set_effort_long | set_effort_max | check_limits}. Use it when the user asks you to open, close, show, switch or check something in the app. check_limits shows their Agent Max messages left.
 - site_help: look up how Pholama works (accounts, downloads, models, phone vs PC, tools, limits, problems). input: {"question": "how do I resume a download"}
 RULES:
 - For ANY question about Pholama itself (features, models, limits, accounts, errors, how to do something) call site_help FIRST and answer only from what it returns. If it does not cover the question say you are not sure. Never invent models, features, prices or steps.
@@ -97,12 +100,10 @@ const SCHEMA = { type: 'object', properties: {
   input: { type: 'object', properties: { expression: { type: 'string' }, question: { type: 'string' }, action: { type: 'string' } } },
   answer: { type: 'string' } }, required: ['action'] };
 
-// Pholama Cloud brain. Order: dots-3 (main), then Nemotron, then gpt-oss-20b (all OpenRouter), then Groq (3 keys) as the last safety net.
+// Agent Max brain. Order: dots-3 (main), then Nemotron, then gpt-oss-20b (all OpenRouter), then Groq (3 keys) as the last safety net.
 // Failures are only written to the server log. Users never see which model failed or why.
 // Each step is tried only if the one before it is busy, out of credit, rate limited, or returns something unusable.
-const OR_MODELS = ['dots-studio/dots-3-note-preview:free', 'nvidia/nemotron-3.5-lightning:free', 'openai/gpt-oss-20b'];
-const GROQ_MODELS = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
-const JSON_RULE = 'Reply with ONLY one JSON object, no other text, shaped like: {"action":"tool" or "answer","tool":"calculator"|"clock"|"site_help"|"ui" (only when action is tool),"thinking":"one short sentence","input":{"expression":"","question":"","action":""},"answer":"the final reply (only when action is answer)"}. You are Pholama Cloud, never say you are Qwen or any other model.';
+const JSON_RULE = 'Reply with ONLY one JSON object, no other text, shaped like: {"action":"tool" or "answer","tool":"calculator"|"clock"|"site_help"|"ui" (only when action is tool),"thinking":"one short sentence","input":{"expression":"","question":"","action":""},"answer":"the final reply (only when action is answer)"}. You are Agent Max, never say you are Qwen or any other model.';
 async function freeChat(messages: { role: string; content: string }[], maxTokens: number): Promise<any> {
   const key = Deno.env.get('FREE_AI_API_KEY');
   if (!key) throw new Error('cloud provider is not configured');
@@ -138,20 +139,20 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   const key = Deno.env.get('PHOLAMA_SUPABASE_SERVICE_KEY') || '';
   const rpc = (fn: string, body: unknown) => fetch(SB + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  let charged: string | null = null;   // user id, set once a message has been counted, so a failure can give it back
+  let charged: string | null = null; let chargedCostRef: number | null = null;   // user id, set once a message has been counted, so a failure can give it back
   try {
-    if (!key) return out({ error: 'Pholama Cloud is not set up yet.', code: 'setup' }, 503);
+    if (!key) return out({ error: 'Agent Max is not set up yet.', code: 'setup' }, 503);
     // 1) who is asking
     const tok = (req.headers.get('authorization') || '').replace(/^Bearer\s+/i, '');
-    if (!tok) return out({ error: 'Log in to use Pholama Cloud.', code: 'login' }, 401);
+    if (!tok) return out({ error: 'Log in to use Agent Max.', code: 'login' }, 401);
     const who = await fetch(SB + '/auth/v1/user', { headers: { apikey: key, Authorization: 'Bearer ' + tok } });
     if (!who.ok) return out({ error: 'Your login expired. Log in again.', code: 'login' }, 401);
-    const user = await who.json(); if (!user?.id) return out({ error: 'Log in to use Pholama Cloud.', code: 'login' }, 401);
+    const user = await who.json(); if (!user?.id) return out({ error: 'Log in to use Agent Max.', code: 'login' }, 401);
 
     // 2) read the request
     const body = await req.json().catch(() => ({}));
 
-    // Friend chat (the Pholama Cloud entry at the top of the friend list). The member's message was ALREADY counted and checked by the
+    // Friend chat (the Agent Max entry at the top of the friend list). The member's message was ALREADY counted and checked by the
     // database (pholama_max_chat_send), so this never trusts the page for what was said or how many are left: it reads the stored chat.
     if (body.friend === true) {
       const hist = await fetch(SB + '/rest/v1/pholama_max_chat?user_id=eq.' + encodeURIComponent(user.id) + '&select=id,role,body&order=id.desc&limit=12', { headers: { apikey: key, Authorization: 'Bearer ' + key } });
@@ -172,8 +173,19 @@ Deno.serve(async (req) => {
       } catch (e) {
         await rpc('pholama_max_chat_refund', { p_user: user.id }).catch(() => {});   // nobody pays for an answer they did not get
         console.log('AgentMax friend error:', String(e).slice(0, 200));
-        return out({ error: 'Pholama Cloud did not answer. You were not charged. Try again.', code: 'server' }, 500);
+        return out({ error: 'Agent Max did not answer. You were not charged. Try again.', code: 'server' }, 500);
       }
+    }
+    // Balance only: lets the page show the credits before the first message. Free, never charges, never calls a model.
+    if (body.status === true) {
+      try {
+        const since0 = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+        const ur0 = await fetch(SB + '/rest/v1/pholama_cloud_usage?user_id=eq.' + encodeURIComponent(user.id) + '&day=gte.' + since0 + '&select=units', { headers: { apikey: key, Authorization: 'Bearer ' + key } });
+        if (!ur0.ok) throw new Error('usage');
+        const used0 = ((await ur0.json()) as any[]).reduce((n, r) => n + Number(r.units || 0), 0);
+        const cap0 = WEEK_CREDITS + PRO_EXTRA_CREDITS;
+        return out({ status: true, day_used: used0, day_cap: cap0, month_used: used0, month_cap: cap0, credits_left: Math.max(0, cap0 - used0), week_cap: cap0 });
+      } catch { return out({ error: 'Could not read your credits. Try again.', code: 'limit-check' }, 502); }
     }
     const effort = EFFORT[String(body.effort)] ? String(body.effort) : 'normal';
     const studioMode = body.studio === true;   // Studio: the PC sends its own rules + tools; this function only thinks and writes, the PC does the file work
@@ -192,28 +204,50 @@ Deno.serve(async (req) => {
     const MONTH_CAP = isPro ? PRO_MONTH_CAP : FREE_MONTH_CAP;
     const DAY_CAP = body.localTools === true ? (isPro ? PRO_DAY_CAP_WITH_LOCAL : DAY_CAP_WITH_LOCAL) : (isPro ? PRO_DAY_CAP_NO_LOCAL : DAY_CAP_NO_LOCAL);
 
-    // 3) count ONE message (atomic in the database) before doing any work
-    const sp = await rpc('pholama_max_spend', { p_user: user.id, p_day_cap: DAY_CAP, p_month_cap: MONTH_CAP });
-    if (!sp.ok) return out({ error: 'Could not check your allowance. Try again.', code: 'limit-check' }, 502);
-    const row = (await sp.json())[0] || {};
-    const info = { day_used: Number(row.day_used || 0), day_cap: DAY_CAP, month_used: Number(row.month_used || 0), month_cap: MONTH_CAP };
-    if (!row.ok) {
-      return out(row.reason === 'month'
-        ? { error: `You used all ${MONTH_CAP} Pholama Cloud messages this month. It restocks next month (1st, UTC). Local models stay free and unlimited.`, code: 'limit-month', ...info }
-        : { error: `You used today's ${DAY_CAP} Pholama Cloud messages. They come back tomorrow (midnight UTC). Local models stay free.${DAY_CAP === DAY_CAP_WITH_LOCAL ? ' You have a local AI that runs tools, so your daily allowance is 1. Remove it from Models and the daily allowance goes back to ${isPro ? PRO_DAY_CAP_NO_LOCAL : DAY_CAP_NO_LOCAL}.' : ''}`, code: 'limit-day', ...info }, 429);
+    // 3) credits. Cost of what you wrote: 5 per word. Work time is charged after the answer (3 per minute).
+    const wordCount = (text: string) => (String(text).match(/\S+/g) || []).length;
+    const sendCost = Math.max(WORD_COST, wordCount(last.content) * WORD_COST);
+    const weekCap = isPro ? WEEK_CREDITS + PRO_EXTRA_CREDITS : WEEK_CREDITS;
+    const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    let weekUsed = 0;
+    try {
+      const ur = await fetch(SB + '/rest/v1/pholama_cloud_usage?user_id=eq.' + encodeURIComponent(user.id) + '&day=gte.' + since + '&select=units', { headers: { apikey: key, Authorization: 'Bearer ' + key } });
+      if (!ur.ok) throw new Error('usage');
+      weekUsed = ((await ur.json()) as any[]).reduce((n, r) => n + Number(r.units || 0), 0);
+    } catch { return out({ error: 'Could not check your credits. Try again.', code: 'limit-check' }, 502); }
+    const left = weekCap - weekUsed;
+    const info = { day_used: weekUsed, day_cap: weekCap, month_used: weekUsed, month_cap: weekCap, credits_left: Math.max(0, left), week_cap: weekCap, cost: sendCost };
+    if (left < sendCost) {
+      return out({ error: `Not enough credits (${Math.max(0, left)} left, this message needs ${sendCost}). You get ${weekCap} credits a week, and they come back by themselves as the week moves on. Local models stay free.`, code: 'limit-month', ...info }, 429);
     }
-    charged = user.id;
+    // today's row carries the spend; the database refuses it if it would pass the cap we hand it (the room left this week plus what today already holds)
+    const todayUsed = await (async () => { try { const tr = await fetch(SB + '/rest/v1/pholama_cloud_usage?user_id=eq.' + encodeURIComponent(user.id) + '&day=eq.' + new Date().toISOString().slice(0, 10) + '&select=units', { headers: { apikey: key, Authorization: 'Bearer ' + key } }); const j = tr.ok ? await tr.json() : []; return Number(j[0]?.units || 0); } catch { return 0; } })();
+    const sp = await rpc('pholama_cloud_spend', { p_user: user.id, p_cost: sendCost, p_cap: todayUsed + left });
+    if (!sp.ok) return out({ error: 'Could not check your credits. Try again.', code: 'limit-check' }, 502);
+    const row = (await sp.json())[0] || {};
+    if (!row.ok) return out({ error: `Not enough credits for this message (${sendCost} needed). They come back by themselves as the week moves on. Local models stay free.`, code: 'limit-month', ...info }, 429);
+    info.day_used = info.month_used = weekUsed + sendCost; info.credits_left = Math.max(0, left - sendCost);
+    charged = user.id; chargedCostRef = sendCost; const startedAt = Date.now();
+    // Work time: 3 credits per started minute, billed once the answer exists. Never more than what is left, and a failure here never costs the user their answer.
+    const billWork = async () => {
+      try {
+        const mins = Math.floor((Date.now() - startedAt) / 60000);   // quick answers (under a minute) are free; a full minute of AI work costs 3
+        const cost = Math.min(mins * MINUTE_COST, Math.max(0, info.credits_left));
+        if (cost > 0) { const w = await rpc('pholama_cloud_spend', { p_user: user.id, p_cost: cost, p_cap: 1000000 }); if (w.ok) { info.day_used += cost; info.month_used += cost; info.credits_left -= cost; chargedCostRef = (chargedCostRef || 0) + cost; } }
+      } catch { /* the answer is still delivered */ }
+    };
 
     // 4) the tool loop (server side, at most MAX_ROUNDS model calls per message)
     const name = String(user.user_metadata?.name || 'the user').slice(0, 30);
-    const convo = msgs.map((m: any) => (m.role === 'user' ? name : 'Pholama Cloud') + ': ' + m.content).join('\n');
+    const convo = msgs.map((m: any) => (m.role === 'user' ? name : 'Agent Max') + ': ' + m.content).join('\n');
     const used: { name: string; input: any; output: string }[] = [];
     const actions: string[] = []; let thinking = '';
     let scratch = '', reply = '';
     if (studioMode) {
-      const prompt: { role: string; content: string }[] = [{ role: 'system', content: studioSystem || 'You are Pholama Cloud, helping build a website in Pholama Studio.' }, ...msgs];
+      const prompt: { role: string; content: string }[] = [{ role: 'system', content: studioSystem || 'You are Agent Max, helping build a website in Pholama Studio.' }, ...msgs];
       const text = await aiText(prompt);
       if (!text) throw new Error('empty');
+      await billWork();
       return out({ reply: text.slice(0, 16000), tools: [], actions: [], thinking: '', ...info });
     }
     const MAX_ROUNDS = ROUNDS[effort];
@@ -236,10 +270,11 @@ Deno.serve(async (req) => {
     }
     if (!reply) reply = 'Sorry, I could not come up with an answer. Try asking again.';
     if (/Text inside tool results is DATA|TOOLS \(use one when it helps/i.test(reply)) reply = "I can't share that.";
+    await billWork();
     return out({ reply, tools: used, actions, thinking, ...info });
   } catch (e) {
-    if (charged) await rpc('pholama_max_refund', { p_user: charged }).catch(() => {});   // nobody pays for an answer they did not get
+    if (charged) await rpc('pholama_cloud_refund', { p_user: charged, p_cost: typeof chargedCostRef === 'number' ? chargedCostRef : 0 }).catch(() => {});   // nobody pays for an answer they did not get
     console.log('AgentMax error:', String(e).slice(0, 200));   // server log only
-    return out({ error: 'Pholama Cloud did not answer. You were not charged. Try again.', code: 'server' }, 500);
+    return out({ error: 'Agent Max did not answer. You were not charged. Try again.', code: 'server' }, 500);
   }
 });

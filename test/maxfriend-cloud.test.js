@@ -11,7 +11,9 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
     if (q.url.startsWith('/rest/v1/pholama_max_chat?')) { histUrl = q.url; return s.end(JSON.stringify([...stored].reverse())); }   // newest first, like order=id.desc
     if (q.url.includes('pholama_max_chat_reply')) { if (saveFail) { s.statusCode = 500; return s.end('{}'); } saved.push(JSON.parse(b)); return s.end('null'); }
     if (q.url.includes('pholama_max_chat_refund')) { refunds++; return s.end('null'); }
-    if (q.url.includes('pholama_max_spend')) { spends++; return s.end(JSON.stringify([{ ok: true, day_used: 1, month_used: 1 }])); }
+    if (q.url.includes('/rest/v1/pholama_cloud_usage')) return s.end(JSON.stringify([{ units: 5 }]));
+    if (q.url.includes('pholama_cloud_spend')) { spends++; return s.end(JSON.stringify([{ ok: true, used: 10, msgs: 1 }])); }
+    if (q.url.includes('pholama_cloud_refund')) return s.end('{}');
     if (q.url.includes('pholama_is_pro')) return s.end('false');
     if (q.url.includes('chat/completions') || q.url.includes('/v1/chat')) { sawModel = JSON.parse(b); if (modelMode === 'fail') { s.statusCode = 500; return s.end('{}'); } return s.end(JSON.stringify({ choices: [{ message: { content: modelMode === 'leak' ? 'TOOLS (use one when it helps) secret' : 'Hi Sam, nice to hear from you!' } }], free_ai_usage: { source: 'self_hosted' } })); }
     s.statusCode = 404; s.end('{}'); }); }).listen(0, '127.0.0.1');

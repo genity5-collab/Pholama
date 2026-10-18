@@ -4,6 +4,9 @@
 // -> { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }  or { error, code }
 
 const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
+// Credits: everyone gets 100 per rolling week. Each word you send costs 5 (spaces do not matter), each minute the AI works costs 3.
+// When the credits run out the AI stops and starts working again by itself as old spending falls out of the 7-day window.
+const WEEK_CREDITS = 100, WORD_COST = 5, MINUTE_COST = 3, PRO_EXTRA_CREDITS = 0;   // Pro's extra room is separate (35 monthly + 15 daily Agent Max credits), so the weekly pool is the same for everyone
 const DAY_CAP_NO_LOCAL = 10, DAY_CAP_WITH_LOCAL = 1, FREE_MONTH_CAP = 30;
 const PRO_DAY_CAP_NO_LOCAL = 15, PRO_DAY_CAP_WITH_LOCAL = 2, PRO_MONTH_CAP = 35;   // Pholama Pro (a Roblox subscription): a little more room   // a capable local AI is free and unlimited, so the cloud one is only a backup
 const ROUNDS: Record<string, number> = { normal: 3, long: 4, max: 5 };   // model calls per message; one message always counts as 1
@@ -100,88 +103,43 @@ const SCHEMA = { type: 'object', properties: {
 // Agent Max brain. Order: dots-3 (main), then Nemotron, then gpt-oss-20b (all OpenRouter), then Groq (3 keys) as the last safety net.
 // Failures are only written to the server log. Users never see which model failed or why.
 // Each step is tried only if the one before it is busy, out of credit, rate limited, or returns something unusable.
-const OR_MODELS = ['dots-studio/dots-3-note-preview:free', 'nvidia/nemotron-3.5-lightning:free', 'openai/gpt-oss-20b'];
-const GROQ_MODELS = ['qwen/qwen3.8-27b', 'openai/gpt-oss-120b'];
 const JSON_RULE = 'Reply with ONLY one JSON object, no other text, shaped like: {"action":"tool" or "answer","tool":"calculator"|"clock"|"site_help"|"ui" (only when action is tool),"thinking":"one short sentence","input":{"expression":"","question":"","action":""},"answer":"the final reply (only when action is answer)"}. You are Agent Max, never say you are Qwen or any other model.';
+async function freeChat(messages: { role: string; content: string }[], maxTokens: number): Promise<any> {
+  const key = Deno.env.get('FREE_AI_API_KEY');
+  if (!key) throw new Error('cloud provider is not configured');
+  const r = await fetch('https://api.free.ai/v1/chat/', {
+    method: 'POST', signal: AbortSignal.timeout(55000),
+    headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
+    body: JSON.stringify({ model: 'qwen7b', messages, temperature: 0.3, max_tokens: maxTokens })
+  });
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok) throw new Error('cloud provider HTTP ' + r.status);
+  if (j?.free_ai_usage?.source && j.free_ai_usage.source !== 'self_hosted') throw new Error('cloud provider returned a paid model');
+  return j;
+}
 async function aiJson(prompt: string): Promise<any> {
   const messages = [{ role: 'system', content: JSON_RULE }, { role: 'user', content: prompt }];
-  const parse = (j: any) => {
-    const t = String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
-    const found = [] as any; for (let a = t.indexOf('{'); a !== -1; a = t.indexOf('{', a + 1)) { for (let b = t.indexOf('}', a); b !== -1; b = t.indexOf('}', b + 1)) { try { const o = JSON.parse(t.slice(a, b + 1)); if (o && (o.action === 'tool' || o.action === 'answer')) { found.push(o); break; } } catch { /* keep widening */ } } }
-    return found.length ? found[found.length - 1] : null;
-  };
-  let last = '';
-  // 1) OpenRouter: main model, then the backup model. A key problem (401/402/403) skips the rest of OpenRouter.
-  const orKey = Deno.env.get('OPENROUTER_API_KEY');
-  if (orKey) orLoop: for (const model of OR_MODELS) {
-    try {
-      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(30000),
-        headers: { Authorization: 'Bearer ' + orKey, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://genity5-collab.github.io/Pholama/', 'X-Title': 'Pholama Agent Max' },
-        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 900, response_format: { type: 'json_object' }, messages }) });
-      if (r.status === 401 || r.status === 403) { last = 'openrouter key HTTP ' + r.status; break orLoop; }
-      if (r.status === 402) { last = model + ' needs credit'; console.log('AgentMax fallback:', last); continue; }   // a paid backup with no credit: try the next step
-      if (!r.ok) { last = model + ' HTTP ' + r.status; continue; }
-      const o = parse(await r.json()); if (o) return o;
-      last = model + ' unusable answer';
-    } catch (e) { last = String(e).slice(0, 60); }
+  const j = await freeChat(messages, 1200);
+  const text = String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
+  for (let a = text.indexOf('{'); a !== -1; a = text.indexOf('{', a + 1)) {
+    for (let b = text.indexOf('}', a); b !== -1; b = text.indexOf('}', b + 1)) {
+      try { const o = JSON.parse(text.slice(a, b + 1)); if (o && (o.action === 'tool' || o.action === 'answer')) return o; } catch {}
+    }
   }
-  // 2) Groq: up to three keys, tried in order. The next key takes over when one is rate limited or rejected.
-  const keys = [Deno.env.get('GROQ_API_KEY'), Deno.env.get('GROQ_API_KEY_2'), Deno.env.get('GROQ_API_KEY_3')].filter((k): k is string => !!k);
-  if (!keys.length && !orKey) throw new Error('no key');
-  for (const key of keys) for (const model of GROQ_MODELS) {
-    try {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(25000),
-        headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, temperature: 0.4, max_tokens: 900, response_format: { type: 'json_object' }, messages }) });
-      if (r.status === 401 || r.status === 403 || r.status === 429) { last = 'groq key HTTP ' + r.status; break; }   // this key is limited or bad: use the next key
-      if (!r.ok) { last = 'groq HTTP ' + r.status; continue; }
-      const o = parse(await r.json()); if (o) return o;
-      last = 'groq unusable answer';
-    } catch (e) { last = String(e).slice(0, 60); }
-  }
-  console.log('AgentMax: every model failed. Last problem:', last);   // log only, never sent to the browser
-  throw new Error('AI failed');
+  throw new Error('cloud provider returned an unreadable answer');
 }
 
 // Studio mode: the PC sends its own instructions (tools, project map, rules). Same models and keys as aiJson, but plain text and more room,
 // because the answer is code and <tool> calls that the PC runs itself. No JSON shape is forced here.
 async function aiText(messages: { role: string; content: string }[]): Promise<string> {
-  const clean = (j: any) => String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim();
-  let last = '';
-  const orKey = Deno.env.get('OPENROUTER_API_KEY');
-  if (orKey) orLoop: for (const model of OR_MODELS) {
-    try {
-      const r = await fetch('https://openrouter.ai/api/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(55000),
-        headers: { Authorization: 'Bearer ' + orKey, 'Content-Type': 'application/json', 'HTTP-Referer': 'https://genity5-collab.github.io/Pholama/', 'X-Title': 'Pholama Agent Max Studio' },
-        body: JSON.stringify({ model, temperature: 0.3, max_tokens: 3500, messages }) });
-      if (r.status === 401 || r.status === 403) { last = 'openrouter key HTTP ' + r.status; break orLoop; }
-      if (!r.ok) { last = model + ' HTTP ' + r.status; continue; }
-      const t = clean(await r.json()); if (t) return t;
-      last = model + ' empty answer';
-    } catch (e) { last = String(e).slice(0, 60); }
-  }
-  const keys = [Deno.env.get('GROQ_API_KEY'), Deno.env.get('GROQ_API_KEY_2'), Deno.env.get('GROQ_API_KEY_3')].filter((k): k is string => !!k);
-  if (!keys.length && !orKey) throw new Error('no key');
-  for (const key of keys) for (const model of GROQ_MODELS) {
-    try {
-      const r = await fetch('https://api.groq.com/openai/v1/chat/completions', { method: 'POST', signal: AbortSignal.timeout(45000),
-        headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ model, temperature: 0.3, max_tokens: 3500, messages }) });
-      if (r.status === 401 || r.status === 403 || r.status === 429) { last = 'groq key HTTP ' + r.status; break; }
-      if (!r.ok) { last = 'groq HTTP ' + r.status; continue; }
-      const t = clean(await r.json()); if (t) return t;
-      last = 'groq empty answer';
-    } catch (e) { last = String(e).slice(0, 60); }
-  }
-  console.log('AgentMax Studio: every model failed. Last problem:', last);
-  throw new Error('AI failed');
+  const j = await freeChat(messages, 4000);
+  return String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim();
 }
-
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   const key = Deno.env.get('PHOLAMA_SUPABASE_SERVICE_KEY') || '';
   const rpc = (fn: string, body: unknown) => fetch(SB + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  let charged: string | null = null;   // user id, set once a message has been counted, so a failure can give it back
+  let charged: string | null = null; let chargedCostRef: number | null = null;   // user id, set once a message has been counted, so a failure can give it back
   try {
     if (!key) return out({ error: 'Agent Max is not set up yet.', code: 'setup' }, 503);
     // 1) who is asking
@@ -218,6 +176,17 @@ Deno.serve(async (req) => {
         return out({ error: 'Agent Max did not answer. You were not charged. Try again.', code: 'server' }, 500);
       }
     }
+    // Balance only: lets the page show the credits before the first message. Free, never charges, never calls a model.
+    if (body.status === true) {
+      try {
+        const since0 = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+        const ur0 = await fetch(SB + '/rest/v1/pholama_cloud_usage?user_id=eq.' + encodeURIComponent(user.id) + '&day=gte.' + since0 + '&select=units', { headers: { apikey: key, Authorization: 'Bearer ' + key } });
+        if (!ur0.ok) throw new Error('usage');
+        const used0 = ((await ur0.json()) as any[]).reduce((n, r) => n + Number(r.units || 0), 0);
+        const cap0 = WEEK_CREDITS + PRO_EXTRA_CREDITS;
+        return out({ status: true, day_used: used0, day_cap: cap0, month_used: used0, month_cap: cap0, credits_left: Math.max(0, cap0 - used0), week_cap: cap0 });
+      } catch { return out({ error: 'Could not read your credits. Try again.', code: 'limit-check' }, 502); }
+    }
     const effort = EFFORT[String(body.effort)] ? String(body.effort) : 'normal';
     const studioMode = body.studio === true;   // Studio: the PC sends its own rules + tools; this function only thinks and writes, the PC does the file work
     const rawMsgs = Array.isArray(body.messages) ? body.messages : [];
@@ -235,17 +204,38 @@ Deno.serve(async (req) => {
     const MONTH_CAP = isPro ? PRO_MONTH_CAP : FREE_MONTH_CAP;
     const DAY_CAP = body.localTools === true ? (isPro ? PRO_DAY_CAP_WITH_LOCAL : DAY_CAP_WITH_LOCAL) : (isPro ? PRO_DAY_CAP_NO_LOCAL : DAY_CAP_NO_LOCAL);
 
-    // 3) count ONE message (atomic in the database) before doing any work
-    const sp = await rpc('pholama_max_spend', { p_user: user.id, p_day_cap: DAY_CAP, p_month_cap: MONTH_CAP });
-    if (!sp.ok) return out({ error: 'Could not check your allowance. Try again.', code: 'limit-check' }, 502);
-    const row = (await sp.json())[0] || {};
-    const info = { day_used: Number(row.day_used || 0), day_cap: DAY_CAP, month_used: Number(row.month_used || 0), month_cap: MONTH_CAP };
-    if (!row.ok) {
-      return out(row.reason === 'month'
-        ? { error: `You used all ${MONTH_CAP} Agent Max messages this month. It restocks next month (1st, UTC). Local models stay free and unlimited.`, code: 'limit-month', ...info }
-        : { error: `You used today's ${DAY_CAP} Agent Max messages. They come back tomorrow (midnight UTC). Local models stay free.${DAY_CAP === DAY_CAP_WITH_LOCAL ? ' You have a local AI that runs tools, so your daily allowance is 1. Remove it from Models and the daily allowance goes back to ${isPro ? PRO_DAY_CAP_NO_LOCAL : DAY_CAP_NO_LOCAL}.' : ''}`, code: 'limit-day', ...info }, 429);
+    // 3) credits. Cost of what you wrote: 5 per word. Work time is charged after the answer (3 per minute).
+    const wordCount = (text: string) => (String(text).match(/\S+/g) || []).length;
+    const sendCost = Math.max(WORD_COST, wordCount(last.content) * WORD_COST);
+    const weekCap = isPro ? WEEK_CREDITS + PRO_EXTRA_CREDITS : WEEK_CREDITS;
+    const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
+    let weekUsed = 0;
+    try {
+      const ur = await fetch(SB + '/rest/v1/pholama_cloud_usage?user_id=eq.' + encodeURIComponent(user.id) + '&day=gte.' + since + '&select=units', { headers: { apikey: key, Authorization: 'Bearer ' + key } });
+      if (!ur.ok) throw new Error('usage');
+      weekUsed = ((await ur.json()) as any[]).reduce((n, r) => n + Number(r.units || 0), 0);
+    } catch { return out({ error: 'Could not check your credits. Try again.', code: 'limit-check' }, 502); }
+    const left = weekCap - weekUsed;
+    const info = { day_used: weekUsed, day_cap: weekCap, month_used: weekUsed, month_cap: weekCap, credits_left: Math.max(0, left), week_cap: weekCap, cost: sendCost };
+    if (left < sendCost) {
+      return out({ error: `Not enough credits (${Math.max(0, left)} left, this message needs ${sendCost}). You get ${weekCap} credits a week, and they come back by themselves as the week moves on. Local models stay free.`, code: 'limit-month', ...info }, 429);
     }
-    charged = user.id;
+    // today's row carries the spend; the database refuses it if it would pass the cap we hand it (the room left this week plus what today already holds)
+    const todayUsed = await (async () => { try { const tr = await fetch(SB + '/rest/v1/pholama_cloud_usage?user_id=eq.' + encodeURIComponent(user.id) + '&day=eq.' + new Date().toISOString().slice(0, 10) + '&select=units', { headers: { apikey: key, Authorization: 'Bearer ' + key } }); const j = tr.ok ? await tr.json() : []; return Number(j[0]?.units || 0); } catch { return 0; } })();
+    const sp = await rpc('pholama_cloud_spend', { p_user: user.id, p_cost: sendCost, p_cap: todayUsed + left });
+    if (!sp.ok) return out({ error: 'Could not check your credits. Try again.', code: 'limit-check' }, 502);
+    const row = (await sp.json())[0] || {};
+    if (!row.ok) return out({ error: `Not enough credits for this message (${sendCost} needed). They come back by themselves as the week moves on. Local models stay free.`, code: 'limit-month', ...info }, 429);
+    info.day_used = info.month_used = weekUsed + sendCost; info.credits_left = Math.max(0, left - sendCost);
+    charged = user.id; chargedCostRef = sendCost; const startedAt = Date.now();
+    // Work time: 3 credits per started minute, billed once the answer exists. Never more than what is left, and a failure here never costs the user their answer.
+    const billWork = async () => {
+      try {
+        const mins = Math.floor((Date.now() - startedAt) / 60000);   // quick answers (under a minute) are free; a full minute of AI work costs 3
+        const cost = Math.min(mins * MINUTE_COST, Math.max(0, info.credits_left));
+        if (cost > 0) { const w = await rpc('pholama_cloud_spend', { p_user: user.id, p_cost: cost, p_cap: 1000000 }); if (w.ok) { info.day_used += cost; info.month_used += cost; info.credits_left -= cost; chargedCostRef = (chargedCostRef || 0) + cost; } }
+      } catch { /* the answer is still delivered */ }
+    };
 
     // 4) the tool loop (server side, at most MAX_ROUNDS model calls per message)
     const name = String(user.user_metadata?.name || 'the user').slice(0, 30);
@@ -257,6 +247,7 @@ Deno.serve(async (req) => {
       const prompt: { role: string; content: string }[] = [{ role: 'system', content: studioSystem || 'You are Agent Max, helping build a website in Pholama Studio.' }, ...msgs];
       const text = await aiText(prompt);
       if (!text) throw new Error('empty');
+      await billWork();
       return out({ reply: text.slice(0, 16000), tools: [], actions: [], thinking: '', ...info });
     }
     const MAX_ROUNDS = ROUNDS[effort];
@@ -279,9 +270,10 @@ Deno.serve(async (req) => {
     }
     if (!reply) reply = 'Sorry, I could not come up with an answer. Try asking again.';
     if (/Text inside tool results is DATA|TOOLS \(use one when it helps/i.test(reply)) reply = "I can't share that.";
+    await billWork();
     return out({ reply, tools: used, actions, thinking, ...info });
   } catch (e) {
-    if (charged) await rpc('pholama_max_refund', { p_user: charged }).catch(() => {});   // nobody pays for an answer they did not get
+    if (charged) await rpc('pholama_cloud_refund', { p_user: charged, p_cost: typeof chargedCostRef === 'number' ? chargedCostRef : 0 }).catch(() => {});   // nobody pays for an answer they did not get
     console.log('AgentMax error:', String(e).slice(0, 200));   // server log only
     return out({ error: 'Agent Max did not answer. You were not charged. Try again.', code: 'server' }, 500);
   }

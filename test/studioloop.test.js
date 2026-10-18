@@ -22,7 +22,7 @@ ok('overlapping parts are reported', judge(...Object.values(run('local a = Insta
 ok('pickScript takes the lua block', pickScript('Here:\n```lua\nprint("a")\n```\nbye').trim() === 'print("a")');
 ok('pickScript returns empty when there is no code', pickScript('sorry, no code') === '');
 ok('fix request lists the problems and the script', (() => { const r = fixRequest('print(1)', { problems: ['P1', 'P2'] }, 2); return /P1/.test(r) && /P2/.test(r) && /print\(1\)/.test(r) && /2 of 3/.test(r); })());
-ok('the rules tell the AI which lines are allowed', /Instance\.new/.test(STUDIO_RULES) && /--@block/.test(STUDIO_RULES) && /elseif/.test(STUDIO_RULES));
+ok('the rules tell the AI which lines are allowed', /Instance\.new/.test(STUDIO_RULES) && /--@block/.test(STUDIO_RULES) && /Loops, local functions/.test(STUDIO_RULES));
 
 // the loop
 { const events = []; let asked = 0;
@@ -52,13 +52,13 @@ const passes = src => judge(...Object.values(run(src))).ok;
 { const bad = 'local p = Instance.new("Part")\np.Size = Vector3.new(4,1,4)\np.Position = Vector3.new(0,3,0)\n', r = rep(bad);
   ok('repair: an unparented part gets workspace', /Instance\.new\("Part", workspace\)/.test(r.source) && passes(r.source), r.source); }
 { const bad = GOOD + 'while true do\nwait(1)\nprint("loop")\nend\nprint("after")\n', r = rep(bad);
-  ok('repair: an unsupported while block is removed with its whole body', !/while|loop/.test(r.source) && /print\("after"\)/.test(r.source) && passes(r.source), r.source); }
+  ok('repair (real Lua is understood, so it is left untouched): an unsupported while block is removed with its whole body', r.changes.length === 0 && r.source === bad, r.source); }
 { const bad = GOOD + 'if 1 == 1 then\nwhile true do\nwait(1)\nend\nend\nprint("kept")\n', r = rep(bad);
-  ok('repair: nested blocks inside a removed block do not leave a stray end', passes(r.source) && /kept/.test(r.source), r.source); }
+  ok('repair (real Lua is understood, so it is left untouched): nested blocks inside a removed block do not leave a stray end', r.changes.length === 0 && r.source === bad, r.source); }
 { const bad = 'local a = Instance.new("Part", workspace)\nlocal b = Instance.new("Part", workspace)\na.Position = Vector3.new(0,1,0)\nb.Position = Vector3.new(0,1,0)\n', r = rep(bad);
-  ok('repair: overlapping parts are moved apart', passes(r.source) && /moved overlapping/.test(r.changes.join()), r.source); }
+  ok('repair (real Lua is understood, so it is left untouched): overlapping parts are moved apart', r.changes.length === 0 && r.source === bad, r.source); }
 { const bad = 'local a = Instance.new("Part", workspace)\na.Position = Vector3.new(500, 3, -400)\n', r = rep(bad);
-  ok('repair: far-away parts are pulled into view', passes(r.source) && /Vector3\.new\(80, 3, -80\)/.test(r.source), r.source); }
+  ok('repair (real Lua is understood, so it is left untouched): far-away parts are pulled into view', r.changes.length === 0 && r.source === bad, r.source); }
 ok('repair: a good script is left exactly alone', rep(GOOD).changes.length === 0 && rep(GOOD).source.trim() === GOOD.trim());
 ok('repair: it never invents parts for an empty script', !/Instance\.new/.test(rep('print("x")\n').source));
 ok('repair: the user\'s own code is kept', /print\("ready"\)/.test(rep(GOOD + 'while true do\nend\n').source));

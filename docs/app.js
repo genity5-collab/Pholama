@@ -16,8 +16,9 @@ import { READER } from './attach.js';
 import { initAttach, hasAttachments, attachedNames, attachedFiles, addAttachmentFiles, clearAttachments, prepare } from './attachui.js';
 import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 import { downloadDecision, readCached, writeCached } from './pclink.js';
-import { extractLuauBlocks, simulateLuau, drawPreview } from './retrostudio.js';
-import { studioLoop, STUDIO_RULES } from './studioloop.js';
+import { extractLuauBlocks, simulateLuau, drawPreview, DEFAULT_CAMERA } from './retrostudio.js';
+import { attachViewControls } from './viewcontrols.js';
+import { studioLoop, rulesFor } from './studioloop.js';
 import * as WS from './studioworkspace-model.js';
 
 const $ = s => document.querySelector(s);
@@ -31,6 +32,8 @@ const deviceRam = () => navigator.deviceMemory || 0; // Chrome reports 0.25-8 (r
 let catalog = null, server = null, tab = 'browser', engine = null, engineModel = null, history = [], busy = false;
 let stopper = null, stopped = false, sessionId = 1;   // stopper() cancels whatever reply is running right now
 let effort = cleanEffort(localStorage.getItem('pholama.effort'));
+// A message that asks for Roblox / Lua scripting. The AI then gets the Lua-only rules even when the encoder is off.
+const LUA_ASK = /\b(lua|luau|roblox|retrostudio|noob|obby|tycoon|npc|(?:a|an|the|me|my)\s+(?:\w+\s+){0,2}(?:script|model|part|gui|sword|gun|house|car|tree|tower|castle|robot|dragon|sign)s?)\b/i;
 let retroEnabled = false, studioWs = WS.newWorkspace(), liveTimer = 0;
 // Compatibility views over the workspace so older code (sessions, download, screenshot) keeps working.
 const scriptList = () => WS.scripts(studioWs);
@@ -220,7 +223,7 @@ async function refreshSelect() {
 function setRetroEnabled(on) {
   retroEnabled = !!on;
   const b = $('#retroPluginBtn'), panel = $('#retroWorkspace');
-  if (b) { b.setAttribute('aria-pressed', String(retroEnabled)); b.textContent = retroEnabled ? '✓ RetroStudio' : '+ RetroStudio'; }
+  if (b) { b.setAttribute('aria-pressed', String(retroEnabled)); b.textContent = retroEnabled ? '✓ RetroStudio encoder' : '+ RetroStudio encoder'; }
   if (panel) panel.hidden = !retroEnabled;
   if (retroEnabled) renderRetroScript();
 }
@@ -253,6 +256,15 @@ function runRetroSafeTest() {
   log.textContent = status + (result.diagnostics.length ? ' ' + result.diagnostics.join(' ') : '');
   return !result.diagnostics.length;
 }
+let viewCam = { ...DEFAULT_CAMERA }, lastParts = [], viewCtl = null;
+// Draw with the user's camera so a new script or a lighting change never throws their zoom away.
+function paintView(parts, canvas = $('#retroCanvas')) { lastParts = parts || []; drawPreview(canvas, lastParts, readLighting(), viewCam); }
+function setupViewControls() {
+  const canvas = $('#retroCanvas'); if (!canvas || canvas.dataset.controls) return; canvas.dataset.controls = '1';
+  viewCtl = attachViewControls(canvas, { getCamera: () => viewCam, setCamera: c => { viewCam = c; window.__viewCam = c; }, redraw: () => drawPreview(canvas, lastParts, readLighting(), viewCam), fit: () => ({ ...DEFAULT_CAMERA }) });
+  const on = (id, f) => { const b = document.getElementById(id); if (b) b.addEventListener('click', f); };
+  on('viewZoomIn', () => viewCtl.zoomBy(1.3)); on('viewZoomOut', () => viewCtl.zoomBy(1 / 1.3)); on('viewFit', () => viewCtl.reset());
+}
 function readLighting() {
   const g = id => document.getElementById(id), hex = (g('lightAmbient') || {}).value || '#7f7f7f';
   return { time: +((g('lightTime') || {}).value ?? 14), brightness: +((g('lightBright') || {}).value ?? 1), fog: +((g('lightFog') || {}).value ?? 0), ambient: [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) || 127) };
@@ -262,7 +274,7 @@ function renderRetroScript() {
   flushEditor();
   const sc = activeScriptItem(); const result = simulateLuau(sc ? sc.source : code.value);
   if (sc) WS.syncModel(studioWs, sc.id, result.parts);
-  drawPreview(canvas, WS.allParts(studioWs), readLighting());
+  paintView(WS.allParts(studioWs), canvas);
   const tree = $('#wsTree'); if (tree && tree.dataset.rev !== String(studioWs.rev)) { tree.dataset.rev = String(studioWs.rev); const keep = document.activeElement === code; renderScriptTabsKeep(); if (keep) code.focus(); }
   log.textContent = result.diagnostics.length ? `${result.created} part${result.created === 1 ? '' : 's'} recognized. ${result.diagnostics.join(' ')}` : `${result.created} supported part${result.created === 1 ? '' : 's'} built. ${WS.models(studioWs).length} model${WS.models(studioWs).length === 1 ? '' : 's'}, ${scriptList().length} script${scriptList().length === 1 ? '' : 's'} in the project. No code was executed.`;
 }
@@ -300,8 +312,9 @@ async function runStudioLoop(msg, token, isCloud) {
   };
   const run = async source => {
     const sim = simulateLuau(source);
-    drawPreview($('#retroCanvas'), sim.parts, readLighting());   // the picture of the result
-    const e = await encode(source);                               // the real encoder says which lines it cannot convert
+    paintView(sim.parts);   // the picture of the result
+    // The encoder reads one simple statement per line, so it gets the flattened form of the script (loops and functions already worked out).
+    const e = await encode(sim.flat || source);                   // the real encoder says which lines it cannot convert
     return { sim, skipped: e.skipped || [], enc: e };
   };
   const ask = async prompt => {
@@ -352,6 +365,7 @@ function initSiteAgentUi() {
   const download = $('#retroDownload'); if (download) download.onclick = downloadActiveScript;
   const copy = $('#retroCopy'); if (copy) copy.onclick = async () => { const t = $('#retroEncText'); if (!t) return; try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); } copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1500); };
   for (const id of ['lightTime', 'lightBright', 'lightAmbient', 'lightFog']) { const el = document.getElementById(id); if (el) el.addEventListener('input', renderRetroScript); }
+  setupViewControls();
   const shot = $('#retroScreenshot'); if (shot) shot.onclick = async () => {
     const canvas = $('#retroCanvas'); if (!canvas || !canvas.toBlob) return alert('This browser cannot capture the preview.');
     if (!Account.token()) { needLogin('use'); return; }
@@ -593,8 +607,10 @@ async function send() {
   if (!sel.value) return alert('Open Models and download a model first.');
   if (needLogin('use')) return;
   const isCloud = sel.value === CLOUD_ID, token = Account.token();
+  // The RetroStudio encoder is OFF unless the RetroStudio switch is on (or the message says @retrostudio). With it off the AI only writes Lua.
   const retroForMessage = retroEnabled || /@(?:roblox\s*:\s*retro\s*studio|retrostudio)\b/i.test(text);
   if (retroForMessage) setRetroEnabled(true);
+  const luaRequest = retroForMessage || LUA_ASK.test(text);
   if (isCloud && !token) return needLogin('use');
   inEl.value = ''; inEl.style.height = 'auto'; setBusy(true); stopped = false;
   const files = attachedNames(), fileRecords = attachedFiles();
@@ -604,7 +620,7 @@ async function send() {
   try {
     if (files.length) { attach = await prepare(text, history, m => msg.log('step', m, 0)); shownText = attach.content; }
     pendingImages = attach && attach.hasImages ? Math.min(4, (attach.seen || []).length) : 0;
-    history.push({ role: 'user', content: retroForMessage ? shownText + '\n\n[Studio]\n' + STUDIO_RULES : shownText }); historyAdded = true; clearAttachments();
+    history.push({ role: 'user', content: luaRequest ? shownText + '\n\n[Studio]\n' + rulesFor(retroForMessage) : shownText }); historyAdded = true; clearAttachments();
     saveCurrentSession();
     const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');
     if (local) { const ri = rememberIntent(text); if (ri && memOn) msg.log('result', await saveMemory(ri), 0); }

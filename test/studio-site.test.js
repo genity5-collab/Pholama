@@ -16,8 +16,8 @@ const ok = (name, condition, detail = '') => { console.log((condition ? 'PASS ' 
   ok('attachment module enforces three images, keeps a four-file total, and exports attachedFiles', /imageCount\s*>=\s*3/.test(attach) && /picked\.length\s*>=\s*4/.test(attach) && /export const attachedFiles/.test(attach));
   ok('failed/cancelled requests only pop history after the current user turn was added', /historyAdded\s*=\s*true/.test(app) && app.split('\n').filter(l => /history\.pop\(\)/.test(l)).every(l => /historyAdded/.test(l)));
   ok('the site uses the stable Pholama Cloud route', /cloudChat\(/.test(app) && /functions\/pholamaCloud/.test(read('docs/cloud.js')) && !/agentRequest/.test(app));
-  ok('Pholama Cloud refunds failed answers', /pholama_max_refund/.test(endpoint) && /nobody pays for an answer they did not get/.test(endpoint));
-  ok('Pholama Cloud limits use database-side checks', /pholama_max_spend/.test(endpoint) && /pholama_max_refund/.test(endpoint));
+  ok('Pholama Cloud refunds failed answers', /pholama_cloud_refund/.test(endpoint) && /nobody pays for an answer they did not get/.test(endpoint));
+  ok('Pholama Cloud limits use database-side checks', /pholama_cloud_spend/.test(endpoint) && /pholama_cloud_refund/.test(endpoint));
   ok('cloud client keeps requests behind Pholama Cloud', /functions\/pholamaCloud/.test(read('docs/cloud.js')) && !/agentcloud/.test(app));
   ok('mock preview source has no dynamic evaluator or executable Lua runtime', !/\beval\s*\(|new Function\s*\(/.test(read('docs/retrostudio.js')) && /never evals user or AI code/.test(read('docs/retrostudio.js')));
 

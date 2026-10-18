@@ -1,3 +1,4 @@
+import { flatten } from './luaflatten.js';
 // In-app Roblox: RetroStudio mock. This is deliberately NOT a Lua/Luau runtime.
 // It statically recognizes a tiny Instance.new/property subset; it never evals user or AI code.
 export const MAX_PARTS = 80;
@@ -24,7 +25,23 @@ export function testLuau(source) {
   const result = simulateLuau(source);
   return { ok: result.diagnostics.length === 0, diagnostics: result.diagnostics, created: result.created, simulated: true };
 }
+// Reads real Lua first (loops, functions, tables, Model, BrickColor) by flattening it; scripts it cannot understand fall back to the simple line reader.
 export function simulateLuau(source) {
+  const full = String(source || '');
+  const f = flatten(full);
+  if (f.flattened && f.parts.length) {
+    const unparented = f.diagnostics.filter(d => /not parented|stopped at/.test(d));
+    return { parts: f.parts, created: f.parts.length, diagnostics: f.ok ? [] : f.diagnostics, simulated: true, flat: f.lua, models: f.models, prints: f.prints };
+  }
+  const simple = simulateLineByLine(full);
+  if (!simple.parts.length && f.diagnostics.length && !f.parts.length) {
+    // neither reader built anything: show the more useful reason (a real error from the Lua reader beats "no parts")
+    const real = f.diagnostics.filter(d => !/not parented/.test(d));
+    if (real.length && /^Line \d+:|nested|too long|safely/.test(real[0])) simple.diagnostics = [...real, ...simple.diagnostics.filter(d => !/No supported Part/.test(d))];
+  }
+  return simple;
+}
+function simulateLineByLine(source) {
   const text = String(source || '').slice(0, MAX_SOURCE_CHARS);
   const parts = [], diagnostics = [], byVar = new Map();
   if (String(source || '').length > MAX_SOURCE_CHARS) diagnostics.push(`Source was limited to ${MAX_SOURCE_CHARS.toLocaleString()} characters.`);
@@ -72,7 +89,28 @@ export function simulateLuau(source) {
 }
 
 function shade(rgb, factor) { return `rgb(${rgb.map(n => Math.round(clamp(n * factor, 0, 255))).join(',')})`; }
-function project(x, y, z, cx, cy, scale) { return [cx + (x - y) * scale * 0.72, cy + (x + y) * scale * 0.36 - z * scale * 0.72]; }
+// A camera for the viewport: yaw turns the scene, zoom scales it, panX / panY slide it. The default is the old fixed view.
+export const DEFAULT_CAMERA = { yaw: 0, zoom: 1, panX: 0, panY: 0 };
+export const CAMERA_LIMITS = { minZoom: 0.25, maxZoom: 12 };
+export function clampCamera(c) {
+  const k = { ...DEFAULT_CAMERA, ...(c || {}) };
+  k.zoom = Math.max(CAMERA_LIMITS.minZoom, Math.min(CAMERA_LIMITS.maxZoom, Number.isFinite(k.zoom) ? k.zoom : 1));
+  k.yaw = Number.isFinite(k.yaw) ? ((k.yaw % (Math.PI * 2)) + Math.PI * 2) % (Math.PI * 2) : 0;
+  k.panX = Math.max(-4000, Math.min(4000, Number.isFinite(k.panX) ? k.panX : 0)); k.panY = Math.max(-4000, Math.min(4000, Number.isFinite(k.panY) ? k.panY : 0));
+  return k;
+}
+// Zoom toward a point on the canvas (the mouse), so the thing under the cursor stays under the cursor.
+export function zoomCamera(cam, factor, px, py, w, h) {
+  const c = clampCamera(cam), z = Math.max(CAMERA_LIMITS.minZoom, Math.min(CAMERA_LIMITS.maxZoom, c.zoom * factor)), k = z / c.zoom;
+  const cx = w / 2, cy = h * 0.62;
+  return clampCamera({ ...c, zoom: z, panX: (px - cx) - (px - cx - c.panX) * k, panY: (py - cy) - (py - cy - c.panY) * k });
+}
+let CAM = DEFAULT_CAMERA;
+const DEFAULT_CAMERA_FLAT = yaw => ({ yaw, zoom: 1, panX: 0, panY: 0 });
+function project(x, y, z, cx, cy, scale) {
+  const a = CAM.yaw, rx = x * Math.cos(a) - y * Math.sin(a), ry = x * Math.sin(a) + y * Math.cos(a);
+  return [cx + CAM.panX + (rx - ry) * scale * 0.72, cy + CAM.panY + (rx + ry) * scale * 0.36 - z * scale * 0.72];
+}
 // Lighting like RetroStudio's Lighting service: TimeOfDay (0-24), Brightness, Ambient colour, Fog.
 export const DEFAULT_LIGHTING = { time: 14, brightness: 1, ambient: [127, 127, 127], fog: 0 };
 export function skyColors(time) {
@@ -84,8 +122,9 @@ export function skyColors(time) {
   bot = mix(bot, [245, 150, 80], dusk * 0.7);
   return { top, bot, day };
 }
-export function drawPreview(canvas, parts = [], lighting = DEFAULT_LIGHTING) {
+export function drawPreview(canvas, parts = [], lighting = DEFAULT_LIGHTING, camera = DEFAULT_CAMERA) {
   lighting = { ...DEFAULT_LIGHTING, ...(lighting || {}) };
+  CAM = clampCamera(camera);
   if (!canvas || !canvas.getContext) return false;
   const rect = canvas.getBoundingClientRect(), dpr = Math.min(2, globalThis.devicePixelRatio || 1);
   const w = Math.max(320, Math.round((rect.width || 700) * dpr)), h = Math.max(220, Math.round((rect.height || 420) * dpr));
@@ -96,13 +135,32 @@ export function drawPreview(canvas, parts = [], lighting = DEFAULT_LIGHTING) {
   const sky = skyColors(lighting.time), rgb = a => `rgb(${a.join(',')})`;
   const g = c.createLinearGradient(0, 0, 0, ch); g.addColorStop(0, rgb(sky.top)); g.addColorStop(1, rgb(sky.bot)); c.fillStyle = g; c.fillRect(0, 0, cw, ch);
   if (sky.day < 0.25) { c.fillStyle = 'rgba(255,255,255,.7)'; for (let i = 0; i < 40; i++) c.fillRect((i * 97) % cw, ((i * 53) % (ch * 0.5)), 1.2, 1.2); }   // stars at night
-  const scale = Math.min(11, Math.max(4, cw / 72)), cx = cw / 2, cy = ch * 0.62;
+  // Zoom 1 fits the model: measure how big it is on screen at a known scale, then pick the scale that fills ~70% of the view. The camera zoom is on top.
+  const probe = 10; let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  const keep = CAM; CAM = DEFAULT_CAMERA_FLAT(keep.yaw);
+  for (const p of parts) for (const dx of [-1, 1]) for (const dy of [-1, 1]) for (const dz of [0, 1]) {
+    const q = project(p.position[0] + dx * p.size[0] / 2, p.position[1] + dy * p.size[1] / 2, p.position[2] + dz * p.size[2], 0, 0, probe);
+    if (q[0] < minX) minX = q[0]; if (q[0] > maxX) maxX = q[0]; if (q[1] < minY) minY = q[1]; if (q[1] > maxY) maxY = q[1];
+  }
+  CAM = keep;
+  const ground = project(0, 0, 0, 0, 0, probe), spanX = parts.length ? Math.max(maxX - minX, 40) : 240, spanY = parts.length ? Math.max(maxY - minY, 40) : 160;
+  const fit = parts.length ? Math.min((cw * 0.84) / spanX, (ch * 0.76) / spanY) * probe : Math.min(cw / 72, ch / 44);
+  // How far the model reaches along the ground (x and depth only: height must not make the baseplate bigger).
+  const reach = parts.reduce((m, p) => Math.max(m, Math.abs(p.position[0]) + p.size[0] / 2, Math.abs(p.position[1]) + p.size[1] / 2), 4);
+  const midX = parts.length ? (minX + maxX) / 2 : 0, midY = parts.length ? (minY + maxY) / 2 : 0;
+  const scale = Math.max(1.5, Math.min(60, fit)) * CAM.zoom;
+  // centre the model on screen (not the origin), so a model off to one side is still framed; the camera pan is added on top
+  const cx = cw / 2 - midX * (scale / probe) * 1, cy = ch * 0.5 - midY * (scale / probe) * 1;
   const lightK = Math.max(0.18, Math.min(1.6, (0.35 + sky.day * 0.75) * lighting.brightness)), amb = lighting.ambient;
-  { const A = project(-12, -12, 0, cx, cy, scale), B = project(12, -12, 0, cx, cy, scale), C = project(12, 12, 0, cx, cy, scale), D = project(-12, 12, 0, cx, cy, scale);
+  // The ground is a baseplate a little wider than the model, so the sky still shows around it and you can see where the model stands.
+  const G = Math.max(3, Math.min(200, reach + Math.max(1.5, reach * 0.35)));   // the model's footprint plus a margin: a baseplate, so the sky shows around it
+  { const A = project(-G, -G, 0, cx, cy, scale), B = project(G, -G, 0, cx, cy, scale), C = project(G, G, 0, cx, cy, scale), D = project(-G, G, 0, cx, cy, scale);
     c.fillStyle = shade([99, 138, 72].map((v, i) => v * 0.7 + amb[i] * 0.3), lightK); c.beginPath(); c.moveTo(...A); c.lineTo(...B); c.lineTo(...C); c.lineTo(...D); c.closePath(); c.fill(); }
   c.strokeStyle = 'rgba(255,255,255,.10)'; c.lineWidth = 1;
-  for (let n = -12; n <= 12; n++) { const a = project(n, -12, 0, cx, cy, scale), b = project(n, 12, 0, cx, cy, scale), d = project(-12, n, 0, cx, cy, scale), e = project(12, n, 0, cx, cy, scale); c.beginPath(); c.moveTo(...a); c.lineTo(...b); c.moveTo(...d); c.lineTo(...e); c.stroke(); }
-  const ordered = [...parts].sort((a, b) => (a.position[0] + a.position[1]) - (b.position[0] + b.position[1]));
+  for (let n = -Math.floor(G); n <= G; n += G > 40 ? 8 : G > 20 ? 4 : G > 8 ? 2 : 1) { const a = project(n, -G, 0, cx, cy, scale), b = project(n, G, 0, cx, cy, scale), d = project(-G, n, 0, cx, cy, scale), e = project(G, n, 0, cx, cy, scale); c.beginPath(); c.moveTo(...a); c.lineTo(...b); c.moveTo(...d); c.lineTo(...e); c.stroke(); }
+  // paint far parts first: depth is x + y after the scene is turned by the camera, with height as a tie-break so a head is drawn after the torso under it
+  const ca = Math.cos(CAM.yaw), sa = Math.sin(CAM.yaw), depth = p => (p.position[0] * ca - p.position[1] * sa) + (p.position[0] * sa + p.position[1] * ca) + p.position[2] * 0.001;
+  const ordered = [...parts].sort((a, b) => depth(a) - depth(b));
   for (const p of ordered) {
     const [x, y, z] = p.position, [sx, sy, sz] = p.size, base = project(x, y, z, cx, cy, scale), top = project(x, y, z + sz, cx, cy, scale);
     const dx = sx * scale * 0.36, dy = sy * scale * 0.36, dz = sz * scale * 0.72;

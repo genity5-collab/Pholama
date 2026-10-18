@@ -44,14 +44,21 @@
       </section>
       <section class="retro-view-card" aria-label="Viewport">
         <div class="retro-card-head"><b>Viewport</b><span id="retroEra">All models</span></div>
-        <canvas id="retroCanvas" aria-label="Simulated 3D parts"></canvas>
+        <div class="retro-canvas-wrap">
+          <canvas id="retroCanvas" aria-label="Simulated 3D parts. Scroll or pinch to zoom, drag to turn, right-drag to slide, double-click to reset."></canvas>
+          <div class="retro-zoom" role="group" aria-label="Viewport zoom">
+            <button type="button" id="viewZoomIn" title="Zoom in (+)" aria-label="Zoom in">+</button>
+            <button type="button" id="viewZoomOut" title="Zoom out (-)" aria-label="Zoom out">&minus;</button>
+            <button type="button" id="viewFit" title="Fit the model in view (0 or double-click)" aria-label="Fit the model in view">Fit</button>
+          </div>
+        </div>
         <div class="retro-light" id="retroLight">
           <label>Time of day <input type="range" id="lightTime" min="0" max="24" step="0.5" value="14"></label>
           <label>Brightness <input type="range" id="lightBright" min="0" max="3" step="0.1" value="1"></label>
           <label>Ambient <input type="color" id="lightAmbient" value="#7f7f7f"></label>
           <label>Fog <input type="range" id="lightFog" min="0" max="100" step="1" value="0"></label>
         </div>
-        <p>A safe look at your models, with lighting. Nothing runs here. Copy the encoded string into RetroStudio to use the script.</p>
+        <p>A safe look at your models, with lighting. Scroll or pinch to zoom, drag to turn, right-drag to slide. Nothing runs here. Copy the encoded string into RetroStudio to use the script.</p>
       </section>
     </div>
   </div>
@@ -74,7 +81,7 @@
   <div class="toolbar">
     <div id="swrow" class="swrow" style="display:none"></div>
     <div class="tbr">
-      <button id="retroPluginBtn" type="button" class="ib" aria-pressed="false" title="Open RetroStudio safe script preview">RetroStudio</button>
+      <button id="retroPluginBtn" type="button" class="ib" aria-pressed="false" title="RetroStudio encoder: turn on to preview your scripts and convert them to RetroStudio blocks. Off: the AI just writes Lua.">RetroStudio</button>
       <div class="effort" id="effort" role="group" aria-label="Think effort"></div>
       <button id="histBtn" class="ib" title="Chat history" aria-label="Chat history"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></button>
       <button id="newSess" class="ib" title="New session" aria-label="New session"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>

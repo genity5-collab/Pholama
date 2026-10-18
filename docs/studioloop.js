@@ -6,17 +6,29 @@
 export const MAX_FIX_ROUNDS = 3;
 
 // The rules the AI must follow so its script can be turned into blocks. The encoder only reads this subset.
-export const STUDIO_RULES = [
-  'You are writing a script for RetroStudio. The script will be converted to blocks, so write ONLY this simple Lua, one statement per line:',
-  '- local part = Instance.new("Part", workspace)   then   part.Size = Vector3.new(4, 1, 4)   part.Position = Vector3.new(0, 5, 0)',
-  '- part.Anchored = true   part.BrickColor = BrickColor.new("Bright red")   part.Material = Enum.Material.Wood',
-  '- local x = 5      print("hello")      wait(1)      local t = {}      t["key"] = "value"',
-  '- if a == b then ... else ... end      for i = 1, 10 do ... end      (simple comparisons only)',
-  '- part.Touched:Connect(function(hit)  ...  end)      button.MouseButton1Click:Connect(function()  ...  end)',
-  '- For any other RetroStudio block write a directive line:  --@block BlockName Field=value',
-  'Do NOT use: elseif, while, function definitions, for-in loops, GetService, math expressions, string.format, or anything else. Those lines cannot be converted.',
-  'Put every script in its own ```lua code block. Say what each script does in one short sentence.'
+// Rules for Roblox scripting. The AI writes ONLY Lua. It never writes encoded strings, block data or base93; encoding is done by the page.
+export const LUA_RULES = [
+  'You write Roblox Lua (Luau) scripts and nothing else. Reply with the script in a ```lua code block and at most one short sentence about what it does.',
+  'Write real, working Lua. Loops, local functions, tables and arithmetic are all fine.',
+  'Never write encoded text, base64 or base93 strings, block data or "CoolFormat". You only write Lua. Anything that converts the Lua is done for you.',
+  'To BUILD a model: group it with local model = Instance.new("Model", workspace). Make a helper such as local function part(name, size, pos, color) local p = Instance.new("Part", model) p.Name = name p.Size = size p.Position = pos p.BrickColor = BrickColor.new(color) p.Anchored = true return p end, then call it for every piece.',
+  'Make the model look good and recognisable: a character needs a head, torso, two arms, two legs and details (a face, hair, a hat, sunglasses), several colours and sensible sizes in studs. Stand it on the ground (feet near y = 0), centred near 0, 0, 0. Never build a thing from a single part.',
+  'Colours: BrickColor.new("Bright red") or Color3.fromRGB(r, g, b). Materials: Enum.Material.Wood, Metal, Glass, Neon, Brick, Grass, Concrete, SmoothPlastic. Shapes: part.Shape = Enum.PartType.Ball.',
+  'Always give every part a parent (second argument of Instance.new) and set Anchored = true so it does not fall apart.',
+  'For behaviour (touch, click, loops over time) write a separate short script in its own ```lua block, for example part.Touched:Connect(function(hit) ... end).',
+  'Put every script in its own ```lua code block.'
 ].join('\n');
+
+// Added ONLY when the RetroStudio encoder is switched on: the script is also converted to RetroStudio blocks, so the one extra rule is to keep to what blocks can do.
+export const ENCODER_RULES = [
+  'The RetroStudio encoder is ON. Your Lua is previewed, checked and converted to RetroStudio blocks automatically, so do not mention encoding. Keep to building with parts, models, properties, simple if/for logic, prints and touch or click events.',
+  'For any other RetroStudio block write a directive line:  --@block BlockName Field=value'
+].join('\n');
+
+// What the AI is shown with a message. Encoder off: Lua only. Encoder on: Lua plus the encoder rules.
+export const rulesFor = encoderOn => (encoderOn ? LUA_RULES + '\n' + ENCODER_RULES : LUA_RULES);
+// Kept for older callers: the full set with the encoder on.
+export const STUDIO_RULES = rulesFor(true);
 
 // Look at what the preview built and decide whether the result is acceptable.
 // `sim` is the result of simulateLuau (parts, created, diagnostics). `skipped` is what the encoder could not convert.
@@ -33,10 +45,11 @@ export function judge(sim, skipped = [], opts = {}) {
   if (off.length) problems.push(`${off.length} part${off.length === 1 ? ' is' : 's are'} far outside the visible area (position beyond 90). Move ${off.length === 1 ? 'it' : 'them'} closer to 0,0,0.`);
   const tiny = parts.filter(p => p.size.some(n => n < 0.3));
   if (tiny.length && opts.strictSize) problems.push(`${tiny.length} part${tiny.length === 1 ? ' is' : 's are'} too thin to see.`);
+  // Two parts only count as a mistake when they are the same size in the same place (a duplicate). Parts of one model touch and overlap on purpose.
   const sameSpot = new Map();
-  for (const p of parts) { const k = p.position.map(n => Math.round(n)).join(','); sameSpot.set(k, (sameSpot.get(k) || 0) + 1); }
+  for (const p of parts) { const k = p.position.map(n => Math.round(n * 10) / 10).join(',') + '|' + p.size.map(n => Math.round(n * 10) / 10).join(','); sameSpot.set(k, (sameSpot.get(k) || 0) + 1); }
   const stacked = [...sameSpot.values()].filter(n => n > 1).length;
-  if (stacked) problems.push('Some parts sit in exactly the same place and overlap. Give each part its own position.');
+  if (stacked) problems.push('Some parts are exact copies sitting in the same place. Give each part its own position or remove the duplicate.');
   const unconvertible = (skipped || []).filter(s => !/^Skip: end$/.test(s));
   if (unconvertible.length) problems.push(`${unconvertible.length} line${unconvertible.length === 1 ? '' : 's'} cannot be converted to blocks: ${unconvertible.slice(0, 4).map(s => s.replace(/^Skip(?:ped[^:]*)?:\s*/, '').slice(0, 60)).join(' | ')}. Rewrite using only the allowed lines, or a --@block directive.`);
   return { ok: problems.length === 0, problems, parts: parts.length };
@@ -46,6 +59,8 @@ export function judge(sim, skipped = [], opts = {}) {
 // ---- Automatic repair: fixes the common problems WITHOUT asking the AI, so no cloud message is spent. ----
 // Each repair is small and safe; the result is always checked again by judge(). Returns { source, changes }.
 export function autoRepair(source, sim, skipped = []) {
+  // A script the Lua reader understood (loops, functions, models) is already fully worked out. Editing its lines would damage it, so the AI fixes real problems.
+  if (sim && sim.flat) return { source: String(source || ''), changes: [] };
   let lines = String(source || '').split(/\r?\n/), changes = [];
   const drop = new Set((skipped || []).map(x => String(x).replace(/^Skip(?:ped[^:]*)?:\s*/, '').trim()).filter(Boolean));
 
@@ -104,7 +119,7 @@ export function fixRequest(source, verdict, round) {
     'Here is the script as it is now:',
     '```lua', source, '```',
     '',
-    'Reply with the corrected full script in ONE ```lua code block, using only the allowed lines. Keep it short.'
+    'Reply with the corrected full script in ONE ```lua code block. Keep building the same thing, and fix only what is listed.'
   ].join('\n');
 }
 
