@@ -56,7 +56,7 @@ export async function mountDashboard(el, ctx) {
     yours = card('Your PC', `<ul class="dkv"><li><span>Memory</span><b>${esc(hw.ramGB)} GB</b></li>${hw.gpu ? `<li><span>Graphics</span><b>${esc(hw.gpu)}${hw.vramGB ? ' · ' + esc(hw.vramGB) + ' GB' : ''}</b></li>` : ''}${yourVer ? `<li><span>Version</span><b>${esc(yourVer)}</b></li>` : ''}</ul>` +
       (pick ? `<div class="dpick">Best tool model for this PC: <b>${esc(pick.name)}</b> <small>(${pick.sizeGB} GB)</small></div>` : '<div class="dpick">Your PC is short on memory for tool models. Small models still chat well.</div>'));
   } else {
-    yours = card('Collama Studio', '<p class="dmut">Build full projects with a code editor, live preview, tests, and publishing in the separate Studio workspace.</p><a class="dlink" href="https://collama-studio.onrender.com" target="_blank" rel="noopener">Open Collama Studio</a>');
+    yours = card('Move to PC', '<p class="dmut"><b>Phone support ends today.</b> The PC app adds tools, web search, file editing and Roblox Studio building. Everything runs on your own computer.</p><a class="dlink" href="https://github.com/genity5-collab/Pholama#on-your-pc-more-power-tools-web-search" target="_blank" rel="noopener">Get Pholama PC</a>');
   }
 
   const actions = card('Start', `<div class="dact"><button class="p" data-go="chat">Open chat</button><button data-go="models">${hw ? 'Models' : 'Get a model'}</button>${hw ? '<button data-go="studio">Roblox Studio</button>' : ''}<button data-go="prompt" data-p="${hw ? 'Explain how a rocket works' : 'What is 15% of 240?'}">Try a question</button></div>`);
