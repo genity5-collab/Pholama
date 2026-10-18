@@ -17,6 +17,7 @@ import { initAttach, hasAttachments, attachedNames, attachedFiles, addAttachment
 import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 import { downloadDecision, readCached, writeCached } from './pclink.js';
 import { extractLuauBlocks, simulateLuau, drawPreview } from './retrostudio.js';
+import { studioLoop, STUDIO_RULES } from './studioloop.js';
 
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
@@ -238,11 +239,15 @@ function runRetroSafeTest() {
   log.textContent = status + (result.diagnostics.length ? ' ' + result.diagnostics.join(' ') : '');
   return !result.diagnostics.length;
 }
+function readLighting() {
+  const g = id => document.getElementById(id), hex = (g('lightAmbient') || {}).value || '#7f7f7f';
+  return { time: +((g('lightTime') || {}).value ?? 14), brightness: +((g('lightBright') || {}).value ?? 1), fog: +((g('lightFog') || {}).value ?? 0), ambient: [1, 3, 5].map(i => parseInt(hex.slice(i, i + 2), 16) || 127) };
+}
 function renderRetroScript() {
   const code = $('#retroCode'), canvas = $('#retroCanvas'), log = $('#retroLog'); if (!code || !canvas || !log) return;
   if (scriptDocuments.length) { if (!$('#retroTabs button')) renderScriptTabs(); else scriptDocuments[activeScript].source = code.value; }
   const result = simulateLuau(code.value);
-  drawPreview(canvas, result.parts);
+  drawPreview(canvas, result.parts, readLighting());
   log.textContent = result.diagnostics.length ? `${result.created} part${result.created === 1 ? '' : 's'} recognized. ${result.diagnostics.join(' ')}` : `${result.created} supported part${result.created === 1 ? '' : 's'} simulated. No code was executed.`;
 }
 function setScriptsFromAnswer(text) {
@@ -258,12 +263,77 @@ function downloadActiveScript() {
   const url = URL.createObjectURL(new Blob([code.value], { type: 'text/plain;charset=utf-8' }));
   const a = document.createElement('a'); a.href = url; a.download = (active.name || 'script').toLowerCase().replace(/[^a-z0-9_-]+/g, '-') + '.lua'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
+// The Studio loop in the page: show the AI editing the script, run it into the preview, take a picture of the result,
+// let the AI fix what is wrong, and only then encode. Nothing here runs Lua; "run" is the safe preview.
+async function runStudioLoop(msg, token, isCloud) {
+  const code = $('#retroCode'), log = $('#retroLog'); if (!code) return;
+  const say = t => { if (log) log.textContent = t; };
+  const base = (window.PHOLAMA && window.PHOLAMA.STUDIO_URL) || '';
+  const encode = async source => {
+    try {
+      const r = await fetch(base ? base + '/retro/encode' : '/api/retro/encode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source }) });
+      const d = await r.json().catch(() => ({}));
+      if (r.ok && d.encoded) return { ok: true, encoded: d.encoded, blocks: d.blocks, skipped: d.skipped || [] };
+      return { ok: false, error: d.error || 'The encoder is not available right now.', skipped: d.skipped || [], unavailable: !d.error };
+    } catch { return { ok: false, error: 'The encoder is not reachable right now.' }; }
+  };
+  const run = async source => {
+    const sim = simulateLuau(source);
+    drawPreview($('#retroCanvas'), sim.parts, readLighting());   // the picture of the result
+    const e = await encode(source);                               // the real encoder says which lines it cannot convert
+    return { sim, skipped: e.skipped || [], enc: e };
+  };
+  const ask = async prompt => {
+    if (!isCloud || !token) throw new Error('fixing needs Pholama Cloud');
+    history.push({ role: 'user', content: prompt });
+    const r = await cloudChat(history, effort, token, undefined);
+    history.push({ role: 'assistant', content: r.reply });
+    return r.reply;
+  };
+  const labels = { edit: e => e.round ? `AI is editing the script (fix ${e.round})...` : 'AI wrote the script. Putting it in the workspace...', run: e => `Ran the preview: ${e.parts} part${e.parts === 1 ? '' : 's'} built.`, check: e => e.verdict.ok ? 'Looks right.' : 'Found ' + e.verdict.problems.length + ' problem(s): ' + e.verdict.problems[0], fix: e => `Asking the AI to fix it (attempt ${e.round})...`, gaveup: () => 'Could not make it work after several tries.', done: e => e.encoded ? 'Encoded. Copy the string and paste it into RetroStudio.' : 'It works, but the encoder is not available right now.' };
+  const result = await studioLoop({
+    source: code.value, ask, run,
+    encode,
+    show: e => {
+      const l = labels[e.type] && labels[e.type](e); if (l) { say(l); msg.log(e.type === 'gaveup' ? 'error' : 'step', l, 0); }
+      if (e.type === 'edit') { code.value = e.source; if (scriptDocuments[activeScript]) scriptDocuments[activeScript].source = e.source; }
+    }
+  });
+  if (result.ok) {
+    const t = $('#retroEncText'), out = $('#retroEncOut'); if (t && out) { t.value = result.encoded; out.hidden = false; $('#retroEncInfo').textContent = result.blocks + ' blocks'; }
+    msg.log('result', `Ready: ${result.blocks} blocks encoded` + (result.rounds ? ` after ${result.rounds} fix${result.rounds === 1 ? '' : 'es'}.` : '.') + ' Copy it from the Studio panel.', 0);
+  } else if (result.verdict && !result.verdict.ok) {
+    const out = $('#retroEncOut'); if (out) out.hidden = true;
+    msg.log('error', 'Not encoded: ' + result.verdict.problems.join(' '), 0);
+  } else if (result.error) msg.log('error', 'Not encoded: ' + result.error, 0);
+}
+// Encode the active script into the string the RetroStudio plugin imports. The encoder lives on the Pholama server so its block table is never shipped to the browser.
+async function encodeActiveScript() {
+  const code = $('#retroCode'), out = $('#retroEncOut'), log = $('#retroLog'), btn = $('#retroEncode'); if (!code || !out) return;
+  const source = code.value; if (!source.trim()) { if (log) log.textContent = 'Nothing to encode yet. Ask the chat to write a script first.'; return false; }
+  const base = (window.PHOLAMA && window.PHOLAMA.STUDIO_URL) || '';
+  const old = btn.textContent; btn.disabled = true; btn.textContent = 'Encoding...';
+  try {
+    const r = await fetch(base ? base + '/retro/encode' : '/api/retro/encode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source }) });
+    const d = await r.json().catch(() => ({}));
+    if (!r.ok || !d.encoded) throw new Error(d.error || (d.errors && d.errors.errorMessage) || 'The encoder is not available right now.');
+    $('#retroEncText').value = d.encoded; out.hidden = false;
+    const skipped = (d.skipped || []).length;
+    $('#retroEncInfo').textContent = d.blocks + ' blocks' + (skipped ? ', ' + skipped + ' line(s) skipped' : '');
+    if (log) log.textContent = skipped ? 'Encoded. These lines could not become blocks: ' + d.skipped.slice(0, 4).join(' | ') : 'Encoded ' + d.blocks + ' blocks. Copy the string and paste it into RetroStudio.';
+    return true;
+  } catch (e) { out.hidden = true; if (log) log.textContent = 'Could not encode: ' + String(e.message || e); return false; }
+  finally { btn.disabled = false; btn.textContent = old; }
+}
 function initSiteAgentUi() {
   const plugin = $('#retroPluginBtn'); if (plugin) plugin.onclick = () => setRetroEnabled(!retroEnabled);
   const code = $('#retroCode'); if (code) code.addEventListener('input', () => { if (scriptDocuments[activeScript]) scriptDocuments[activeScript].source = code.value; renderRetroScript(); saveCurrentSession(); });
   const test = $('#retroTest'); if (test) test.onclick = runRetroSafeTest;
   const preview = $('#retroPreview'); if (preview) preview.onclick = renderRetroScript;
   const download = $('#retroDownload'); if (download) download.onclick = downloadActiveScript;
+  const enc = $('#retroEncode'); if (enc) enc.onclick = encodeActiveScript;
+  const copy = $('#retroCopy'); if (copy) copy.onclick = async () => { const t = $('#retroEncText'); if (!t) return; try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); } copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1500); };
+  for (const id of ['lightTime', 'lightBright', 'lightAmbient', 'lightFog']) { const el = document.getElementById(id); if (el) el.addEventListener('input', renderRetroScript); }
   const shot = $('#retroScreenshot'); if (shot) shot.onclick = async () => {
     const canvas = $('#retroCanvas'); if (!canvas || !canvas.toBlob) return alert('This browser cannot capture the preview.');
     if (!Account.token()) { needLogin('use'); return; }
@@ -516,7 +586,7 @@ async function send() {
   try {
     if (files.length) { attach = await prepare(text, history, m => msg.log('step', m, 0)); shownText = attach.content; }
     pendingImages = attach && attach.hasImages ? Math.min(4, (attach.seen || []).length) : 0;
-    history.push({ role: 'user', content: shownText }); historyAdded = true; clearAttachments();
+    history.push({ role: 'user', content: retroForMessage ? shownText + '\n\n[Studio]\n' + STUDIO_RULES : shownText }); historyAdded = true; clearAttachments();
     saveCurrentSession();
     const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');
     if (local) { const ri = rememberIntent(text); if (ri && memOn) msg.log('result', await saveMemory(ri), 0); }
@@ -568,7 +638,7 @@ async function send() {
       await pcChat(sel.value, msg, t => { acc += t; msg.text(acc); });
     }
     if (sessionAtStart !== sessionId) return;                // a New session began while this ran: drop the late reply
-    if (retroForMessage && setScriptsFromAnswer(acc)) msg.log('result', `${scriptDocuments.length} separate script tab${scriptDocuments.length === 1 ? '' : 's'} ready in the mock workspace. Run safe preview to inspect supported parts.`, 0);
+    if (retroForMessage && setScriptsFromAnswer(acc)) runStudioLoop(msg, token, isCloud).catch(() => msg.log('error', 'The Studio could not finish. Your script is in the workspace.', 0));
     const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
     if (stopped) {                                           // user pressed Stop: keep what was written, say so, no error
       if (clean) history.push({ role: 'assistant', content: clean }); else if (historyAdded) history.pop();

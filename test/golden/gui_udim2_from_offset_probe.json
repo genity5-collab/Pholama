@@ -1,0 +1,10 @@
+{
+  "source": "local frame = Instance.new(\"Frame\")\nframe.Size = UDim2.fromOffset(240, 80)\n",
+  "blocks": 1,
+  "skippedFeatures": [
+    "Skip: frame.Size = UDim2.fromOffset(240, 80)"
+  ],
+  "serialized": "\u001a\u001aEditor\u001aCameraPosition\u001b2.3F,0.3BF\u001aCameraZoom\u001b0.C2\u001a\u001aBlock\u001aType\u001bComment2\u001aName\u001bROOT\u001aVisualPosition\u001b-10.0,-10.0\u001aChildBlocks\u001bCreate Object1\u001aElseChildBlock\u001bnil\u001aInputs\u001bColor\u001b0\u001b3FC\u001bComment\u001b0\u001bROOT\u001aOutputs\u001a\u001aBlock\u001aType\u001bCreateObject\u001aName\u001bCreate Object1\u001aVisualPosition\u001b0.0,0.0\u001aChildBlocks\u001aElseChildBlock\u001bnil\u001aInputs\u001bParent\u001b0\u001bscript.Parent\u001bClassName\u001b0\u001bFrame\u001aOutputs\u001bObject\u001bframe",
+  "compressedBase64": "fY5LDoIwEIbvMbPxANoUuAGNJG7EGOLCXcUxVluGtGXh7Q3UR2ThZpJ5/d8HsD6byB6UduT1joOJhjvMRVEtpSjK6rU5MjuUQuUApeX2Ds2jJ1TsHHUxh612hPu6buBgwqDtJ2iVSSGXUwV1NfY8fQdUnnSkRX26URszWNtA3zV2xsKm64cYULFljxKLSr1xKBOqHuJ48ms05abYZDUjzfxGu5nbH5md9okfWm/6KF69sjqECSax8trRWw0TFS/j8Ak=",
+  "encoded": "\u001a0000000000000004\u001b@nyyu|0s3;hihJX{gOrJYYv#pI.;^? md7 iJ/|ta%|,,Lo#9MR.1@J&'jC)j3SKM?2T9X_?;#|bXOyvt-q1#0<b^5k{/z#:z*CVWH]TCIc'X/'mf$Z|Rad3:V~e7yXnn6},h(}U5UZzX>FfzVlYTigehC9$!o7Hm>pF5{Zl3K|8>4q(+iw6;Fp2a.8c&c&yej2*VTMmD#VyKb&NjXdm&YLe^iaX'|:hZ8N>jS?3SQtu=A"
+}

@@ -1,0 +1,1138 @@
+{
+  "AddDebrisItem": {
+    "i": "\u001bTime\u001b0\u001b28\u001bObject\u001b0\u001bscript.Parent",
+    "o": ""
+  },
+  "Addition": {
+    "i": "\u001bNumber2\u001b0\u001b1\u001bNumber1\u001b0\u001b1",
+    "o": "\u001bResult\u001bAdditionVariable"
+  },
+  "AddPluginButton": {
+    "i": "\u001bID\u001b0\u001b\u001bToolbarName\u001b0\u001b\u001bIcon\u001b0\u001b\u001bToolTip\u001b0\u001b",
+    "o": ""
+  },
+  "AddPluginToolbar": {
+    "i": "\u001bName\u001b0\u001b",
+    "o": ""
+  },
+  "AddToLeaderstat": {
+    "i": "\u001bPlayer\u001b0\u001b\u001bStatName\u001b0\u001b\u001bAmount\u001b0\u001b0",
+    "o": ""
+  },
+  "AddToStudioSelection": {
+    "i": "\u001bInstances\u001b0\u001b",
+    "o": ""
+  },
+  "AddUserToChatChannel": {
+    "i": "\u001bUserId\u001b0\u001b0\u001bChannel\u001b0\u001b",
+    "o": "\u001bTextSource\u001b"
+  },
+  "ANDAny": {
+    "i": "\u001bA\u001b1\u001beee\u001bString\u001bB\u001b1\u001beee\u001bString",
+    "o": "\u001bResult\u001bAndVariable"
+  },
+  "Angles": {
+    "i": "\u001brz\u001b0\u001b0\u001brx\u001b0\u001b0\u001bry\u001b0\u001b0",
+    "o": "\u001bResult\u001bCFrameAngle"
+  },
+  "AnimationStopped": {
+    "i": "\u001bAnimationTrack\u001b0\u001b",
+    "o": ""
+  },
+  "AnyPropertyChanged": {
+    "i": "\u001bObject\u001b0\u001b",
+    "o": "\u001bNewValue\u001b\u001bProperty\u001b"
+  },
+  "Assert": {
+    "i": "\u001bValue\u001b1\u001b0\u001bBool\u001bErrorMessage\u001b0\u001bassert",
+    "o": ""
+  },
+  "BanPlayer": {
+    "i": "\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "BindableFire2": {
+    "i": "\u001bTUPLEPARAM_Parameters_3\u001b1\u001bJason\u001bString\u001bTUPLEPARAM_Parameters_1\u001b1\u001bsamething\u001bString\u001bParameters\u001b0\u001bTUPLEPARAM_Parameters_1,TUPLEPARAM_Parameters_2,TUPLEPARAM_Parameters_3\u001bBindableEvent\u001b0\u001bgame.Lighting\u001bTUPLEPARAM_Parameters_2\u001b1\u001blol\u001bString",
+    "o": ""
+  },
+  "BindableFunctionInvoke": {
+    "i": "\u001bBindableFunction\u001b0\u001bgame.Lighting.Remote\u001bTUPLEPARAM_Parameters_1\u001b1\u001berm\u001bString\u001bParameters\u001b0\u001bTUPLEPARAM_Parameters_1",
+    "o": "\u001bTUPLEPARAM_Output_1\u001berrrm\u001bTUPLE_Output\u001b1"
+  },
+  "BindableFunctionOnInvoke": {
+    "i": "\u001bBindableFunction\u001b0\u001bgame.Lighting.remote",
+    "o": "\u001bTUPLE_Parameters\u001b1\u001bTUPLEPARAM_Parameters_1\u001bparam"
+  },
+  "BindableRecieve2": {
+    "i": "\u001bBindableEvent\u001b0\u001bgame.Lighting.Remote",
+    "o": "\u001bTUPLE_Parameters\u001b1\u001bTUPLEPARAM_Parameters_1\u001bErm"
+  },
+  "BindToClose": {
+    "i": "",
+    "o": ""
+  },
+  "BlockThatMakesYourCharacterSentient": {
+    "i": "\u001bHumanoid\u001b0\u001bthisisinvalidinthisformat",
+    "o": "\u001bResult\u001bResult"
+  },
+  "BreakJoints": {
+    "i": "\u001bPart\u001b0\u001bscript.Parent",
+    "o": ""
+  },
+  "BreakLoop": {
+    "i": "",
+    "o": ""
+  },
+  "BrickColorToColor3": {
+    "i": "\u001bBrickColor\u001b0\u001bC2",
+    "o": "\u001bColor3\u001b"
+  },
+  "ChangeHumanoidState": {
+    "i": "\u001bState\u001b0\u001bJump\u001bHumanoid\u001b0\u001bCharacter.Humanoid",
+    "o": ""
+  },
+  "ChangeHumanoidStateLocal": {
+    "i": "\u001bState\u001b0\u001bKeyed\u001bHumanoid\u001b0\u001bValued",
+    "o": "\u001bSuccess\u001bSuccess"
+  },
+  "CharacterAdded": {
+    "i": "\u001bPlayer\u001b0\u001bPlayer",
+    "o": "\u001bCharacter\u001bChar"
+  },
+  "Chatted": {
+    "i": "\u001bPlayer\u001b0\u001b",
+    "o": "\u001bMessage\u001b"
+  },
+  "ChattedSpecificMessage": {
+    "i": "\u001bMessage\u001b0\u001b\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "CheckIfPlayerIsBanned": {
+    "i": "\u001bUserId\u001b0\u001b0",
+    "o": "\u001bResult\u001b"
+  },
+  "CheckToolEquipped": {
+    "i": "\u001bTool\u001b0\u001b",
+    "o": "\u001bResult\u001b"
+  },
+  "ChildAdded": {
+    "i": "\u001bObject\u001b0\u001b",
+    "o": "\u001bChild\u001b\n\nlocal -- "
+  },
+  "ChildRemoved": {
+    "i": "\u001bObject\u001b0\u001b",
+    "o": "\u001bChild\u001b"
+  },
+  "CloneObject": {
+    "i": "\u001bParent\u001b0\u001bgame.Workspace\u001bObject\u001b0\u001bgame.Workspace.Baseplate",
+    "o": "\u001bNewObject\u001b"
+  },
+  "Color3ToBrickColor": {
+    "i": "\u001bColor3\u001b0\u001bFF,FF,FF",
+    "o": "\u001bBrickColor\u001b"
+  },
+  "CombineNumberWithString": {
+    "i": "\u001bNumber\u001b0\u001b64\u001bString\u001b0\u001bString\u001bAddSpace\u001b0\u001b0",
+    "o": "\u001bCombined\u001bCombined2"
+  },
+  "CombineStringWithNumber": {
+    "i": "\u001bNumber\u001b0\u001b64\u001bString\u001b0\u001bString\u001bAddSpace\u001b0\u001b0",
+    "o": "\u001bCombined\u001bCombined"
+  },
+  "Comment2": {
+    "i": "\u001bColor\u001b0\u001b3E9\u001bComment\u001b0\u001bThis Either Returns true or false",
+    "o": ""
+  },
+  "Comparison": {
+    "i": "\u001bComparisonType\u001b0\u001b==\u001bValue 2\u001b1\u001blol2\u001bString\u001bValue 1\u001b1\u001blol\u001bString",
+    "o": "\u001bResult\u001bcomparissed"
+  },
+  "ComputePath": {
+    "i": "\u001bStartPosition\u001b0\u001b0,0,0\u001bEndPosition\u001b0\u001b0,0,0",
+    "o": "\u001bComputedPath\u001bPath"
+  },
+  "Concatenate": {
+    "i": "\u001bFirstString\u001b0\u001bKiller\u001bSecondString\u001b0\u001bKyle",
+    "o": "\u001bResult\u001bCombinedStrings"
+  },
+  "ConstructCFrame": {
+    "i": "\u001bRotation\u001b0\u001b0,0,0\u001bPosition\u001b0\u001b0,0,0",
+    "o": "\u001bCFrame\u001bCFrame"
+  },
+  "ConstructColor3": {
+    "i": "\u001bB\u001b0\u001b0\u001bG\u001b0\u001b0\u001bR\u001b0\u001b0",
+    "o": "\u001bColor3\u001bColorrr"
+  },
+  "ConstructNumberRange": {
+    "i": "\u001bMin\u001b0\u001b0\u001bMax\u001b0\u001b0",
+    "o": "\u001bNumberRange\u001b"
+  },
+  "ConstructUDim2": {
+    "i": "\u001bYScale\u001b0\u001b0\u001bXScale\u001b0\u001b0\u001bXOffset\u001b0\u001b0\u001bYOffset\u001b0\u001b0",
+    "o": "\u001bUDim2\u001bUdim"
+  },
+  "ConstructVector2": {
+    "i": "\u001bY\u001b0\u001b0\u001bX\u001b0\u001b0",
+    "o": "\u001bVector2\u001b"
+  },
+  "ConstructVector3": {
+    "i": "\u001bY\u001b0\u001b0\u001bX\u001b0\u001b0\u001bZ\u001b0\u001b0",
+    "o": "\u001bVector3\u001bVector3Variable"
+  },
+  "ContinueLoop": {
+    "i": "",
+    "o": ""
+  },
+  "CreateChatChannel": {
+    "i": "",
+    "o": "\u001bChannel\u001b"
+  },
+  "CreateLeaderstat": {
+    "i": "\u001bStatName\u001b0\u001b\u001bInitialValue\u001b0\u001b0",
+    "o": ""
+  },
+  "CreateObject": {
+    "i": "\u001bParent\u001b0\u001bgame.Lighting\u001bClassName\u001b0\u001bBodyVelocity",
+    "o": "\u001bObject\u001bVariable_5941"
+  },
+  "CreateTable": {
+    "i": "",
+    "o": "\u001bTableVariable\u001bTable_6229"
+  },
+  "DefineFunction": {
+    "i": "",
+    "o": "\u001bFunction\u001bVariable_5439\u001bTUPLEPARAM_Parameters_1\u001btbl\u001bTUPLEPARAM_Parameters_3\u001binit\u001bTUPLE_Parameters\u001b3\u001bTUPLEPARAM_Parameters_2\u001bval"
+  },
+  "DescendantAdded": {
+    "i": "\u001bObject\u001b0\u001b",
+    "o": "\u001bDescendant\u001b"
+  },
+  "DescendantRemoved": {
+    "i": "\u001bObject\u001b0\u001b",
+    "o": "\u001bDescendant\u001b"
+  },
+  "DescendantRemoving": {
+    "i": "\u001bObject\u001b0\u001bKeyed",
+    "o": "\u001bSuccess\u001b\u001bLoadedData\u001bData"
+  },
+  "DestroyObject": {
+    "i": "\u001bObject\u001b0\u001bgame.Workspace.Baseplate",
+    "o": ""
+  },
+  "DialogChat": {
+    "i": "\u001bMessage\u001b0\u001b\u001bColor\u001b0\u001bBlue\u001bPart\u001b0\u001b",
+    "o": ""
+  },
+  "DisconnectEvent": {
+    "i": "\u001bEventConnection\u001b0\u001bConnection",
+    "o": ""
+  },
+  "DistanceBetweenPoints": {
+    "i": "\u001bPoint 2\u001b0\u001b0,0,0\u001bPoint 1\u001b0\u001b0,0,0",
+    "o": "\u001bDistance\u001bDistanceVariable"
+  },
+  "Division": {
+    "i": "\u001bNumber2\u001b0\u001b1\u001bNumber1\u001b0\u001b1",
+    "o": "\u001bResult\u001bDivisionVariable"
+  },
+  "DoNotRun": {
+    "i": "",
+    "o": ""
+  },
+  "DumpMemory": {
+    "i": "",
+    "o": ""
+  },
+  "Error": {
+    "i": "\u001bText\u001b0\u001berrored",
+    "o": ""
+  },
+  "ExecuteBlock": {
+    "i": "\u001bName\u001b0\u001b",
+    "o": ""
+  },
+  "ExecuteFunction": {
+    "i": "\u001bFunction\u001b0\u001bVariable_3703\u001bParameters\u001b0\u001bTUPLEPARAM_Parameters_1,TUPLEPARAM_Parameters_2\u001bTUPLEPARAM_Parameters_2\u001b2\u001bVariable_3700\u001bTUPLEPARAM_Parameters_1\u001b1\u001b[RetroStudio ClickDetector]: Part clicked by player: %s\u001bString",
+    "o": "\u001bTUPLE_ReturnedValues\u001b1\u001bTUPLEPARAM_ReturnedValues_1\u001bVariable_3702"
+  },
+  "Exponentiation": {
+    "i": "\u001bNumber2\u001b0\u001b2\u001bNumber1\u001b0\u001b1",
+    "o": "\u001bResult\u001bExponentiationVariable"
+  },
+  "FilterString": {
+    "i": "\u001bString\u001b0\u001b",
+    "o": "\u001bResult\u001b"
+  },
+  "FindFirstChild": {
+    "i": "\u001bParent\u001b0\u001bgame\u001bChildName\u001b0\u001bDebris\u001bRecursive\u001b0\u001b0",
+    "o": "\u001bResult\u001bVariable_5059"
+  },
+  "FindFirstChildNew": {
+    "i": "\u001bCanReturnNil\u001b0\u001b1\u001bChildName\u001b0\u001bBaseplate\u001bRecursive\u001b0\u001b0\u001bParent\u001b0\u001bgame.Workspace",
+    "o": "\u001bResult\u001bFoundPart"
+  },
+  "FindFirstChildOfClass": {
+    "i": "\u001bParent\u001b2\u001bplayer\u001bChildClass\u001b0\u001bPlayerGui",
+    "o": "\u001bResult\u001bVariable_4237"
+  },
+  "FindFirstChildWhichIsANew": {
+    "i": "\u001bChildClass\u001b0\u001b\u001bCanReturnNil\u001b0\u001b0\u001bParent\u001b0\u001b",
+    "o": "\u001bResult\u001b"
+  },
+  "FindPartOnRay": {
+    "i": "\u001bFilterDescendantsTable\u001b0\u001b\u001bDirection\u001b0\u001b0,0,0\u001bOrigin\u001b0\u001b0,0,0\u001bFilterType\u001b0\u001bBlacklist",
+    "o": "\u001bNormal\u001b\u001bInstance\u001b\u001bPosition\u001b"
+  },
+  "FindString": {
+    "i": "\u001bPattern\u001b0\u001b\u001bString\u001b0\u001b",
+    "o": "\u001bResult\u001b"
+  },
+  "ForLoop2": {
+    "i": "\u001bInitial\u001b0\u001b1\u001bIncrement\u001b0\u001b1\u001bMaximum\u001b0\u001bA",
+    "o": "\u001bPlace\u001b"
+  },
+  "FromAxisAngle": {
+    "i": "\u001bv\u001b0\u001b0,0,0\u001br\u001b0\u001b",
+    "o": "\u001bCFrame\u001bAxisAngle"
+  },
+  "FromMatrix": {
+    "i": "\u001bvZ\u001b0\u001b0,0,0\u001bpos\u001b0\u001b0,0,0\u001bvX\u001b0\u001b0,0,0\u001bvY\u001b0\u001b0,0,0",
+    "o": "\u001bCFrame\u001bMatrixCFrameVariable"
+  },
+  "FunctionReturn": {
+    "i": "\u001bTUPLEPARAM_Parameters_1\u001b2\u001bVariable_6556\u001bReturns\u001b0\u001bTUPLEPARAM_Parameters_1",
+    "o": ""
+  },
+  "GetCameraPositionLocal": {
+    "i": "",
+    "o": "\u001bRotation\u001b\u001bPosition\u001b"
+  },
+  "GetCFrameDirection": {
+    "i": "\u001bCFrame\u001b0\u001b\u001bDirection\u001b0\u001bForward",
+    "o": "\u001bDirection\u001bDir"
+  },
+  "GetChildren": {
+    "i": "\u001bParent\u001b0\u001bgame.Workspace",
+    "o": "\u001bChildrenTable\u001b"
+  },
+  "GetConnectedParts": {
+    "i": "\u001bPart\u001b0\u001b",
+    "o": "\u001bPartsTable\u001b"
+  },
+  "GetDefaultChannel": {
+    "i": "",
+    "o": "\u001bChannel\u001b"
+  },
+  "GetDescendants": {
+    "i": "\u001bParent\u001b0\u001bgame.Workspace",
+    "o": "\u001bDescendantTable\u001b"
+  },
+  "GetFullName": {
+    "i": "\u001bObject\u001b0\u001bscript.Parent",
+    "o": "\u001bFullName\u001bFN"
+  },
+  "GetGameBadges": {
+    "i": "",
+    "o": "\u001bBadges\u001b"
+  },
+  "GetGameInfo": {
+    "i": "",
+    "o": "\u001bGameInfo\u001b"
+  },
+  "GetGamepasses": {
+    "i": "",
+    "o": "\u001bGamepasses\u001b"
+  },
+  "GetHumanoidState": {
+    "i": "\u001bHumanoid\u001b0\u001bCharacter.Humanoid",
+    "o": "\u001bState\u001bState"
+  },
+  "GetJoints": {
+    "i": "\u001bPart\u001b0\u001b",
+    "o": "\u001bJoints\u001b"
+  },
+  "GetLeaderstat": {
+    "i": "\u001bPlayer\u001b0\u001bgame.Players.LocalPlayer\u001bStatName\u001b0\u001bCoins",
+    "o": "\u001bValue\u001bV"
+  },
+  "GetLength": {
+    "i": "\u001bString\u001b0\u001bKillerKyle",
+    "o": "\u001bLength\u001bLength"
+  },
+  "GetModelThumbnail": {
+    "i": "\u001bModel\u001b0\u001b\u001bGui\u001b0\u001b",
+    "o": ""
+  },
+  "GetMousePosition2D": {
+    "i": "\u001bPlayer\u001b0\u001b",
+    "o": "\u001bY\u001b\u001bX\u001b"
+  },
+  "GetMousePosition3D": {
+    "i": "\u001bPlayer\u001b0\u001b",
+    "o": "\u001bPosition\u001b"
+  },
+  "GetMouseTargetPart": {
+    "i": "\u001bPlayer\u001b0\u001b",
+    "o": "\u001bTargetPart\u001b"
+  },
+  "GetMouseTargetPartLocal": {
+    "i": "",
+    "o": "\u001bTargetPart\u001bMouseTarget"
+  },
+  "GetMouseTargetSurface": {
+    "i": "\u001bPlayer\u001b0\u001b",
+    "o": "\u001bSurface\u001b"
+  },
+  "GetNameFromUserIdAsync": {
+    "i": "\u001bUserId\u001b0\u001b0",
+    "o": "\u001bUsername\u001b"
+  },
+  "GetPartDirection": {
+    "i": "\u001bPart\u001b0\u001bscript.Parent\u001bDirection\u001b0\u001bForward",
+    "o": "\u001bDirection\u001bPartDirection"
+  },
+  "GetPlayerFromCharacter": {
+    "i": "\u001bCharacter\u001b0\u001bCharacter",
+    "o": "\u001bPlayer\u001bPlr"
+  },
+  "GetPlayersOnTeam": {
+    "i": "\u001bTeam\u001b0\u001b",
+    "o": "\u001bPlayerTable\u001b"
+  },
+  "GetRandomChild": {
+    "i": "\u001bParent\u001b0\u001bgame.Workspace",
+    "o": "\u001bResult\u001bRandomChild"
+  },
+  "GetRankInGroup": {
+    "i": "\u001bPlayer\u001b0\u001bplayer\u001bGroupId\u001b0\u001b1E240",
+    "o": "\u001bResult\u001bRankGroup"
+  },
+  "GetRobloxVersion": {
+    "i": "",
+    "o": "\u001bAnswer\u001bGetRobloxVersion"
+  },
+  "GetServerTimeNow": {
+    "i": "",
+    "o": "\u001bAnswer\u001bServerTime"
+  },
+  "GetStudioSelection": {
+    "i": "",
+    "o": "\u001bSelection\u001b"
+  },
+  "GetStudioTheme": {
+    "i": "",
+    "o": "\u001bDesign\u001b\u001bColor\u001b"
+  },
+  "GetTableValue": {
+    "i": "\u001bKey\u001b1\u001bName\u001bString\u001bTable\u001b0\u001bplayerWhoClicked",
+    "o": "\u001bValue\u001bVariable_3700"
+  },
+  "GetTestStatus": {
+    "i": "",
+    "o": "\u001bStatus\u001b"
+  },
+  "GetTouchingParts": {
+    "i": "\u001bPart\u001b0\u001b",
+    "o": "\u001bPartsTable\u001b"
+  },
+  "GetUserIdFromNameAsync": {
+    "i": "\u001bUsername\u001b0\u001b",
+    "o": "\u001bUserId\u001b"
+  },
+  "GetUserThumbnail": {
+    "i": "\u001bUserId\u001b0\u001b0",
+    "o": "\u001bImageId\u001b"
+  },
+  "GiveBadge": {
+    "i": "\u001bBadgeId\u001b0\u001b0\u001bPlayer\u001b0\u001b",
+    "o": "\u001bResult\u001b"
+  },
+  "GSubString": {
+    "i": "\u001bString\u001b0\u001bkillerkyle\u001bReplacement\u001b0\u001b\u001bPattern\u001b0\u001bkiller",
+    "o": "\u001bResult\u001bGSUBEDString"
+  },
+  "GUILeftMouseButtonClick": {
+    "i": "\u001bGUIButton\u001b2\u001btextButton",
+    "o": "\u001bEventConnection\u001bVariable_4376"
+  },
+  "GUILeftMouseButtonUp": {
+    "i": "\u001bGUIButton\u001b0\u001b",
+    "o": ""
+  },
+  "GUIMouseEnter": {
+    "i": "\u001bGUI\u001b0\u001b",
+    "o": ""
+  },
+  "GUIMouseLeave": {
+    "i": "\u001bGUI\u001b0\u001b",
+    "o": ""
+  },
+  "GUIRightMouseButtonClick": {
+    "i": "\u001bGUIButton\u001b0\u001b",
+    "o": ""
+  },
+  "GUIRightMouseButtonDown": {
+    "i": "\u001bGUIButton\u001b0\u001b",
+    "o": ""
+  },
+  "HandlesMouseButtonDown": {
+    "i": "\u001bHandles\u001b0\u001b",
+    "o": "\u001bHandle\u001b"
+  },
+  "HandlesMouseButtonUp": {
+    "i": "\u001bHandles\u001b0\u001b",
+    "o": "\u001bHandle\u001b"
+  },
+  "HasBadge": {
+    "i": "\u001bBadgeId\u001b0\u001b0\u001bPlayer\u001b0\u001b",
+    "o": "\u001bResult\u001b"
+  },
+  "HasBadgeFromForeignPlace": {
+    "i": "\u001bBadgeId\u001b0\u001b0\u001bPlayer\u001b0\u001b\u001bPlaceId\u001b0\u001b",
+    "o": "\u001bResult\u001b"
+  },
+  "HasGamepass": {
+    "i": "\u001bGamepassId\u001b0\u001b0\u001bPlayer\u001b0\u001b",
+    "o": "\u001bResult\u001b"
+  },
+  "HasGamepassFromForeignPlace": {
+    "i": "\u001bPlaceId\u001b0\u001b\u001bGamepassId\u001b0\u001b0\u001bPlayer\u001b0\u001b",
+    "o": "\u001bResult\u001b"
+  },
+  "Heartbeat": {
+    "i": "",
+    "o": "\u001bDeltaTime\u001b"
+  },
+  "HideLeaderboard": {
+    "i": "\u001bHide\u001b0\u001b0",
+    "o": "\u001bResult\u001bResult"
+  },
+  "HumanoidDied": {
+    "i": "\u001bHumanoid\u001b0\u001bCharacter.Humanoid",
+    "o": ""
+  },
+  "HumanoidFreeFalling": {
+    "i": "\u001bHumanoid\u001b0\u001bCharacter.Humanoid",
+    "o": "\u001bActive\u001b"
+  },
+  "HumanoidJumping": {
+    "i": "\u001bHumanoid\u001b0\u001b",
+    "o": "\u001bActive\u001b"
+  },
+  "HumanoidMoveTo": {
+    "i": "\u001bTarget\u001b0\u001b0,0,0\u001bHumanoid\u001b0\u001bCharacter.Humanoid",
+    "o": ""
+  },
+  "HumanoidMoveToFinished": {
+    "i": "\u001bHumanoid\u001b0\u001bCharacter.Humanoid",
+    "o": "\u001bReachedTarget\u001bTarget"
+  },
+  "HumanoidRunning": {
+    "i": "\u001bHumanoid\u001b0\u001b",
+    "o": "\u001bSpeed\u001b"
+  },
+  "HumanoidSeated": {
+    "i": "\u001bHumanoid\u001b0\u001bCharacter.Humanoid",
+    "o": "\u001bSeat\u001bSeat\u001bActive\u001bAct"
+  },
+  "HumanoidStateChanged": {
+    "i": "\u001bHumanoid\u001b0\u001bCharacter.Humanoid",
+    "o": "\u001bPreviousState\u001bPrev\u001bNewState\u001bNew"
+  },
+  "If": {
+    "i": "\u001bValue 1\u001b1\u001be\u001bString\u001bValue 2\u001b1\u001be\u001bString\u001bComparisonType\u001b0\u001b==",
+    "o": ""
+  },
+  "InputBegan": {
+    "i": "",
+    "o": "\u001bProcessed\u001bProcesseds\u001bType\u001bTypes\u001bPosition\u001b\u001bKeyCode\u001bKeycodes"
+  },
+  "InputChanged": {
+    "i": "",
+    "o": "\u001bType\u001b\u001bKeyCode\u001b\u001bPosition\u001b\u001bDelta\u001b\u001bProcessed\u001b"
+  },
+  "InputEnded": {
+    "i": "",
+    "o": "\u001bProcessed\u001b\u001bType\u001b\u001bPosition\u001b\u001bKeyCode\u001b"
+  },
+  "InsertModel": {
+    "i": "\u001bID\u001b0\u001b0\u001bParent\u001b0\u001b",
+    "o": "\u001bSuccess\u001b\u001bLoadedModel\u001b"
+  },
+  "InsertRetrostudioAvatar": {
+    "i": "\u001bID\u001b0\u001b0\u001bCFrame\u001b0\u001b",
+    "o": "\u001bModel\u001b"
+  },
+  "InverseCFrame1": {
+    "i": "\u001bCFrame\u001b2\u001bCFramee",
+    "o": "\u001bResult\u001bInversedCFrameVariable"
+  },
+  "IsA": {
+    "i": "\u001bObject\u001b0\u001bgame.Workspace.Baseplate\u001bClass\u001b0\u001bPart",
+    "o": "\u001bResult\u001bResult"
+  },
+  "IsAncestorOf": {
+    "i": "\u001bDescendant\u001b0\u001b\u001bAncestor\u001b0\u001b",
+    "o": "\u001bOutputValue\u001b"
+  },
+  "IsClient": {
+    "i": "",
+    "o": "\u001bAnswer\u001bIsClient"
+  },
+  "IsDescendantOf": {
+    "i": "\u001bDescendant\u001b0\u001bscript.Parent\u001bAncestor\u001b0\u001bscript.Parent.Parent",
+    "o": "\u001bOutputValue\u001bCheck"
+  },
+  "IsFriendsWith": {
+    "i": "\u001bUserId\u001b0\u001b0\u001bPlayer\u001b0\u001b",
+    "o": "\u001bResult\u001b"
+  },
+  "IsGameLoaded": {
+    "i": "",
+    "o": "\u001bAnswer\u001bIsLoaded"
+  },
+  "IsGuest": {
+    "i": "\u001bPlayer\u001b0\u001bgame.Players.LocalPlayer",
+    "o": "\u001bAnswer\u001bIsGuestPlayer"
+  },
+  "IsInGroup": {
+    "i": "\u001bPlayer\u001b0\u001bplayer\u001bGroupId\u001b0\u001b1E240",
+    "o": "\u001bResult\u001bcompareGroup"
+  },
+  "IsOwner": {
+    "i": "\u001bAllowAuthorizedUsers\u001b0\u001b1\u001bPlayer\u001b0\u001bgame.Players.LocalPlayer",
+    "o": "\u001bResult\u001bIsOwnerTrue"
+  },
+  "IsPlayingSolo": {
+    "i": "",
+    "o": "\u001bAnswer\u001bIsSolo"
+  },
+  "IsServer": {
+    "i": "",
+    "o": "\u001bAnswer\u001b"
+  },
+  "IsStudio": {
+    "i": "",
+    "o": "\u001bAnswer\u001bIsStudio"
+  },
+  "IsTouching": {
+    "i": "\u001bPart1\u001b0\u001b\u001bPart2\u001b0\u001b",
+    "o": "\u001bIsTouching\u001b"
+  },
+  "IsTouchscreen": {
+    "i": "",
+    "o": "\u001bAnswer\u001b"
+  },
+  "JsonDecode": {
+    "i": "\u001bJSON\u001b2\u001bJSON",
+    "o": "\u001bTable\u001btable"
+  },
+  "JsonEncode": {
+    "i": "\u001bTable\u001b0\u001btable",
+    "o": "\u001bJSON\u001bJSON"
+  },
+  "KeyDown": {
+    "i": "\u001bKey\u001b0\u001b\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "KeyDownLocal": {
+    "i": "\u001bKey\u001b0\u001b",
+    "o": ""
+  },
+  "KeyUp": {
+    "i": "\u001bKey\u001b0\u001b\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "KickPlayer": {
+    "i": "\u001bPlayer\u001b0\u001b\u001bReason\u001b0\u001b",
+    "o": ""
+  },
+  "LeaderstatChanged": {
+    "i": "\u001bPlayer\u001b0\u001b\u001bStatName\u001b0\u001b",
+    "o": "\u001bValue\u001b"
+  },
+  "LeftMouseDown": {
+    "i": "\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "LeftMouseUp": {
+    "i": "\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "Lerp1": {
+    "i": "\u001bGoalCFrame\u001b2\u001bGoalCFramee\u001bAlpha\u001b0\u001b0\u001bStartCFrame\u001b2\u001bStartCFramee",
+    "o": "\u001bResult\u001bLerpVariableCFrame"
+  },
+  "LoadAnimation": {
+    "i": "\u001bHumanoid\u001b0\u001b\u001bAnimation\u001b0\u001b",
+    "o": "\u001bAnimationTrack\u001b"
+  },
+  "LoadCharacter": {
+    "i": "\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "LoadInstance": {
+    "i": "\u001bParent\u001b0\u001b\u001bKey\u001b0\u001b\u001bShared\u001b0\u001b0",
+    "o": "\u001bSuccess\u001b\u001bLoadedModel\u001b"
+  },
+  "LoadVariable": {
+    "i": "\u001bKey\u001b0\u001bwoahwoah\u001bShared\u001b0\u001b0",
+    "o": "\u001bSuccess\u001bSuccess\u001bLoadedData\u001bData"
+  },
+  "LoopThroughDescendants": {
+    "i": "\u001bObject\u001b0\u001b",
+    "o": "\u001bDescendant\u001b"
+  },
+  "LoopThroughTable": {
+    "i": "\u001bTable\u001b0\u001btbl",
+    "o": "\u001bIndex\u001bVariable_5425\u001bValue\u001bVariable_5426"
+  },
+  "Lower": {
+    "i": "\u001bString\u001b0\u001bAHAH",
+    "o": "\u001bResult\u001bLower"
+  },
+  "MakeJoints": {
+    "i": "\u001bPart\u001b0\u001bscript.Parent",
+    "o": ""
+  },
+  "MathLibraryDoubleInput": {
+    "i": "\u001bFunction\u001b0\u001batan2\u001bNumber2\u001b0\u001b1\u001bNumber1\u001b0\u001b1",
+    "o": "\u001bResult\u001bmathVariable2"
+  },
+  "MathLibrarySingleInput": {
+    "i": "\u001bNumber\u001b0\u001b1\u001bFunction\u001b0\u001babs",
+    "o": "\u001bResult\u001bmathVariable"
+  },
+  "MathLibraryTripleInput": {
+    "i": "\u001bFunction\u001b0\u001bclamp\u001bNumber3\u001b0\u001b0\u001bNumber2\u001b0\u001b0\u001bNumber1\u001b0\u001b0",
+    "o": "\u001bResult\u001bmathVariable3"
+  },
+  "MathPi": {
+    "i": "",
+    "o": "\u001bMessage\u001b\u001bMessageType\u001b"
+  },
+  "ModelInserted": {
+    "i": "",
+    "o": "\u001bID\u001b\u001bLoadedModel\u001b\u001bSourceScript\u001b\u001bSuccess\u001b"
+  },
+  "Modulus": {
+    "i": "\u001bNumber2\u001b0\u001b1\u001bNumber1\u001b0\u001b1",
+    "o": "\u001bResult\u001bModulusVariable"
+  },
+  "MoveModelTo": {
+    "i": "\u001bModel\u001b0\u001b\u001bPosition\u001b0\u001b0,0,0",
+    "o": ""
+  },
+  "Multiplication": {
+    "i": "\u001bNumber2\u001b0\u001b1\u001bNumber1\u001b0\u001b1",
+    "o": "\u001bResult\u001bMultiplicationVariable"
+  },
+  "MutePlayer": {
+    "i": "\u001bMute\u001b0\u001b1\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "NormalizeVector3": {
+    "i": "\u001bVector3\u001b0\u001b0,0,0",
+    "o": "\u001bResult\u001bNormalizedVector3Variable"
+  },
+  "NOTAny": {
+    "i": "\u001bA\u001b1\u001b1\u001bBool",
+    "o": "\u001bResult\u001breversedVariable"
+  },
+  "ORAny": {
+    "i": "\u001bA\u001b1\u001be\u001bString\u001bB\u001b1\u001be\u001bString",
+    "o": "\u001bResult\u001bOrVariable"
+  },
+  "OsClock": {
+    "i": "",
+    "o": "\u001bAnswer\u001bOsClockVariable"
+  },
+  "OsDate": {
+    "i": "\u001bTime\u001b0\u001b0\u001bTimezone\u001b0\u001bUTC",
+    "o": "\u001bDateTable\u001bOsDataVariableTable"
+  },
+  "OsTime": {
+    "i": "",
+    "o": "\u001bAnswer\u001bOsTimeVariable"
+  },
+  "PauseSound": {
+    "i": "\u001bSound\u001b0\u001bscript.Parent.Sound",
+    "o": ""
+  },
+  "PerlinNoise": {
+    "i": "\u001bY\u001b0\u001b0\u001bX\u001b0\u001b0\u001bZ\u001b0\u001b0",
+    "o": "\u001bResult\u001bPerlinNoiseVariable"
+  },
+  "PlayAnimation": {
+    "i": "\u001bSpeed\u001b0\u001b1\u001bAnimationTrack\u001b0\u001b\u001bFadeTime\u001b0\u001b0.64\u001bWeight\u001b0\u001b1",
+    "o": ""
+  },
+  "PlayerAdded": {
+    "i": "",
+    "o": "\u001bPlayer\u001bPlayer"
+  },
+  "PlayerRemoving": {
+    "i": "",
+    "o": "\u001bPlayer\u001bPlayer"
+  },
+  "PlaySound": {
+    "i": "\u001bSound\u001b0\u001bscript.Parent.Sound",
+    "o": ""
+  },
+  "PluginButtonClicked": {
+    "i": "\u001bID\u001b0\u001b\u001bToolbarName\u001b0\u001b",
+    "o": ""
+  },
+  "PluginButtonSetActive": {
+    "i": "\u001bID\u001b0\u001b\u001bToolbarName\u001b0\u001b\u001bState\u001b0\u001b0",
+    "o": ""
+  },
+  "PluginDeactivating": {
+    "i": "",
+    "o": ""
+  },
+  "PowerlangImport": {
+    "i": "\u001bVisualSource\u001b0\u001bthisisinvalidinthisformat\u001bNewParent\u001b0\u001bgame.Workspace\u001bFilterDelay\u001b0\u001b1\u001bServerOrLocal\u001b0\u001b1\u001bUseLocalVariables\u001b0\u001b1\u001bInfoRemote\u001b0\u001banyremote\u001bRetryAmount\u001b0\u001bA",
+    "o": "\u001bTUPLE_Info\u001b0"
+  },
+  "PowerlangImport2": {
+    "i": "\u001bRetryAmount\u001b0\u001bA\u001bUseLocalVariables\u001b0\u001b1\u001bScriptClass\u001b0\u001bScript\u001bNewParent\u001b0\u001bgame.Worksapce\u001bFilterDelay\u001b0\u001b1\u001bInfoRemote\u001b0\u001banyremote\u001bVisualSource\u001b0\u001behem",
+    "o": "\u001bTUPLE_Info\u001b0"
+  },
+  "PreSimulation": {
+    "i": "",
+    "o": "\u001bdeltaTime\u001b"
+  },
+  "Print": {
+    "i": "\u001bText\u001b0\u001bprint",
+    "o": ""
+  },
+  "PromptDeveloperProductPurchase": {
+    "i": "\u001bPlayer\u001b0\u001b\u001bDeveloperProductId\u001b0\u001b0",
+    "o": ""
+  },
+  "PromptDeveloperProductPurchaseFinished": {
+    "i": "",
+    "o": "\u001bPlayer\u001b\u001bDeveloperProductId\u001b\u001bPurchased\u001b"
+  },
+  "PromptGamepassPurchase": {
+    "i": "\u001bGamepassId\u001b0\u001b0\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "PromptGamepassPurchaseFinished": {
+    "i": "",
+    "o": "\u001bPlayer\u001b\u001bGamepassId\u001b\u001bPurchased\u001b"
+  },
+  "PropertyChanged": {
+    "i": "\u001bObject\u001b0\u001b\u001bProperty\u001b0\u001b",
+    "o": "\u001bNewValue\u001b"
+  },
+  "RandomBrickColor": {
+    "i": "",
+    "o": "\u001bBrickColor\u001b"
+  },
+  "RandomNumber": {
+    "i": "\u001bMinimum\u001b0\u001b1\u001bMaximum\u001b0\u001b1",
+    "o": "\u001bResult\u001bRandomNumberVariable"
+  },
+  "RBXGuiCreateDropDownMenu": {
+    "i": "\u001bItems\u001b0\u001b\u001bOnSelect\u001b0\u001b",
+    "o": "\u001bDropDown\u001b\u001bUpdateSelection\u001b"
+  },
+  "ReceiveChatMessage": {
+    "i": "\u001bChannel\u001b0\u001b",
+    "o": "\u001bTextChatMessage\u001b"
+  },
+  "ReloadPlace": {
+    "i": "",
+    "o": ""
+  },
+  "RemoteFireServer2": {
+    "i": "\u001bRemoteEvent\u001b0\u001bgame.Lighting.Remote\u001bTUPLEPARAM_Parameters_3\u001b1\u001bkiki\u001bString\u001bTUPLEPARAM_Parameters_1\u001b1\u001bFaha\u001bString\u001bTUPLEPARAM_Parameters_5\u001b1\u001bjason\u001bString\u001bTUPLEPARAM_Parameters_4\u001b1\u001bmama\u001bString\u001bParameters\u001b0\u001bTUPLEPARAM_Parameters_1,TUPLEPARAM_Parameters_2,TUPLEPARAM_Parameters_3,TUPLEPARAM_Parameters_4,TUPLEPARAM_Parameters_5\u001bTUPLEPARAM_Parameters_2\u001b1\u001blol\u001bString",
+    "o": ""
+  },
+  "RemoteFunctionInvokeServer": {
+    "i": "\u001bTUPLEPARAM_Parameters_1\u001b1\u001be\u001bString\u001bRemoteFunction\u001b0\u001bgame.Lighting\u001bParameters\u001b0\u001bTUPLEPARAM_Parameters_1",
+    "o": "\u001bTUPLE_Output\u001b2\u001bTUPLEPARAM_Output_1\u001be\u001bTUPLEPARAM_Output_2\u001bee"
+  },
+  "RemoteFunctionOnInvokeClient": {
+    "i": "\u001bRemoteFunction\u001b0\u001bgame.Lighting",
+    "o": "\u001bTUPLE_Parameters\u001b0"
+  },
+  "RenderStepped": {
+    "i": "",
+    "o": "\u001bdeltaTime\u001b"
+  },
+  "Require": {
+    "i": "\u001bModuleScript\u001b0\u001bscript.Parent.ModuleScript",
+    "o": "\u001bReturned\u001b"
+  },
+  "ResumeSound": {
+    "i": "\u001bSound\u001b0\u001bscript.Parent.Sound",
+    "o": ""
+  },
+  "RightMouseDown": {
+    "i": "\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "RightMouseUp": {
+    "i": "\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "RotationBetweenPoints": {
+    "i": "\u001bPoint 1\u001b0\u001b0,0,0\u001bPoint 2\u001b0\u001b0,0,0",
+    "o": "\u001bRotationVector3\u001bRotationDirection"
+  },
+  "Round": {
+    "i": "\u001bNumber\u001b0\u001b0\u001bType\u001b0\u001bRound",
+    "o": "\u001bResult\u001bRoundVariable"
+  },
+  "SaveInstance": {
+    "i": "\u001bKey\u001b0\u001b\u001bShared\u001b0\u001b0\u001bModel\u001b0\u001b",
+    "o": "\u001bSuccess\u001b"
+  },
+  "SaveVariable": {
+    "i": "\u001bValue\u001b1\u001b1\u001bBool\u001bKey\u001b0\u001bwoahwoah\u001bShared\u001b0\u001b0",
+    "o": "\u001bSuccess\u001bSuccess"
+  },
+  "SendChatMessage": {
+    "i": "\u001bMessage\u001b0\u001b\u001bChannel\u001b0\u001b",
+    "o": "\u001bTextChatMessage\u001b"
+  },
+  "SetCameraPositionLocal": {
+    "i": "\u001bRotation\u001b0\u001b0,0,0\u001bPosition\u001b0\u001b0,0,0",
+    "o": ""
+  },
+  "SetCell": {
+    "i": "\u001bOrientation\u001b0\u001bNegZ\u001bMaterial\u001b0\u001bEmpty\u001bBlock\u001b0\u001bSolid\u001bPosition\u001b0\u001b0,0,0",
+    "o": ""
+  },
+  "SetCoreGuiEnabled": {
+    "i": "\u001bEnabled\u001b0\u001b0\u001bCoreGui\u001b0\u001bAll",
+    "o": "\u001bResult\u001b"
+  },
+  "SetJoinAfterMoveInstance": {
+    "i": "\u001bInstance\u001b0\u001b",
+    "o": "\u001bSuccess\u001b\u001bID\u001b"
+  },
+  "SetLeaderstat": {
+    "i": "\u001bValue\u001b0\u001b0\u001bPlayer\u001b0\u001b\u001bStatName\u001b0\u001b",
+    "o": ""
+  },
+  "SetModelPrimaryPartCFrameNew": {
+    "i": "\u001bModel\u001b0\u001b\u001bCFrame\u001b0\u001b",
+    "o": ""
+  },
+  "SetMouseIconLocal": {
+    "i": "\u001bIcon\u001b0\u001brbxassetid://0",
+    "o": ""
+  },
+  "SetNetworkOwner": {
+    "i": "\u001bPart\u001b0\u001bscript.Parent\u001bPlayer\u001b1\u001bgame.Players.LocalPlayer\u001bObject",
+    "o": ""
+  },
+  "SetObjectProperty": {
+    "i": "\u001bValue\u001b1\u001bSimulate Mouse Click\u001bString\u001bProperty\u001b0\u001bText\u001bObject\u001b2\u001btextButton",
+    "o": ""
+  },
+  "SetTableValue": {
+    "i": "\u001bValue\u001b1\u001bsilly\u001bString\u001bKey\u001b1\u001bgoober\u001bString\u001bTable\u001b0\u001btable",
+    "o": ""
+  },
+  "SetVariable1": {
+    "i": "\u001bValue\u001b1\u001b0\u001bBool",
+    "o": "\u001bVariableName\u001bEhem"
+  },
+  "SolveEquation": {
+    "i": "\u001bEquation\u001b0\u001b1+1",
+    "o": "\u001bResult\u001bSolveEquationVariable"
+  },
+  "SortTable": {
+    "i": "\u001bOrder\u001b0\u001bLow to High\u001bTable\u001b0\u001btable",
+    "o": ""
+  },
+  "SortTableAdvanced": {
+    "i": "\u001bTable\u001b0\u001bTable",
+    "o": "\u001bValueA\u001bA\u001bValueB\u001bB"
+  },
+  "SortTableAdvancedReturn": {
+    "i": "\u001bReturn\u001b0\u001b0",
+    "o": ""
+  },
+  "Spawn": {
+    "i": "\u001bFunction\u001b0\u001bVariable_6610\u001bParameters\u001b0\u001bTUPLEPARAM_Parameters_1\u001bTUPLEPARAM_Parameters_1\u001b2\u001bVariable_6604",
+    "o": ""
+  },
+  "SplitCFrame": {
+    "i": "\u001bCFrame\u001b0\u001b",
+    "o": "\u001bRotation\u001bRotation\u001bPosition\u001bPosition"
+  },
+  "SplitColor3": {
+    "i": "\u001bColor3\u001b0\u001bFF,FF,FF",
+    "o": "\u001bR\u001b\u001bG\u001b\u001bB\u001b"
+  },
+  "SplitNumberRange": {
+    "i": "\u001bNumberRange\u001b0\u001b",
+    "o": "\u001bMin\u001b\u001bMax\u001b"
+  },
+  "SplitString": {
+    "i": "\u001bString\u001b0\u001bKillerKyle\u001bSeperator\u001b0\u001br",
+    "o": "\u001bResult\u001bSplitted"
+  },
+  "SplitUDim2": {
+    "i": "\u001bUDim2\u001b0\u001b0,0,0,0",
+    "o": "\u001bXOffset\u001b\u001bXScale\u001b\u001bYScale\u001b\u001bYOffset\u001b"
+  },
+  "SplitVector2": {
+    "i": "\u001bVector2\u001b0\u001b0,0",
+    "o": "\u001bY\u001b\u001bX\u001b"
+  },
+  "SplitVector3": {
+    "i": "\u001bVector3\u001b0\u001b0,0,0",
+    "o": "\u001bY\u001bYVariable\u001bX\u001bXVariable\u001bZ\u001bZVariable"
+  },
+  "StopAnimation": {
+    "i": "\u001bAnimationTrack\u001b0\u001b\u001bFadeTime\u001b0\u001b0.64",
+    "o": ""
+  },
+  "StopSound": {
+    "i": "\u001bSound\u001b0\u001bscript.Parent.Sound",
+    "o": ""
+  },
+  "StudioSelectionChanged": {
+    "i": "",
+    "o": "\u001bSelection\u001b"
+  },
+  "Substring": {
+    "i": "\u001bStartPoint\u001b0\u001b0\u001bString\u001b0\u001b\u001bEndPoint\u001b0\u001b0",
+    "o": "\u001bResult\u001b"
+  },
+  "Subtraction": {
+    "i": "\u001bNumber2\u001b0\u001b1\u001bNumber1\u001b0\u001b1",
+    "o": "\u001bResult\u001bSubstractionVariable"
+  },
+  "TableAppend": {
+    "i": "\u001bValue\u001b1\u001blol\u001bString\u001bTable\u001b0\u001btable",
+    "o": ""
+  },
+  "TableFind": {
+    "i": "\u001bValue\u001b1\u001bhey\u001bString\u001bTable\u001b0\u001btable\u001bInit\u001b0\u001b1",
+    "o": "\u001bKey\u001bKeyVariable"
+  },
+  "TableInsert": {
+    "i": "\u001bValue\u001b1\u001bhey\u001bString\u001bPosition\u001b0\u001b1\u001bTable\u001b0\u001btable",
+    "o": ""
+  },
+  "TablePack": {
+    "i": "\u001bValues\u001b0\u001bTUPLEPARAM_Values_1\u001bTUPLEPARAM_Values_1\u001b1\u001bhey\u001bString",
+    "o": "\u001bTableVariable\u001bPackTableVariable"
+  },
+  "TableRemove": {
+    "i": "\u001bPosition\u001b0\u001b1\u001bTable\u001b0\u001btable",
+    "o": ""
+  },
+  "TableUnpack": {
+    "i": "\u001bTable\u001b0\u001btable",
+    "o": "\u001bTUPLE_Values\u001b1\u001bTUPLEPARAM_Values_1\u001bPackedInTable1"
+  },
+  "TakeDamage": {
+    "i": "\u001bPlayer\u001b0\u001b\u001bDamage\u001b0\u001b0",
+    "o": ""
+  },
+  "TeleportPlayerToPosition": {
+    "i": "\u001bRotation\u001b0\u001b0,0,0\u001bPlayer\u001b0\u001b\u001bPosition\u001b0\u001b0,0,0",
+    "o": ""
+  },
+  "TeleportToPlace": {
+    "i": "\u001bPlayer\u001b0\u001b\u001bPlaceId\u001b0\u001b",
+    "o": ""
+  },
+  "TeleportToPlaceProtected": {
+    "i": "\u001bNewServer\u001b0\u001b0\u001bPlaceId\u001b0\u001b\u001bSoloServer\u001b0\u001b0\u001bPlayer\u001b0\u001b",
+    "o": ""
+  },
+  "TestStatusChanged": {
+    "i": "",
+    "o": "\u001bStatus\u001b"
+  },
+  "TextBoxCaptureFocus": {
+    "i": "\u001bTextBox\u001b0\u001bscript.Parent.TextBox",
+    "o": ""
+  },
+  "TextBoxFocused": {
+    "i": "\u001bTextBox\u001b0\u001b",
+    "o": ""
+  },
+  "TextBoxFocusLost": {
+    "i": "\u001bTextBox\u001b0\u001b",
+    "o": "\u001bEnterPressed\u001b"
+  },
+  "ToEulerAnglesXYZ": {
+    "i": "\u001bCFrame\u001b0\u001b",
+    "o": "\u001brz\u001b\u001brx\u001b\u001bry\u001b"
+  },
+  "ToggleMobileControls": {
+    "i": "\u001bEnabled\u001b0\u001b0",
+    "o": ""
+  },
+  "ToNumberAny": {
+    "i": "\u001bInput\u001b1\u001b1000\u001bString",
+    "o": "\u001bNumber\u001bNumber"
+  },
+  "ToObjectSpace1": {
+    "i": "\u001bObjectCFrame\u001b0\u001b\u001bCFrame\u001b0\u001b",
+    "o": "\u001bResult\u001bResult"
+  },
+  "ToolEquipped": {
+    "i": "\u001bTool\u001b0\u001bscript.Parent",
+    "o": "\u001bEventConnection\u001bConnection"
+  },
+  "ToStringAny": {
+    "i": "\u001bInput\u001b1\u001b64\u001bNumber",
+    "o": "\u001bString\u001bString"
+  },
+  "ToWorldSpace1": {
+    "i": "\u001bObjectCFrame\u001b0\u001b\u001bCFrame\u001b0\u001b",
+    "o": "\u001bResult\u001bResult"
+  },
+  "TweenObjectProperty": {
+    "i": "\u001bRepeatCount\u001b0\u001b0\u001bEasingStyle\u001b0\u001bSine\u001bObject\u001b0\u001bscript.Parent\u001bReverses\u001b0\u001b0\u001bValue\u001b1\u001b0,0,0\u001bVector3\u001bProperty\u001b0\u001bPosition\u001bTime\u001b0\u001b3\u001bEasingDirection\u001b0\u001bOut",
+    "o": ""
+  },
+  "TypeOf": {
+    "i": "\u001bVariable\u001b1\u001b1\u001bBool",
+    "o": "\u001bType\u001bWhatType"
+  },
+  "UnbanPlayerUID": {
+    "i": "\u001bUserId\u001b0\u001b0",
+    "o": ""
+  },
+  "Upper": {
+    "i": "\u001bString\u001b0\u001btehee",
+    "o": "\u001bResult\u001bUpper"
+  },
+  "Vector3Cross": {
+    "i": "\u001bVectorA\u001b0\u001b0,0,0\u001bVectorB\u001b0\u001b0,0,0",
+    "o": "\u001bResult\u001bErrm"
+  },
+  "Vector3Dot": {
+    "i": "\u001bVectorA\u001b0\u001b0,0,0\u001bVectorB\u001b0\u001b0,0,0",
+    "o": "\u001bResult\u001bVectorDotResult"
+  },
+  "Wait": {
+    "i": "\u001bTime\u001b0\u001b0.21",
+    "o": ""
+  },
+  "WaitForChild": {
+    "i": "\u001bTimeOut\u001b0\u001b5\u001bChildName\u001b0\u001bLocalScript\u001bParent\u001b0\u001bscript.Parent",
+    "o": "\u001bResult\u001bFoundObject"
+  },
+  "Warn": {
+    "i": "\u001bText\u001b0\u001bwarned",
+    "o": ""
+  },
+  "WhileLoop3": {
+    "i": "\u001bValue 1\u001b1\u001b\u001bString\u001bValue 2\u001b1\u001b\u001bString\u001bComparisonType\u001b0\u001b==",
+    "o": ""
+  }
+}

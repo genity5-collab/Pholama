@@ -24,19 +24,30 @@
 <div id="plat" hidden><div id="platHost"></div></div>
 <div id="chat">
   <div id="retroWorkspace" class="retro-workspace" hidden>
-    <div class="retro-head"><div><b>Roblox: RetroStudio</b><span>Chat-linked mock workspace</span></div><span class="retro-sim-badge">SIMULATED</span></div>
+    <div class="retro-head"><div><b>Studio</b><span>The AI writes the Lua and encodes it for RetroStudio</span></div><span class="retro-sim-badge" id="retroBadge">PREVIEW</span></div>
     <div class="retro-grid">
-      <section class="retro-code-card" aria-label="Generated Luau scripts">
+      <section class="retro-code-card" aria-label="Scripts">
         <div class="retro-card-head"><b>Scripts</b><button type="button" id="retroDownload">Download active .lua</button></div>
         <div id="retroTabs" class="retro-tabs" role="tablist" aria-label="Scripts in this response"></div>
         <textarea id="retroCode" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Active Luau script" placeholder="Ask the chat to create a Roblox Luau script. Each returned Lua block gets its own tab."></textarea>
-        <div class="retro-actions"><button type="button" id="retroTest" class="p">Run safe test</button><button type="button" id="retroPreview">Show preview</button><button type="button" id="retroScreenshot">Attach preview screenshot to chat</button></div>
+        <div class="retro-actions"><button type="button" id="retroEncode" class="p">Encode for RetroStudio</button><button type="button" id="retroTest">Run safe test</button><button type="button" id="retroPreview">Show preview</button><button type="button" id="retroScreenshot">Attach preview screenshot to chat</button></div>
+        <div id="retroEncOut" class="retro-enc" hidden>
+          <div class="retro-enc-head"><b>Encoded string</b><span id="retroEncInfo"></span><button type="button" id="retroCopy" class="p">Copy</button></div>
+          <textarea id="retroEncText" readonly spellcheck="false" aria-label="Encoded string for RetroStudio"></textarea>
+          <ol class="retro-steps"><li>The AI already encoded your script. Press <b>Copy</b>.</li><li>In RetroStudio, paste it into your script to import the blocks.</li></ol>
+        </div>
         <div id="retroLog" class="retro-log" role="status" aria-live="polite">No script yet. Ask the chat to build one.</div>
       </section>
-      <section class="retro-view-card" aria-label="Simulated part preview">
-        <div class="retro-card-head"><b>Viewport</b><span>Static, allowlisted preview only</span></div>
+      <section class="retro-view-card" aria-label="Viewport">
+        <div class="retro-card-head"><b>Viewport</b><span id="retroEra">Early 2013 look</span></div>
         <canvas id="retroCanvas" aria-label="Simulated 3D parts"></canvas>
-        <p>Only simple Part creation and listed properties are visualized. No Lua is executed; no live Roblox playtest or remote project access.</p>
+        <div class="retro-light" id="retroLight">
+          <label>Time of day <input type="range" id="lightTime" min="0" max="24" step="0.5" value="14"></label>
+          <label>Brightness <input type="range" id="lightBright" min="0" max="3" step="0.1" value="1"></label>
+          <label>Ambient <input type="color" id="lightAmbient" value="#7f7f7f"></label>
+          <label>Fog <input type="range" id="lightFog" min="0" max="100" step="1" value="0"></label>
+        </div>
+        <p>A safe look at your parts, with lighting. Nothing runs here. Copy the encoded string into RetroStudio to use the script.</p>
       </section>
     </div>
   </div>

@@ -1,0 +1,10 @@
+{
+  "source": "local corner = Instance.new(\"UICorner\")\ncorner.CornerRadius = UDim.new(0, 8)\n",
+  "blocks": 1,
+  "skippedFeatures": [
+    "Skip: corner.CornerRadius = UDim.new(0, 8)"
+  ],
+  "serialized": "\u001a\u001aEditor\u001aCameraPosition\u001b2.3F,0.3BF\u001aCameraZoom\u001b0.C2\u001a\u001aBlock\u001aType\u001bComment2\u001aName\u001bROOT\u001aVisualPosition\u001b-10.0,-10.0\u001aChildBlocks\u001bCreate Object1\u001aElseChildBlock\u001bnil\u001aInputs\u001bColor\u001b0\u001b3FC\u001bComment\u001b0\u001bROOT\u001aOutputs\u001a\u001aBlock\u001aType\u001bCreateObject\u001aName\u001bCreate Object1\u001aVisualPosition\u001b0.0,0.0\u001aChildBlocks\u001aElseChildBlock\u001bnil\u001aInputs\u001bParent\u001b0\u001bscript.Parent\u001bClassName\u001b0\u001bUICorner\u001aOutputs\u001bObject\u001bcorner",
+  "compressedBase64": "fY5NbsIwEEbvMbPpAcAyyQ0YEYkNQQhYsHPDSLjYnsh2Fr19hQ2tmgWbkebvew9gc7VZIpDxHM1eks1WAjaq7RZatevuubmIeNSKGoC1k+EOx++RkcR7DrmBnfGMh74/wtmmybjfoOVKK70oFehm3bV8J6TIJvNH//nFQ17BxiX+W2OwDrZhnHJCEicRNbYdvXCoK6qf8uPkv1HJrbHVakaa+T3sZm5vZPYmVn4aoh2zevbkTEoFpvG0JYmB48sOKxiHMv0B",
+  "encoded": "\u001a0000000000000004\u001b@n&y&tM|I,hil1eA_i[/QwsM3L<Cy&AmDZE(9N)?E,!%4SrdB}VY _7qX{B8>ems,UG1ENijUDU4@o]j;oT@/**LM6D6H&Lb+/t(ixwMQ^=xh&a(M[z%RG,!#yz_&+ O^4BOXW?eGlUpWcj1x`;`pQ?x~s.f+`9w8-7!L<[10MgGMJ[oMI|5 b,5,(u`J6B#$!*ke,trt.a=PT>.('rr-F5(o]dbVNaHOSY!QZT;U0?8Swy)[VA"
+}

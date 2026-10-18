@@ -1,0 +1,10 @@
+{
+  "source": "local part = Instance.new(\"Part\")\nunrecognizedCall(part)\nprint(\"safe remainder\")\n",
+  "blocks": 2,
+  "skippedFeatures": [
+    "Skip: unrecognizedCall(part)"
+  ],
+  "serialized": "\u001a\u001aEditor\u001aCameraPosition\u001b2.3F,0.3BF\u001aCameraZoom\u001b0.C2\u001a\u001aBlock\u001aType\u001bComment2\u001aName\u001bROOT\u001aVisualPosition\u001b-10.0,-10.0\u001aChildBlocks\u001bCreate Object1\u001aElseChildBlock\u001bnil\u001aInputs\u001bColor\u001b0\u001b3FC\u001bComment\u001b0\u001bROOT\u001aOutputs\u001a\u001aBlock\u001aType\u001bCreateObject\u001aName\u001bCreate Object1\u001aVisualPosition\u001b0.0,0.0\u001aChildBlocks\u001bPrint1\u001aElseChildBlock\u001bnil\u001aInputs\u001bParent\u001b0\u001bscript.Parent\u001bClassName\u001b0\u001bPart\u001aOutputs\u001bObject\u001bpart\u001a\u001aBlock\u001aType\u001bPrint\u001aName\u001bPrint1\u001aVisualPosition\u001b3.0,0.0\u001aChildBlocks\u001aElseChildBlock\u001bnil\u001aInputs\u001bText\u001b0\u001bsafe remainder\u001aOutputs",
+  "compressedBase64": "fc5LasMwEAbge8xscoBUKPYNImLopjbFdNGdak+pGj3MSIb29sWS3YcL2QikGf3/B3AZTQoMSjti3YVokgkeK1E3Rynqc7NOnkNwKIWqAM42DFfoPydCFZwjnyp40I7wsW17eDJx1vY76O4khTzmE9SbsWP+HVEx6USH9uWdhnSCi430M0ZvLNz7aU4RVbCBUWLdqK0OZalq57Ss/BXl3BJbVLumnW/R7W0dG3/T1GkujDiwmZJY78rqGHOnXFbSBsTSjdPy9hubi4py7dzp6v+6G6yePjJKv9KByWnjR+IN8QU=",
+  "encoded": "\u001a0000000000000004\u001b@n0ykuM|wA6qVj<JO6[ht}x'Cmp16,F$#k6ZdYr03imqTIi9)u`(<{:IF{#A*IhcHt.o#-CXfZs&;OR$NcF-ATyN~E^ ]W^ArlNuw3:=*Wc;L)ed!}aMii^!'U&'a/6UDpSZ8prVx>Z(g*dK!vFUAF;gPbb,7m%w_2J,1eb%VS:X9Dh&VvwJ*7^N56P+{)v`DzwfffV/hk/:G:{!dlumV-!nFMRhdOa7EPJK4n?<rz$E9zY<B=>%'*vO~7B:DeF&HT,>+KDOXe!s`a6^6'.FCB"
+}

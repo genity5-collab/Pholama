@@ -277,7 +277,7 @@ export function createWorkspace(host, env) {
   // UI Elements
   let topEl, mainEl, leftEl, centreWrapEl, centreEl, bottomEl, splitHEl, splitVEl;
   let promptEl, projSelEl, newProjInputEl, modelSelEl, modeSelEl, modeNoteEl, attachmentsEl, startBtnEl, resolveAskEl;
-  let dashCardsEl, taskHistEl, searchInputEl, searchHitsEl, treeContainerEl, newFileBtn, newFolderBtn, editorAreaEl, editorSaveBtn, editorTitleEl;
+  let dashCardsEl, taskHistEl, searchInputEl, searchHitsEl, treeContainerEl, newFileBtn, newFolderBtn, editorAreaEl, editorSaveBtn, editorEncodeBtn, editorTitleEl;
   let stageBarEl, planContainerEl, stepsTimelineEl, changesDiffEl, reportCardEl;
   let chatEl, chatFeedEl, composerEl, patchesEl, ideEl, treeColEl, editorColEl, tabsHostEl, crumbHostEl, codeHostEl, splitTEl;
   const tabs = makeTabs(), dirty = new Set();
@@ -330,6 +330,7 @@ export function createWorkspace(host, env) {
     editorTitleEl = el('div', { className: 'ide-title', textContent: 'No file open' });
     editorAreaEl = el('textarea', { className: 'ide-edit', spellcheck: 'false', hidden: true });
     editorSaveBtn = el('button', { className: 'ws-btn ws-btn-primary', textContent: 'Save File', onclick: handleSaveFile, disabled: true });
+    editorEncodeBtn = el('button', { className: 'ws-btn', textContent: 'Encode for RetroStudio', title: 'Turn this Lua file into the string RetroStudio imports', onclick: handleEncodeRetro, disabled: true, hidden: true });
     editorAreaEl.addEventListener('input', () => { if (S.openFile) { dirty.add(S.openFile.name); paintTabs(); } });
 
     // chat panel: messages (plan, steps, report), the patches card, and the composer at the bottom
@@ -372,7 +373,7 @@ export function createWorkspace(host, env) {
     codeHostEl = el('div', { className: 'ide-code-host' }, [el('div', { className: 'ide-empty', textContent: 'Open a file from the explorer, or ask the assistant to change something.' })]);
     editorColEl = el('div', { className: 'ide-editor' }, [
       tabsHostEl, crumbHostEl,
-      el('div', { className: 'ide-editor-bar' }, [editorTitleEl, editorSaveBtn]),
+      el('div', { className: 'ide-editor-bar' }, [editorTitleEl, editorEncodeBtn, editorSaveBtn]),
       codeHostEl, editorAreaEl
     ]);
 
@@ -687,7 +688,7 @@ export function createWorkspace(host, env) {
     crumbHostEl.replaceChildren();
     codeHostEl.replaceChildren();
     if (!name) {
-      editorTitleEl.textContent = 'No file open'; editorAreaEl.hidden = true; editorSaveBtn.disabled = true; S.openFile = null;
+      editorTitleEl.textContent = 'No file open'; editorAreaEl.hidden = true; editorSaveBtn.disabled = true; editorEncodeBtn.hidden = true; S.openFile = null;
       codeHostEl.append(el('div', { className: 'ide-empty', textContent: 'Open a file from the explorer, or ask the assistant to change something.' }));
       return;
     }
@@ -698,6 +699,7 @@ export function createWorkspace(host, env) {
     const before = ch && typeof ch.before === 'string' ? ch.before : null;
     S.openFile = { name, content: text };
     editorSaveBtn.disabled = false;
+    { const isLua = /\.luau?$/i.test(name); editorEncodeBtn.hidden = !isLua; editorEncodeBtn.disabled = !isLua; }
     if (S.editing) { editorAreaEl.hidden = false; editorAreaEl.value = text; return; }
     editorAreaEl.hidden = true;
     const rows = (before != null && before !== text) ? diffRows(before, text) : plainRows(text);
@@ -725,6 +727,36 @@ export function createWorkspace(host, env) {
     }
   }
 
+  // RetroStudio: turn the open Lua file into the string the RetroStudio plugin imports. The encoder runs on the Pholama server
+  // (it reads the code, never runs it). The user pastes the string into the plugin inside RetroStudio.
+  async function handleEncodeRetro() {
+    if (!S.openFile) return;
+    const source = editorAreaEl && !editorAreaEl.hidden ? editorAreaEl.value : (S.openFile.content || '');
+    const old = editorEncodeBtn.textContent; editorEncodeBtn.disabled = true; editorEncodeBtn.textContent = 'Encoding...';
+    try {
+      const r = await fetch('/api/retro/encode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source }) });
+      const d = await r.json().catch(() => ({}));
+      if (!r.ok || !d.encoded) throw new Error(d.error || 'The encoder is not available here. Open the Pholama PC app to encode.');
+      showEncoded(S.openFile.name, d);
+    } catch (e) { showEncoded(S.openFile.name, { error: String(e.message || e) }); }
+    finally { editorEncodeBtn.textContent = old; editorEncodeBtn.disabled = false; }
+  }
+  function showEncoded(name, d) {
+    const old = document.getElementById('retroEncDialog'); if (old) old.remove();
+    const box = el('div', { id: 'retroEncDialog', className: 'ws-enc-dialog', role: 'dialog' });
+    const close = el('button', { className: 'ws-btn', textContent: 'Close', onclick: () => box.remove() });
+    if (d.error) { box.append(el('b', { textContent: 'Could not encode ' + name }), el('p', { textContent: d.error }), close); }
+    else {
+      const ta = el('textarea', { className: 'ide-edit ws-enc-text', readOnly: true, spellcheck: 'false' }); ta.value = d.encoded;
+      const copy = el('button', { className: 'ws-btn ws-btn-primary', textContent: 'Copy', onclick: async () => { try { await navigator.clipboard.writeText(d.encoded); } catch { ta.select(); document.execCommand('copy'); } copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1500); } });
+      const skipped = (d.skipped || []).length;
+      box.append(el('b', { textContent: 'Encoded ' + name + ': ' + d.blocks + ' blocks' }), ta,
+        el('ol', { className: 'retro-steps' }, [el('li', { textContent: 'Press Copy.' }), el('li', { textContent: 'In RetroStudio, paste it into your script to import the blocks.' })]),
+        skipped ? el('p', { className: 'ws-enc-skip', textContent: skipped + ' line(s) could not be turned into blocks: ' + d.skipped.slice(0, 4).join(' | ') }) : null,
+        el('div', { className: 'ws-enc-actions' }, [copy, close]));
+    }
+    (document.getElementById('workspace') || document.body).append(box);
+  }
   async function handleSaveFile() {
     if (!S.selectedProject || !S.openFile) return;
     if (!S.editing) { S.editing = true; paintCode(); editorAreaEl.focus(); return; }   // first press switches to editing

@@ -1,0 +1,10 @@
+{
+  "source": "local Players = game:GetService(\"Players\")\nlocal part = Instance.new(\"Part\")\npart.Parent = workspace\n",
+  "blocks": 2,
+  "skippedFeatures": [
+    "Skip: local Players = game:GetService(\"Players\")"
+  ],
+  "serialized": "\u001a\u001aEditor\u001aCameraPosition\u001b2.3F,0.3BF\u001aCameraZoom\u001b0.C2\u001a\u001aBlock\u001aType\u001bComment2\u001aName\u001bROOT\u001aVisualPosition\u001b-10.0,-10.0\u001aChildBlocks\u001bCreate Object1\u001aElseChildBlock\u001bnil\u001aInputs\u001bColor\u001b0\u001b3FC\u001bComment\u001b0\u001bROOT\u001aOutputs\u001a\u001aBlock\u001aType\u001bCreateObject\u001aName\u001bCreate Object1\u001aVisualPosition\u001b0.0,0.0\u001aChildBlocks\u001bSet Object Property1\u001aElseChildBlock\u001bnil\u001aInputs\u001bParent\u001b0\u001bscript.Parent\u001bClassName\u001b0\u001bPart\u001aOutputs\u001bObject\u001bpart\u001a\u001aBlock\u001aType\u001bSetObjectProperty\u001aName\u001bSet Object Property1\u001aVisualPosition\u001b3.0,0.0\u001aChildBlocks\u001aElseChildBlock\u001bnil\u001aInputs\u001bValue\u001b2\u001bworkspace\u001bProperty\u001b0\u001bParent\u001bObject\u001b0\u001bpart\u001aOutputs",
+  "compressedBase64": "fc/NasMwDAfw95AufYAuuMkb1DSwyxLW0sNuXiqYVycytsLo2w/HyT6y0YvBlvzXTwCHixUOoE1PwbQcrVgesCyqequKal/PlRfmHlWhS4C94+4Kp5sn1Nz3NEgJT6YnfG6aE5xtHI37CnrYqUJtpxP0m3WX6XdEHcgIbZrXd+pkBwcX6buMg3XwOPhRImp2HFBhVetlHKo8qhkltfwWTbk5NqtWk1a+pFvbjiRz+6YN7CnI7Z6wNSGjYhesl2K+a2dinAQqtcjCxRyNPr39pB9JcmkZmv3/alZbVH+3uAM+GzcSlvjB4Rq96QiX4ExN+hmpMnOmfwI=",
+  "encoded": "\u001a0000000000000004\u001b7q)9kuK'TBy@R>xVA$_S0Jf5U?_M5P$h@p]|K7C)=dI>8rNnTrfJJ(df``rbZTCi$JB/#54,a4veis@vm](6i!OVw[P=M6`=a{bK3$>a@puk@:h}7t'0)tBm|1pj0T3#}|@89O<!EbxrroladKNUgw*StgQb'igTAYVpyTUUi<#V/L%9pCthSf+I~ch4qwN-_:wa/*'*77Sk)gEmu/1M0/jkh.`s]o^&dNM4i$>><'8$-RGnUWf!9HBRCJ^,8rzrPZak<+?`6-m!z6j:}ofV4#4t~@!J!wp5q;Z;4kzrac4R#,oDA"
+}

@@ -1,0 +1,12 @@
+{
+  "source": "local button = Instance.new(\"TextButton\")\nlocal function onClick()\n    print(\"clicked\")\nend\nbutton.MouseButton1Click:Connect(onClick)\n",
+  "blocks": 1,
+  "skippedFeatures": [
+    "Skip: local function onClick()print(\"clicked\")",
+    "Skip: end",
+    "Skip: button.MouseButton1Click:Connect(onClick)"
+  ],
+  "serialized": "\u001a\u001aEditor\u001aCameraPosition\u001b2.3F,0.3BF\u001aCameraZoom\u001b0.C2\u001a\u001aBlock\u001aType\u001bComment2\u001aName\u001bROOT\u001aVisualPosition\u001b-10.0,-10.0\u001aChildBlocks\u001bCreate Object1\u001aElseChildBlock\u001bnil\u001aInputs\u001bColor\u001b0\u001b3FC\u001bComment\u001b0\u001bROOT\u001aOutputs\u001a\u001aBlock\u001aType\u001bCreateObject\u001aName\u001bCreate Object1\u001aVisualPosition\u001b0.0,0.0\u001aChildBlocks\u001aElseChildBlock\u001bnil\u001aInputs\u001bParent\u001b0\u001bscript.Parent\u001bClassName\u001b0\u001bTextButton\u001aOutputs\u001bObject\u001bbutton",
+  "compressedBase64": "fY5NasMwEEbvMbPpARKh2DewiKGbOBSTRXaKM1C1ksZIY2hvXyIlKfWim4H5+94D2F+dcAJjAyV75OzEccRGtf1Gq7br75szc0CtTAPQeZ4+YfyeCQ2HQFEaONhA+DYMI5xcXqx/Bm13WulNqWDenb+W74wmkRV6GS4fNMkO9j7T7xqj8/Aa50UyGvacUGPbmwcOdUUNi9xO/hqV3BpbrVakld/NbuX2j8zRpsrPU3KzqHtvvM25wDSO9CXdIsLx4YcVjZcy/QE=",
+  "encoded": "\u001a0000000000000004\u001b@n&ykuM|I,hil1m{*WSrdeOu$G|GgPU2rjXdWZHMh T#cv4Mh]G:Phd^cVT?no>aGi.N3K`.(J.he-}:_6Wg%_vjsC]OZCF+!5^&u@$t%J-NFJ!&1F;l,Q>a-pt]d}a:[O/a]|5$_%]qP4.Lw3r qV!y6}erL`!wG+jgw=bybu_TXS-?rK93[XneB#^_Jc{lclw-y4`_)9.)@`V=n1-^;cx11>&:5/|f4,OyFN@H'ml'ped(6)[VA"
+}

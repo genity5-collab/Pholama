@@ -1,0 +1,11 @@
+{
+  "source": "local button = Instance.new(\"TextButton\")\nbutton.MouseButton1Down:Connect(function()\n    print(\"down\")\nend)\n",
+  "blocks": 2,
+  "skippedFeatures": [
+    "Skip: button.MouseButton1Down:Connect(function()",
+    "Skip: end)"
+  ],
+  "serialized": "\u001a\u001aEditor\u001aCameraPosition\u001b2.3F,0.3BF\u001aCameraZoom\u001b0.C2\u001a\u001aBlock\u001aType\u001bComment2\u001aName\u001bROOT\u001aVisualPosition\u001b-10.0,-10.0\u001aChildBlocks\u001bCreate Object1\u001aElseChildBlock\u001bnil\u001aInputs\u001bColor\u001b0\u001b3FC\u001bComment\u001b0\u001bROOT\u001aOutputs\u001a\u001aBlock\u001aType\u001bCreateObject\u001aName\u001bCreate Object1\u001aVisualPosition\u001b0.0,0.0\u001aChildBlocks\u001bPrint1\u001aElseChildBlock\u001bnil\u001aInputs\u001bParent\u001b0\u001bscript.Parent\u001bClassName\u001b0\u001bTextButton\u001aOutputs\u001bObject\u001bbutton\u001a\u001aBlock\u001aType\u001bPrint\u001aName\u001bPrint1\u001aVisualPosition\u001b3.0,0.0\u001aChildBlocks\u001aElseChildBlock\u001bnil\u001aInputs\u001bText\u001b0\u001bdown\u001aOutputs",
+  "compressedBase64": "fc7NSsQwEMDx95i5+ABryLZv0LAFL7ZI8eAt2waMJpmSTFHfXpp0V62wl0C+5v8DOE2WKYLS3kTdU7JsKWAl6vYgRd20280LkUcpVAXQOBrfYfiaDSry3gSu4FF7g09dN8CzTYt210H3RynkIa+gXq2b8u+EKhrN5q47v5mRj3ByyfxcY7AOHsK8cEJFjiJKrFt1yaEsqW7h9clfUZ5bxhbVrrTzrbq9rY823DT1OhZGGqOdWWx75XRKuSlxMJ/cLMwULkwsAjyX09/oHCzarb1T1v+VN3hrGyVO9HGNfwM=",
+  "encoded": "\u001a0000000000000004\u001b@n)9 uM|ymy@;0-qR7#.omauz&alGH)@llfsYNSz4c3%I5J$l!!]UW0SH{ym$iOHsZ61M:pyifQ&=3sqFH013/tgy<lcfd-jIk4Ur^pl9vf%Q;$@7?'@Jg3A-!_v2$'+wx]W?x~sL701[rs3ASplM.C`5Rlx*yeR #U}ctutN (b:J.3#-o-!ThPhomp[y0Ha+)ID4O8W2A7sqd_jJ*,0g8He,Ek!9@!snkO~S`m=^}Sn0w;JN C;np>X4atG/$?Wz}`*p'$(l9'F]AlD;A"
+}
