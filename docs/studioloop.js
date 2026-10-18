@@ -21,6 +21,8 @@ export const LUA_RULES = [
   'Use ONLY properties, methods and enums that really exist. If a [Roblox documentation] brief is included below, rely on it exactly and do not invent names it does not list. Never guess an API: when unsure, build it from plain Parts.',
   'Rotation: use part.CFrame = CFrame.new(x, y, z) * CFrame.Angles(math.rad(rx), math.rad(ry), math.rad(rz)) or part.Orientation = Vector3.new(rx, ry, rz) in degrees. Size always stays in the part\'s own axes, so a part turned 90 degrees keeps its Size.',
   'Position is the CENTRE of a part, so a part of height h that rests on the ground has Position.Y = h / 2. A WedgePart is a ramp: its tall edge is at the back and it slopes down toward the front. For a pitched roof use two WedgeParts turned to face opposite ways, each as wide as half the roof.',
+  'RetroStudio models: build ONE model (local model = Instance.new("Model", workspace)), centred on x = 0, z = 0, resting on the ground, and set model.PrimaryPart to its main part so the whole model can be moved as one. Real-world scale in studs: a person is about 5 tall and 2 wide, a door 4 x 7, a house 20 x 12 x 10, a tree 14 tall, a car 12 long. Use sizes in whole or half studs.',
+  'Build from the ground up: the first part sits on the ground (Position.Y = its height / 2), and each next part is placed from the Size and Position of the part under or beside it (for example, wall.Position.Y = floor top + wall height / 2). Never place a part by eye.',
   'Check your own work before replying: every part has a name, a size in studs, a colour and a parent; nothing overlaps by accident; parts that should touch actually touch (position them from the sizes, not by eye).'
 ].join('\n');
 
@@ -55,6 +57,22 @@ export function judge(sim, skipped = [], opts = {}) {
   for (const p of parts) { const k = p.position.map(n => Math.round(n * 10) / 10).join(',') + '|' + p.size.map(n => Math.round(n * 10) / 10).join(','); sameSpot.set(k, (sameSpot.get(k) || 0) + 1); }
   const stacked = [...sameSpot.values()].filter(n => n > 1).length;
   if (stacked) problems.push('Some parts are exact copies sitting in the same place. Give each part its own position or remove the duplicate.');
+  // Size and placement, in the way RetroStudio shows them. Parts here are [x, depth, height] with Position at the CENTRE, so a part's bottom is height - size/2.
+  if (parts.length >= 3) {
+    const box = p => { const R = p.rot || [1, 0, 0, 0, 1, 0, 0, 0, 1], h = [0, 0, 0];
+      for (let i = 0; i < 3; i++) h[i] = (Math.abs(R[i * 3]) * p.size[0] + Math.abs(R[i * 3 + 1]) * p.size[1] + Math.abs(R[i * 3 + 2]) * p.size[2]) / 2;   // half extent after rotation
+      return { lo: p.position.map((v, i) => v - h[i]), hi: p.position.map((v, i) => v + h[i]) }; };
+    const bx = parts.map(box), minZ = Math.min(...bx.map(b => b.lo[2])), maxZ = Math.max(...bx.map(b => b.hi[2]));
+    if (minZ > 1.5) problems.push(`The whole model floats ${minZ.toFixed(1)} studs above the ground. The lowest part should rest at height 0: a part's Position is its CENTRE, so a part of height h on the ground has Position.Y = h / 2.`);
+    else if (minZ < -1.5) problems.push(`The model sinks ${Math.abs(minZ).toFixed(1)} studs below the ground. Raise it so the lowest part rests at height 0 (Position.Y = height / 2 for a part on the ground).`);
+    const span = [0, 1, 2].map(i => Math.max(...bx.map(b => b.hi[i])) - Math.min(...bx.map(b => b.lo[i]))), big = Math.max(...span, ...parts.map(p => Math.max(...(p.trueSize || p.size))));   // the preview caps a part at 60 studs, but the script's real size is judged
+    if (big > 120) problems.push(`The model is ${Math.round(big)} studs across, far too big (a house is about 20 studs, a person about 5 tall). Scale everything down.`);
+    if (big < 1.5) problems.push('The whole model is smaller than 1.5 studs, too small to see. Scale it up (a person is about 5 studs tall, a house about 20 wide).');
+    // A part that touches nothing else is a stray piece: its box is not within 0.6 stud of any other part's box.
+    const near = (a, b) => [0, 1, 2].every(i => a.lo[i] <= b.hi[i] + 0.6 && b.lo[i] <= a.hi[i] + 0.6);
+    const stray = parts.filter((_, i) => !bx.some((b, j) => j !== i && near(bx[i], b)));
+    if (stray.length && stray.length < parts.length) problems.push(`${stray.length} part${stray.length === 1 ? '' : 's'} touch nothing else (${stray.slice(0, 3).map(p => p.name).join(', ')}). Position ${stray.length === 1 ? 'it' : 'them'} from the sizes of the neighbouring parts so the pieces meet.`);
+  }
   const unconvertible = (skipped || []).filter(s => !/^Skip: end$/.test(s));
   if (unconvertible.length) problems.push(`${unconvertible.length} line${unconvertible.length === 1 ? '' : 's'} cannot be converted to blocks: ${unconvertible.slice(0, 4).map(s => s.replace(/^Skip(?:ped[^:]*)?:\s*/, '').slice(0, 60)).join(' | ')}. Rewrite using only the allowed lines, or a --@block directive.`);
   return { ok: problems.length === 0, problems, parts: parts.length };

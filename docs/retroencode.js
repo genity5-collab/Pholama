@@ -62,7 +62,13 @@ function hexNumber(v) {
 }
 function typedValue(value) {
   const v = value.trim();
-  if (NUM.test(v)) return ESC + '1' + ESC + hexNumber(v) + ESC + 'Number';
+  if (NUM.test(v)) {
+    // Whole, non-negative numbers keep the known hex "typed Number" form. A fraction or a negative would be cut to a whole number (0.5 became 0, -5.5 became 0),
+    // so those are written as plain text, the same plain form RetroStudio uses for positions such as 0,50,0.
+    const plain = v.replace(/_/g, '');
+    if (/^-/.test(plain) || /\./.test(plain)) return ESC + '0' + ESC + String(Number(plain));
+    return ESC + '1' + ESC + hexNumber(v) + ESC + 'Number';
+  }
   if (v.length >= 2 && '"\''.includes(v[0]) && v[v.length - 1] === v[0]) return ESC + '1' + ESC + esc(v.slice(1, -1)) + ESC + 'String';
   if (v === 'true') return ESC + '1' + ESC + '1' + ESC + 'Bool';
   if (v === 'false') return ESC + '1' + ESC + '0' + ESC + 'Bool';
@@ -172,8 +178,10 @@ function compile(source) {
     else top.push(b);
     return b;
   };
+  const objVars = new Set();   // names made by `local X = Instance.new(...)`: later uses of X are VARIABLE references (mode 2), not literal paths
+  const objRef = name => (objVars.has(name) ? ESC + '2' + ESC + name : ESC + '0' + ESC + name);
   const setProp = (obj, prop, valueRef) => add('SetObjectProperty', 'Set Object Property',
-    ESC + 'Value' + valueRef + ESC + 'Property' + ESC + '0' + ESC + prop + ESC + 'Object' + ESC + '0' + ESC + obj);
+    ESC + 'Value' + valueRef + ESC + 'Property' + ESC + '0' + ESC + prop + ESC + 'Object' + objRef(obj));
   const ref = name => ESC + '2' + ESC + name;
 
   for (const rawLine of normalizeModern(source).split('\n')) {
@@ -247,11 +255,13 @@ function compile(source) {
     }
     if ((m = /^local\s+(\w+)\s*=\s*\{\s*\}$/.exec(line))) { add('CreateTable', 'Create Table', '', ESC + 'TableVariable' + ESC + m[1]); continue; }
     if ((m = /^local\s+(\w+)\s*=\s*Instance\.new\s*\(\s*(['"])(\w+)\2\s*,\s*([\w.]+)\s*\)$/.exec(line))) {
-      add('CreateObject', 'Create Object', ESC + 'Parent' + ESC + '0' + ESC + m[4] + ESC + 'ClassName' + ESC + '0' + ESC + m[3], ESC + 'Object' + ESC + m[1]);
+      add('CreateObject', 'Create Object', ESC + 'Parent' + objRef(m[4]) + ESC + 'ClassName' + ESC + '0' + ESC + m[3], ESC + 'Object' + ESC + m[1]);
+      objVars.add(m[1]);
       continue;
     }
     if ((m = /^local\s+(\w+)\s*=\s*Instance\.new\s*\(\s*(['"])(\w+)\2\s*\)$/.exec(line))) {
       add('CreateObject', 'Create Object', ESC + 'Parent' + ESC + '0' + ESC + 'script.Parent' + ESC + 'ClassName' + ESC + '0' + ESC + m[3], ESC + 'Object' + ESC + m[1]);
+      objVars.add(m[1]);
       continue;
     }
     if ((m = /^local\s+(\w+)\s*=\s*(.+)$/.exec(line)) && isSimpleValue(m[2])) {
@@ -351,7 +361,7 @@ export const blockNames = () => Object.keys(CATALOG);
 export async function encodeLua(source) {
   const r = compile(String(source || ''));
   if (!r.blocks) return { encoded: '', blocks: 0, skipped: r.skipped.slice(0, 40) };
-  return { encoded: HEADER + encodeBase93(await deflateRaw(r.serialized)), blocks: r.blocks, skipped: r.skipped.slice(0, 40) };
+  return { encoded: HEADER + encodeBase93(await deflateRaw(r.serialized)), serialized: r.serialized, blocks: r.blocks, skipped: r.skipped.slice(0, 40) };
 }
 /** Decode an encoded string and count its blocks (sanity check of what we hand to the user). */
 export async function checkEncoded(encoded) {
