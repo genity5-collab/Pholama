@@ -51,9 +51,15 @@ setTimeout(() => { console.log('FAIL timed out after 90s'); process.exit(1); }, 
     ok('pressing Run rebuilds it: the active script now builds 2 parts', /\b2 supported parts/.test(after.log), after.log);
     ok('and the Explorer shows 2 parts for that model', after.items.some(t => /^Script/.test(t) === false) || /2 parts/.test(await ev(`document.querySelector('#wsTree').textContent`)), after.items.join('|'));
 
-    // There is no Encode button: only the AI encodes. The string box stays hidden until the AI's own run fills it.
-    ok('there is no Encode button anywhere', (await ev(`!document.querySelector('#retroEncode') && ![...document.querySelectorAll('button')].some(b => /^encode/i.test(b.textContent.trim()))`)) === true);
-    ok('the encoded-string box is hidden until the AI produces one', (await ev(`document.querySelector('#retroEncOut').hidden`)) === true);
+    // The manual Encode button turns the script in the editor into the RetroStudio string, right in the page. The AI cannot press buttons, so this is how you encode.
+    ok('there is an Encode button', (await ev(`!!document.querySelector('#retroEncode')`)) === true);
+    ok('the string box is hidden until Encode is pressed', (await ev(`document.querySelector('#retroEncOut').hidden`)) === true);
+    await ev(`document.querySelector('#retroEncode').click()`); await wait(1500);
+    const enc = await ev(`JSON.stringify({ shown: !document.querySelector('#retroEncOut').hidden, text: document.querySelector('#retroEncText').value.slice(0, 20), len: document.querySelector('#retroEncText').value.length, info: document.querySelector('#retroEncInfo').textContent, log: document.querySelector('#retroLog').textContent.slice(0, 120) })`);
+    const e = JSON.parse(enc);
+    ok('pressing Encode shows a RetroStudio string with a block count', e.shown && e.len > 40 && /\d+ blocks/.test(e.info), enc);
+    ok('the string starts with the RetroStudio header', e.text.charCodeAt(0) === 26, JSON.stringify(e.text));
+    ok('the log says how many blocks were made', /Encoded \d+ blocks/.test(e.log), e.log);
     ok('Copy and the three viewport lighting sliders exist', (await ev(`!!document.querySelector('#retroCopy') && ['lightTime','lightBright','lightAmbient','lightFog'].every(i => document.getElementById(i))`)) === true);
     ok('no JavaScript errors anywhere', errs.length === 0, errs.join(' | '));
   } catch (e) { ok('no crash', false, e && e.stack || e); }

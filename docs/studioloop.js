@@ -16,7 +16,12 @@ export const LUA_RULES = [
   'Colours: BrickColor.new("Bright red") or Color3.fromRGB(r, g, b). Materials: Enum.Material.Wood, Metal, Glass, Neon, Brick, Grass, Concrete, SmoothPlastic. Shapes: part.Shape = Enum.PartType.Ball.',
   'Always give every part a parent (second argument of Instance.new) and set Anchored = true so it does not fall apart.',
   'For behaviour (touch, click, loops over time) write a separate short script in its own ```lua block, for example part.Touched:Connect(function(hit) ... end).',
-  'Put every script in its own ```lua code block.'
+  'Put every script in its own ```lua code block.',
+  'DOCUMENT FIRST, then build. Start every script with a short comment header: -- Plan: what you will build, the parts it needs, their sizes and colours. -- Notes: anything the Roblox documentation brief below says that you rely on. When you change an existing script, add one line under -- Changes: saying what you changed and why, and keep the older lines.',
+  'Use ONLY properties, methods and enums that really exist. If a [Roblox documentation] brief is included below, rely on it exactly and do not invent names it does not list. Never guess an API: when unsure, build it from plain Parts.',
+  'Rotation: use part.CFrame = CFrame.new(x, y, z) * CFrame.Angles(math.rad(rx), math.rad(ry), math.rad(rz)) or part.Orientation = Vector3.new(rx, ry, rz) in degrees. Size always stays in the part\'s own axes, so a part turned 90 degrees keeps its Size.',
+  'Position is the CENTRE of a part, so a part of height h that rests on the ground has Position.Y = h / 2. A WedgePart is a ramp: its tall edge is at the back and it slopes down toward the front. For a pitched roof use two WedgeParts turned to face opposite ways, each as wide as half the roof.',
+  'Check your own work before replying: every part has a name, a size in studs, a colour and a parent; nothing overlaps by accident; parts that should touch actually touch (position them from the sizes, not by eye).'
 ].join('\n');
 
 // Added ONLY when the RetroStudio encoder is switched on: the script is also converted to RetroStudio blocks, so the one extra rule is to keep to what blocks can do.

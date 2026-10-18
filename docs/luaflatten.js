@@ -183,7 +183,15 @@ class LuaTable { constructor() { this.hash = new Map(); this.arr = []; } get(k) 
   len() { return this.arr.length; } }
 class Vec { constructor(x, y, z) { this.x = x; this.y = y; this.z = z; } }
 class Col { constructor(r, g, b) { this.r = r; this.g = g; this.b = b; } }
-class Cf { constructor(x, y, z) { this.x = x; this.y = y; this.z = z; } }
+const IDENT = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+class Cf { constructor(x, y, z, r) { this.x = x; this.y = y; this.z = z; this.r = r || IDENT; } }
+// Roblox rotation order: CFrame.Angles(rx, ry, rz) = Rx * Ry * Rz (radians). 3x3 matrices, row-major.
+const mmul = (a, b) => { const o = []; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) o.push(a[i * 3] * b[j] + a[i * 3 + 1] * b[3 + j] + a[i * 3 + 2] * b[6 + j]); return o; };
+const rotX = t => [1, 0, 0, 0, Math.cos(t), -Math.sin(t), 0, Math.sin(t), Math.cos(t)];
+const rotY = t => [Math.cos(t), 0, Math.sin(t), 0, 1, 0, -Math.sin(t), 0, Math.cos(t)];
+const rotZ = t => [Math.cos(t), -Math.sin(t), 0, Math.sin(t), Math.cos(t), 0, 0, 0, 1];
+const anglesMat = (rx, ry, rz) => mmul(mmul(rotX(rx), rotY(ry)), rotZ(rz));
+const rotVec = (r, v) => ({ x: r[0] * v.x + r[1] * v.y + r[2] * v.z, y: r[3] * v.x + r[4] * v.y + r[5] * v.z, z: r[6] * v.x + r[7] * v.y + r[8] * v.z });
 class Inst { constructor(cls) { this.cls = cls; this.props = {}; this.kids = []; this.parent = null; } }
 class Fn { constructor(node, env) { this.node = node; this.env = env; } }
 class Native { constructor(f) { this.f = f; } }
@@ -231,7 +239,7 @@ function flattenInner(source, opts = {}) {
   def('game', Object.assign(new Inst('DataModel'), { props: { Name: 'game' } }));
   def('Instance', tbl({ new: nat((a, line) => { const cls = String(a[0]); if (!/^[A-Za-z]+$/.test(cls)) fail('Instance.new needs a class name.', line); return newInst(cls, a[1]); }) }));
   def('Vector3', tbl({ new: nat((a, line) => new Vec(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line))), zero: new Vec(0, 0, 0), one: new Vec(1, 1, 1) }));
-  def('CFrame', tbl({ new: nat((a, line) => (a[0] instanceof Vec ? new Cf(a[0].x, a[0].y, a[0].z) : new Cf(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line))), 'CFrame'), Angles: nat(() => new Cf(0, 0, 0)) }));
+  def('CFrame', tbl({ new: nat((a, line) => (a[0] instanceof Vec ? new Cf(a[0].x, a[0].y, a[0].z) : new Cf(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line))), 'CFrame'), Angles: nat((a, line) => new Cf(0, 0, 0, anglesMat(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line)))), fromEulerAnglesXYZ: nat((a, line) => new Cf(0, 0, 0, anglesMat(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line)))), fromOrientation: nat((a, line) => new Cf(0, 0, 0, mmul(mmul(rotY(asNum(a[1] ?? 0, line)), rotX(asNum(a[0] ?? 0, line))), rotZ(asNum(a[2] ?? 0, line))))), identity: new Cf(0, 0, 0) }));
   def('Color3', tbl({ new: nat((a, line) => new Col(Math.round(asNum(a[0] ?? 0, line) * 255), Math.round(asNum(a[1] ?? 0, line) * 255), Math.round(asNum(a[2] ?? 0, line) * 255))), fromRGB: nat((a, line) => new Col(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line))) }));
   const brickTable = new LuaTable();
   brickTable.set('new', nat((a, line) => { const nm = typeof a[0] === 'string' ? a[0] : null; const rgb = nm && brickRgb(nm); const c = new Col(...(rgb || [163, 162, 165])); c.brick = nm || 'Medium stone grey'; return c; }));
@@ -277,8 +285,9 @@ function flattenInner(source, opts = {}) {
     if (obj instanceof LuaTable) { obj.set(key, val); return; }
     if (obj instanceof Inst) {
       if (key === 'Parent') { if (obj.parent) obj.parent.kids = obj.parent.kids.filter(k => k !== obj); obj.parent = val instanceof Inst ? val : null; if (obj.parent) obj.parent.kids.push(obj); return; }
-      if (key === 'Position' && val instanceof Vec) { obj.props.Position = val; delete obj.props.CFrame; return; }
+      if (key === 'Position' && val instanceof Vec) { const keep = obj.props.CFrame instanceof Cf ? obj.props.CFrame.r : null; if (keep) { obj.props.CFrame = new Cf(val.x, val.y, val.z, keep); delete obj.props.Position; } else { obj.props.Position = val; delete obj.props.CFrame; } return; }
       if (key === 'CFrame' && val instanceof Cf) { obj.props.CFrame = val; delete obj.props.Position; return; }
+      if ((key === 'Orientation' || key === 'Rotation') && val instanceof Vec) { const d = Math.PI / 180, cur = obj.props.CFrame instanceof Cf ? obj.props.CFrame : obj.props.Position instanceof Vec ? new Cf(obj.props.Position.x, obj.props.Position.y, obj.props.Position.z) : new Cf(0, 0, 0); obj.props.CFrame = new Cf(cur.x, cur.y, cur.z, mmul(mmul(rotY(val.y * d), rotX(val.x * d)), rotZ(val.z * d))); delete obj.props.Position; return; }
       obj.props[key] = val; return;
     }
     fail(`Cannot set "${tstr(key)}" on this value.`, line);
@@ -288,8 +297,9 @@ function flattenInner(source, opts = {}) {
       if (a instanceof Vec && b instanceof Vec) return op === '+' ? new Vec(a.x + b.x, a.y + b.y, a.z + b.z) : op === '-' ? new Vec(a.x - b.x, a.y - b.y, a.z - b.z) : op === '*' ? new Vec(a.x * b.x, a.y * b.y, a.z * b.z) : new Vec(a.x / b.x, a.y / b.y, a.z / b.z);
       if (a instanceof Vec && typeof b === 'number') return op === '*' ? new Vec(a.x * b, a.y * b, a.z * b) : op === '/' ? new Vec(a.x / b, a.y / b, a.z / b) : fail('A Vector3 can only be multiplied or divided by a number.', line);
       if (typeof a === 'number' && b instanceof Vec && op === '*') return new Vec(a * b.x, a * b.y, a * b.z);
-      if (a instanceof Cf && b instanceof Vec) return op === '+' ? new Cf(a.x + b.x, a.y + b.y, a.z + b.z) : new Cf(a.x - b.x, a.y - b.y, a.z - b.z);
-      if (a instanceof Cf && b instanceof Cf && op === '*') return new Cf(a.x + b.x, a.y + b.y, a.z + b.z);
+      if (a instanceof Cf && b instanceof Cf && op === '*') { const t = rotVec(a.r, b); return new Cf(a.x + t.x, a.y + t.y, a.z + t.z, mmul(a.r, b.r)); }
+      if (a instanceof Cf && b instanceof Vec && op === '*') { const t = rotVec(a.r, b); return new Vec(a.x + t.x, a.y + t.y, a.z + t.z); }
+      if (a instanceof Cf && b instanceof Vec) return op === '+' ? new Cf(a.x + b.x, a.y + b.y, a.z + b.z, a.r) : new Cf(a.x - b.x, a.y - b.y, a.z - b.z, a.r);
     }
     const x = asNum(a, line), y = asNum(b, line);
     switch (op) { case '+': return x + y; case '-': return x - y; case '*': return x * y; case '/': return x / y; case '%': return x - Math.floor(x / y) * y; case '^': return Math.pow(x, y); case '//': return Math.floor(x / y); }
@@ -419,8 +429,9 @@ function flattenInner(source, opts = {}) {
       if (pr.CanCollide === false) lines.push(`${v}.CanCollide = false`);
       if (typeof pr.Transparency === 'number' && pr.Transparency > 0) lines.push(`${v}.Transparency = ${fmt(pr.Transparency)}`);
       const sh = enumName(pr.Shape); if (sh && /^(Ball|Cylinder|Block)$/.test(String(sh))) lines.push(`${v}.Shape = Enum.PartType.${sh}`);
-      // Roblox has Y up; the viewport draws [x, depth, height], so Y and Z swap here and only here.
-      result.parts.push({ name: typeof pr.Name === 'string' ? pr.Name : v, type: inst.cls === 'WedgePart' || inst.cls === 'CornerWedgePart' || inst.cls === 'TrussPart' ? inst.cls : 'Part', size: [size.x, size.z, size.y].map(n => Math.max(0.2, Math.min(60, n))), position: [pos.x, pos.z, pos.y].map(n => Math.max(-200, Math.min(200, n))), color: col ? [col.r, col.g, col.b] : [163, 162, 165], material: String(enumName(pr.Material) || 'Plastic'), anchored: pr.Anchored === undefined ? true : truthy(pr.Anchored), shape: sh || 'Block', transparency: typeof pr.Transparency === 'number' ? pr.Transparency : 0, parented: true, model: parentVar === 'workspace' ? null : parentVar });
+      // Roblox has Y up; the viewport draws [x, depth, height], so Y and Z swap here and only here. The rotation matrix is swapped the same way (P * R * P).
+      const rm = pr.CFrame instanceof Cf ? pr.CFrame.r : IDENT, sw = [0, 2, 1], rot = []; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) rot.push(rm[sw[i] * 3 + sw[j]]);
+      result.parts.push({ rot, name: typeof pr.Name === 'string' ? pr.Name : v, type: inst.cls === 'WedgePart' || inst.cls === 'CornerWedgePart' || inst.cls === 'TrussPart' ? inst.cls : 'Part', size: [size.x, size.z, size.y].map(n => Math.max(0.2, Math.min(60, n))), position: [pos.x, pos.z, pos.y].map(n => Math.max(-200, Math.min(200, n))), color: col ? [col.r, col.g, col.b] : [163, 162, 165], material: String(enumName(pr.Material) || 'Plastic'), anchored: pr.Anchored === undefined ? true : truthy(pr.Anchored), shape: sh || 'Block', transparency: typeof pr.Transparency === 'number' ? pr.Transparency : 0, parented: true, model: parentVar === 'workspace' ? null : parentVar });
     } else result.models.push({ name: typeof pr.Name === 'string' ? pr.Name : v, parts: 0 });
     for (const k of inst.kids) emit(k, v);
   };

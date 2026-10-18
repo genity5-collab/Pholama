@@ -20,6 +20,8 @@ import { extractLuauBlocks, simulateLuau, drawPreview, DEFAULT_CAMERA } from './
 import { attachViewControls } from './viewcontrols.js';
 import { studioLoop, rulesFor } from './studioloop.js';
 import * as WS from './studioworkspace-model.js';
+import { encodeLua } from './retroencode.js';
+import { lookup as docsLookup, briefFor as docsBrief } from './robloxdocs.js';
 
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
@@ -303,12 +305,12 @@ async function runStudioLoop(msg, token, isCloud) {
   const say = t => { if (log) log.textContent = t; };
   const base = (window.PHOLAMA && window.PHOLAMA.STUDIO_URL) || '';
   const encode = async source => {
+    // The encoder runs right here in the page: nothing to download, nothing to wait for, and it works offline.
     try {
-      const r = await fetch(base ? base + '/retro/encode' : '/api/retro/encode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source }) });
-      const d = await r.json().catch(() => ({}));
-      if (r.ok && d.encoded) return { ok: true, encoded: d.encoded, blocks: d.blocks, skipped: d.skipped || [] };
-      return { ok: false, error: d.error || 'The encoder is not available right now.', skipped: d.skipped || [], unavailable: !d.error };
-    } catch { return { ok: false, error: 'The encoder is not reachable right now.' }; }
+      const r = await encodeLua(source);
+      if (r.blocks && r.encoded) return { ok: true, encoded: r.encoded, blocks: r.blocks, skipped: r.skipped || [] };
+      return { ok: false, error: 'Nothing in that script could be turned into blocks.', skipped: r.skipped || [] };
+    } catch { return { ok: false, error: 'The encoder could not process that script.' }; }
   };
   const run = async source => {
     const sim = simulateLuau(source);
@@ -352,6 +354,20 @@ async function runStudioLoop(msg, token, isCloud) {
     msg.log('error', 'Not encoded: ' + result.verdict.problems.join(' '), 0);
   } else if (result.error) msg.log('error', 'Not encoded: ' + result.error, 0);
 }
+// Manual encoder: turns the script in the editor into the RetroStudio string, right in the page. The AI cannot press buttons, so this is how you encode.
+async function encodeNow() {
+  const code = $('#retroCode'), log = $('#retroLog'), out = $('#retroEncOut'), t = $('#retroEncText'), info = $('#retroEncInfo'); if (!code) return;
+  const say = x => { if (log) log.textContent = x; };
+  const src = code.value.trim(); if (!src) { say('Nothing to encode yet. Write or paste a script first.'); return; }
+  say('Encoding...');
+  try {
+    const sim = simulateLuau(code.value), source = sim.flat || code.value;   // loops and functions are already worked out in the flat form
+    const r = await encodeLua(source);
+    if (!r.blocks || !r.encoded) { if (out) out.hidden = true; say('Nothing in that script could be turned into blocks.' + (r.skipped && r.skipped.length ? ' Not supported: ' + r.skipped.slice(0, 4).join('; ') : '')); return; }
+    if (t) t.value = r.encoded; if (out) out.hidden = false; if (info) info.textContent = r.blocks + ' blocks';
+    say(`Encoded ${r.blocks} blocks.` + (r.skipped && r.skipped.length ? ` ${r.skipped.length} line${r.skipped.length === 1 ? '' : 's'} could not be converted: ${r.skipped.slice(0, 3).join('; ')}` : ' Press Copy, then paste it into RetroStudio.'));
+  } catch (e) { say('The encoder could not process that script.'); }
+}
 function initSiteAgentUi() {
   const plugin = $('#retroPluginBtn'); if (plugin) plugin.onclick = () => setRetroEnabled(!retroEnabled);
   const code = $('#retroCode'); if (code) code.addEventListener('input', () => {
@@ -360,6 +376,7 @@ function initSiteAgentUi() {
     clearTimeout(liveTimer); liveTimer = setTimeout(() => { renderRetroScript(); saveCurrentSession(); }, 250);                // Live edit on: rebuild the model as you type
   });
   const newScript = $('#wsNewScript'); if (newScript) newScript.onclick = () => { flushEditor(); const it = WS.addScript(studioWs, 'Script', ''); WS.activate(studioWs, it.id); renderScriptTabs(); renderRetroScript(); const c = $('#retroCode'); if (c) c.focus(); saveCurrentSession(); };
+  const enc = $('#retroEncode'); if (enc) enc.onclick = encodeNow;
   const test = $('#retroTest'); if (test) test.onclick = runRetroSafeTest;
   const preview = $('#retroPreview'); if (preview) preview.onclick = renderRetroScript;
   const download = $('#retroDownload'); if (download) download.onclick = downloadActiveScript;
@@ -620,7 +637,17 @@ async function send() {
   try {
     if (files.length) { attach = await prepare(text, history, m => msg.log('step', m, 0)); shownText = attach.content; }
     pendingImages = attach && attach.hasImages ? Math.min(4, (attach.seen || []).length) : 0;
-    history.push({ role: 'user', content: luaRequest ? shownText + '\n\n[Studio]\n' + rulesFor(retroForMessage) : shownText }); historyAdded = true; clearAttachments();
+    // Live search first: read the official Roblox documentation for what was asked, so the AI writes against real names instead of guessing.
+    let docsBrief_ = '';
+    if (luaRequest) {
+      try {
+        msg.log('step', 'Looking up the Roblox documentation...', 0);
+        const found = await docsLookup(text, async u => { const r = await fetch(u); if (!r.ok) throw new Error(String(r.status)); return r.text(); });
+        docsBrief_ = docsBrief(found);
+        if (found.docs.length) msg.log('result', 'Read the Roblox docs: ' + found.docs.map(d => d.name).join(', '), 0);
+      } catch { /* offline or blocked: carry on without the brief */ }
+    }
+    history.push({ role: 'user', content: luaRequest ? shownText + '\n\n[Studio]\n' + rulesFor(retroForMessage) + (docsBrief_ ? '\n\n' + docsBrief_ : '') : shownText }); historyAdded = true; clearAttachments();
     saveCurrentSession();
     const local = sel.value.startsWith('cpu:') || sel.value.startsWith('web:');
     if (local) { const ri = rememberIntent(text); if (ri && memOn) msg.log('result', await saveMemory(ri), 0); }

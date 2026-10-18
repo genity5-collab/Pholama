@@ -3,6 +3,7 @@ import { flatten } from './luaflatten.js';
 // It statically recognizes a tiny Instance.new/property subset; it never evals user or AI code.
 export const MAX_PARTS = 80;
 export const MAX_SOURCE_CHARS = 50000;
+import { facesFor } from './meshes.js';
 const PART_TYPES = new Set(['Part', 'WedgePart', 'CornerWedgePart', 'TrussPart']);
 const MATERIALS = new Set(['Plastic', 'SmoothPlastic', 'Wood', 'Concrete', 'Metal', 'Glass', 'Neon', 'Brick', 'Grass', 'Fabric']);
 const number3 = s => {
@@ -138,9 +139,13 @@ export function drawPreview(canvas, parts = [], lighting = DEFAULT_LIGHTING, cam
   // Zoom 1 fits the model: measure how big it is on screen at a known scale, then pick the scale that fills ~70% of the view. The camera zoom is on top.
   const probe = 10; let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
   const keep = CAM; CAM = DEFAULT_CAMERA_FLAT(keep.yaw);
-  for (const p of parts) for (const dx of [-1, 1]) for (const dy of [-1, 1]) for (const dz of [0, 1]) {
-    const q = project(p.position[0] + dx * p.size[0] / 2, p.position[1] + dy * p.size[1] / 2, p.position[2] + dz * p.size[2], 0, 0, probe);
-    if (q[0] < minX) minX = q[0]; if (q[0] > maxX) maxX = q[0]; if (q[1] < minY) minY = q[1]; if (q[1] > maxY) maxY = q[1];
+  for (const p of parts) {
+    const R = p.rot || [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    for (const dx of [-0.5, 0.5]) for (const dy of [-0.5, 0.5]) for (const dz of [-0.5, 0.5]) {   // the 8 corners of the part, turned by its rotation
+      const x = dx * p.size[0], y = dy * p.size[1], z = dz * p.size[2];
+      const q = project(R[0] * x + R[1] * y + R[2] * z + p.position[0], R[3] * x + R[4] * y + R[5] * z + p.position[1], R[6] * x + R[7] * y + R[8] * z + p.position[2], 0, 0, probe);
+      if (q[0] < minX) minX = q[0]; if (q[0] > maxX) maxX = q[0]; if (q[1] < minY) minY = q[1]; if (q[1] > maxY) maxY = q[1];
+    }
   }
   CAM = keep;
   const ground = project(0, 0, 0, 0, 0, probe), spanX = parts.length ? Math.max(maxX - minX, 40) : 240, spanY = parts.length ? Math.max(maxY - minY, 40) : 160;
@@ -158,21 +163,41 @@ export function drawPreview(canvas, parts = [], lighting = DEFAULT_LIGHTING, cam
     c.fillStyle = shade([99, 138, 72].map((v, i) => v * 0.7 + amb[i] * 0.3), lightK); c.beginPath(); c.moveTo(...A); c.lineTo(...B); c.lineTo(...C); c.lineTo(...D); c.closePath(); c.fill(); }
   c.strokeStyle = 'rgba(255,255,255,.10)'; c.lineWidth = 1;
   for (let n = -Math.floor(G); n <= G; n += G > 40 ? 8 : G > 20 ? 4 : G > 8 ? 2 : 1) { const a = project(n, -G, 0, cx, cy, scale), b = project(n, G, 0, cx, cy, scale), d = project(-G, n, 0, cx, cy, scale), e = project(G, n, 0, cx, cy, scale); c.beginPath(); c.moveTo(...a); c.lineTo(...b); c.moveTo(...d); c.lineTo(...e); c.stroke(); }
-  // paint far parts first: depth is x + y after the scene is turned by the camera, with height as a tie-break so a head is drawn after the torso under it
-  const ca = Math.cos(CAM.yaw), sa = Math.sin(CAM.yaw), depth = p => (p.position[0] * ca - p.position[1] * sa) + (p.position[0] * sa + p.position[1] * ca) + p.position[2] * 0.001;
-  const ordered = [...parts].sort((a, b) => depth(a) - depth(b));
-  for (const p of ordered) {
-    const [x, y, z] = p.position, [sx, sy, sz] = p.size, base = project(x, y, z, cx, cy, scale), top = project(x, y, z + sz, cx, cy, scale);
-    const dx = sx * scale * 0.36, dy = sy * scale * 0.36, dz = sz * scale * 0.72;
-    const left = [top[0] - dx, top[1] - dy], right = [top[0] + dx, top[1] - dy], front = [top[0], top[1] + dx + dy];
-    const bottomLeft = [left[0], left[1] + dz], bottomRight = [right[0], right[1] + dz], bottomFront = [front[0], front[1] + dz];
-    const pc = p.color.map((v, i) => v * 0.8 + amb[i] * 0.2);
-    c.fillStyle = shade(pc, .68 * lightK); c.beginPath(); c.moveTo(left[0], left[1]); c.lineTo(front[0], front[1]); c.lineTo(bottomFront[0], bottomFront[1]); c.lineTo(bottomLeft[0], bottomLeft[1]); c.closePath(); c.fill();
-    c.fillStyle = shade(pc, .52 * lightK); c.beginPath(); c.moveTo(right[0], right[1]); c.lineTo(front[0], front[1]); c.lineTo(bottomFront[0], bottomFront[1]); c.lineTo(bottomRight[0], bottomRight[1]); c.closePath(); c.fill();
-    c.fillStyle = shade(pc, 1.12 * lightK); c.beginPath(); c.moveTo(top[0], top[1]); c.lineTo(right[0], right[1]); c.lineTo(front[0], front[1]); c.lineTo(left[0], left[1]); c.closePath(); c.fill();
-    c.strokeStyle = 'rgba(255,255,255,.22)'; c.stroke();
-    if (ordered.length <= 18) { c.fillStyle = '#e8efff'; c.font = '10px system-ui'; c.textAlign = 'center'; c.fillText(String(p.name).slice(0, 18), top[0], top[1] - 5); }
+  // Every part is a real mesh: turned by its rotation, moved into place, shaded by the angle of each face to the light, and painted back to front.
+  // The view looks along (1,1,-0.5)-ish after the camera turn; a face is visible when its normal points toward the viewer.
+  const ca = Math.cos(CAM.yaw), sa = Math.sin(CAM.yaw);
+  const view = [(ca - sa) * 0.5 + (sa + ca) * 0.5, 0, 0];   // unused placeholder kept simple: visibility is decided in screen space below
+  const light = (() => { const l = [-0.45, -0.55, 0.7], m = Math.hypot(...l); return l.map(v => v / m); })();
+  const tris = [];
+  for (const p of parts) {
+    const [px, py, pz] = p.position, [sx, sy, sz] = p.size, R = p.rot || [1, 0, 0, 0, 1, 0, 0, 0, 1], pc = p.color.map((v, i) => v * 0.8 + amb[i] * 0.2);
+    const alpha = typeof p.transparency === 'number' ? Math.max(0, Math.min(1, 1 - p.transparency)) : 1;
+    // A Roblox Position is the CENTRE of the part, and the mesh is centred on zero, so it goes exactly there.
+    const cxp = px, cyp = py, czp = pz;
+    for (const f of facesFor(p.type, p.shape)) {
+      const pts = f.v.map(v => {
+        const x = v[0] * sx, y = v[1] * sy, z = v[2] * sz;
+        return [R[0] * x + R[1] * y + R[2] * z + cxp, R[3] * x + R[4] * y + R[5] * z + cyp, R[6] * x + R[7] * y + R[8] * z + czp];
+      });
+      // normal after rotation (size scaling ignored for the direction, close enough for shading and facing)
+      const n = [R[0] * f.n[0] + R[1] * f.n[1] + R[2] * f.n[2], R[3] * f.n[0] + R[4] * f.n[1] + R[5] * f.n[2], R[6] * f.n[0] + R[7] * f.n[1] + R[8] * f.n[2]];
+      const scr = pts.map(q => project(q[0], q[1], q[2], cx, cy, scale));
+      // back-face culling in screen space: a face whose projected winding is clockwise faces away
+      let area = 0; for (let i = 0; i < scr.length; i++) { const a2 = scr[i], b2 = scr[(i + 1) % scr.length]; area += a2[0] * b2[1] - b2[0] * a2[1]; }
+      if (area >= 0) continue;
+      const cxm = pts.reduce((t, q) => t + q[0], 0) / pts.length, cym = pts.reduce((t, q) => t + q[1], 0) / pts.length, czm = pts.reduce((t, q) => t + q[2], 0) / pts.length;
+      const d = (cxm * ca - cym * sa) + (cxm * sa + cym * ca) + czm * 0.55;   // larger = nearer the viewer
+      const lam = Math.max(0, n[0] * light[0] + n[1] * light[1] + n[2] * light[2]);
+      tris.push({ d, scr, color: shade(pc, (0.42 + 0.78 * lam) * lightK), alpha, name: p.name, top: n[2] > 0.6 });
+    }
   }
+  tris.sort((a, b) => a.d - b.d);
+  for (const t of tris) {
+    c.globalAlpha = t.alpha; c.fillStyle = t.color; c.beginPath(); c.moveTo(t.scr[0][0], t.scr[0][1]); for (let i = 1; i < t.scr.length; i++) c.lineTo(t.scr[i][0], t.scr[i][1]); c.closePath(); c.fill();
+    c.strokeStyle = t.color; c.lineWidth = 0.6; c.stroke();   // same-colour hairline closes the tiny gaps between neighbouring faces
+  }
+  c.globalAlpha = 1;
+  if (parts.length <= 18) { c.fillStyle = '#e8efff'; c.font = '10px system-ui'; c.textAlign = 'center'; for (const p of parts) { const q = project(p.position[0], p.position[1], p.position[2] + p.size[2] / 2, cx, cy, scale); c.fillText(String(p.name).slice(0, 18), q[0], q[1] - 5); } }
   if (lighting.fog > 0) { const f = c.createLinearGradient(0, 0, 0, ch); const fa = Math.min(0.85, lighting.fog / 100); f.addColorStop(0, `rgba(${sky.bot.join(',')},${fa * 0.2})`); f.addColorStop(1, `rgba(${sky.bot.join(',')},${fa})`); c.fillStyle = f; c.fillRect(0, 0, cw, ch); }
   c.fillStyle = 'rgba(226,235,255,.82)'; c.font = '11px system-ui'; c.textAlign = 'left'; c.fillText(`${parts.length} part${parts.length === 1 ? '' : 's'} · preview only, nothing runs here`, 12, 20);
   return true;

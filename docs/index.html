@@ -24,7 +24,7 @@
 <div id="plat" hidden><div id="platHost"></div></div>
 <div id="chat">
   <div id="retroWorkspace" class="retro-workspace" hidden>
-    <div class="retro-head"><div><b>Studio</b><span>The AI writes the Lua and encodes it for RetroStudio</span></div><span class="retro-sim-badge" id="retroBadge">PREVIEW</span></div>
+    <div class="retro-head"><div><b>Studio</b><span>The AI writes the Lua. Press Encode to turn it into a RetroStudio string</span></div><span class="retro-sim-badge" id="retroBadge">PREVIEW</span></div>
     <div class="retro-grid">
       <aside class="retro-explorer" aria-label="Explorer">
         <div class="retro-card-head"><b>Explorer</b><span><button type="button" id="wsNewScript" title="New script">+ Script</button></span></div>
@@ -34,11 +34,11 @@
       <section class="retro-code-card" aria-label="Script editor">
         <div class="retro-card-head"><b id="wsTitle">Script</b><span><label class="ws-live"><input type="checkbox" id="wsLive" checked> Live edit</label> <button type="button" id="retroDownload">Download .lua</button></span></div>
         <textarea id="retroCode" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Active Luau script" placeholder="Ask the chat to create a Roblox Luau script, or type here. With Live edit on, the viewport updates as you type."></textarea>
-        <div class="retro-actions"><button type="button" id="retroTest">Run safe test</button><button type="button" id="retroPreview">Run</button><button type="button" id="retroScreenshot">Attach preview screenshot to chat</button></div>
+        <div class="retro-actions"><button type="button" id="retroTest">Run safe test</button><button type="button" id="retroPreview">Run</button><button type="button" id="retroEncode" class="p" title="Turn this script into a RetroStudio string you can paste in">Encode</button><button type="button" id="retroScreenshot">Attach preview screenshot to chat</button></div>
         <div id="retroEncOut" class="retro-enc" hidden>
           <div class="retro-enc-head"><b>Encoded string</b><span id="retroEncInfo"></span><button type="button" id="retroCopy" class="p">Copy</button></div>
           <textarea id="retroEncText" readonly spellcheck="false" aria-label="Encoded string for RetroStudio"></textarea>
-          <ol class="retro-steps"><li>The AI encoded your script for you. Press <b>Copy</b>.</li><li>In RetroStudio, paste it into your script to import the blocks.</li></ol>
+          <ol class="retro-steps"><li>Press <b>Copy</b>.</li><li>In RetroStudio, paste it into your script to import the blocks.</li></ol>
         </div>
         <div id="retroLog" class="retro-log" role="status" aria-live="polite">No script yet. Ask the chat to build one.</div>
       </section>
