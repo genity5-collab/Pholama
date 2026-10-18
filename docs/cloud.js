@@ -28,6 +28,16 @@ export function mayUse(user) { return !!user; }
 export function mayDownload(user) { return !!user; }
 export const GATE_MESSAGE = 'Sign in with Discord to chat and download models. It is free and takes one tap.';
 
+// ---- credit balance ----
+// Free and instant: the server answers with the credits left and never calls a model or charges anything.
+export async function cloudStatus(token) {
+  if (!token) return null;
+  try {
+    const r = await fetch(FN, { method: 'POST', headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ status: true }) });
+    const j = await r.json(); return r.ok && j && j.day_used != null ? j : null;
+  } catch { return null; }
+}
+
 // ---- cloud chat ----
 // Returns { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }.
 // Throws Error with .code = login | limit-day | limit-month | server | setup | network (and .info with the counts).

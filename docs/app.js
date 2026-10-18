@@ -3,7 +3,7 @@
 //  "local":   talks to the Pholama server on your PC (llama.cpp / Ollama) using PC RAM/GPU.
 import { Account, cleanName } from './account.js';
 import { llamaLoader, LLAMA_CSS } from './loader.js';
-import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME } from './cloud.js';
+import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME, cloudStatus } from './cloud.js';
 import { planFallback } from './fallback.js';
 import { splitThinking, thinkLabel, countWords } from './thinking.js';
 import { splitBlocks, LANGS, cleanLang, extFor, safeFileName, diffLines, diffStats, extractScript, editPrompt, runCommand } from './codeblocks.js';
@@ -558,7 +558,8 @@ async function paintSwitches() {
   }
   row.style.display = row.children.length ? '' : 'none';
 }
-sel.addEventListener('change', () => { paintSwitches(); paintEffort(); paintComposerPill(); });
+sel.addEventListener('change', () => { paintSwitches(); paintEffort(); paintComposerPill(); if (sel.value === CLOUD_ID) refreshCloudCredits(); });
+setTimeout(refreshCloudCredits, 1200); setInterval(() => { if (sel.value === CLOUD_ID && !document.hidden) refreshCloudCredits(); }, 60000);
 
 // ----- think effort: Normal / Long / Max -----
 function paintEffort() {
@@ -593,7 +594,7 @@ function runUiActions(list) {
 function paintCloudLeft(r) {
   const el = $('#cloudLeft'); if (!r || r.day_used == null) { el.style.display = 'none'; return; }
   const dl = Math.max(0, r.day_cap - r.day_used), ml = Math.max(0, r.month_cap - r.month_used), n = Math.min(dl, ml);
-  el.textContent = `${MAX_NAME}: ${n} left today \u00b7 ${ml} left this month`; el.style.display = '';
+  el.textContent = r.credits_left != null ? `${MAX_NAME}: ${r.credits_left} of ${r.week_cap} credits left this week` : `${MAX_NAME}: ${n} left today \u00b7 ${ml} left this month`; el.style.display = '';
 }
 
 const SEND_ICON = '\u2191', STOP_ICON = '\u25A0';
@@ -681,7 +682,7 @@ async function send() {
       paintCloudLeft(r);
       if (r && r.day_used != null) {
         try {
-          localStorage.setItem('pholama.maxUsage', JSON.stringify({ day_used: r.day_used, day_cap: r.day_cap, month_used: r.month_used, month_cap: r.month_cap }));
+          localStorage.setItem('pholama.maxUsage', JSON.stringify({ day_used: r.day_used, day_cap: r.day_cap, month_used: r.month_used, month_cap: r.month_cap, credits_left: r.credits_left, week_cap: r.week_cap }));
         } catch {}
         paintUsage();
         paintComposerPill();
@@ -1225,6 +1226,12 @@ function paintUsage() {
   }
 }
 
+async function refreshCloudCredits() {
+  const t = Account.token(); if (!t) return;
+  const r = await cloudStatus(t); if (!r) return;
+  try { localStorage.setItem('pholama.maxUsage', JSON.stringify({ day_used: r.day_used, day_cap: r.day_cap, month_used: r.month_used, month_cap: r.month_cap, credits_left: r.credits_left, week_cap: r.week_cap })); } catch {}
+  paintComposerPill(); paintUsage(); paintCloudLeft(r);
+}
 function paintComposerPill() {
   const cb = $('#crBox');
   if (!cb) return;
@@ -1233,11 +1240,11 @@ function paintComposerPill() {
   if (isCloud) {
     let uData = null;
     try { uData = JSON.parse(localStorage.getItem('pholama.maxUsage') || 'null'); } catch {}
-    const dUsed = uData ? (uData.day_used ?? 0) : 0;
-    const dCap = uData ? (uData.day_cap ?? 10) : 10;
-    cb.textContent = `Max ${dUsed}/${dCap} today`;
-    cb.className = 'pill' + (dUsed >= dCap ? ' zero' : dUsed >= dCap * 0.8 ? ' low' : '');
-    cb.title = `Pholama Cloud usage: ${dUsed} of ${dCap} used today. Tap to see usage in Settings.`;
+    if (!uData || uData.day_used == null) { cb.textContent = 'Credits \u2026'; cb.className = 'pill'; cb.title = 'Loading your Pholama Cloud credits.'; cb.style.display = ''; return; }
+    const cap = uData.week_cap ?? uData.day_cap ?? 100, left = Math.max(0, uData.credits_left ?? (cap - (uData.day_used ?? 0)));
+    cb.textContent = `${left}/${cap} credits`;
+    cb.className = 'pill' + (left <= 0 ? ' zero' : left <= cap * 0.2 ? ' low' : '');
+    cb.title = `Pholama Cloud: ${left} of ${cap} credits left this week. Tap to see usage in Settings.`;
     cb.style.display = '';
   } else if (server && cred) {
     cb.textContent = cred.left;
