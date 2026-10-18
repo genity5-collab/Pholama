@@ -247,7 +247,7 @@ code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:13px}
 @media (max-width:720px){.dtiles{grid-template-columns:repeat(2,1fr)}.dgrid{grid-template-columns:1fr}.dhero h2{font-size:24px}}
 
 /* ---------- phone version: Max and credits are gone, notice is shown ---------- */
-#u_cloud_box,#cr,#crBox,#cloudLeft,#acct,#opt,#pcPromo{display:none!important}
+#u_cloud_box,#cr,#acct,#opt,#pcPromo{display:none!important}
 .sunset{margin:8px 14px 0;padding:11px 14px;border:1px solid var(--warn);border-radius:var(--r);background:var(--card);font-size:14px;line-height:1.45}
 .sunset b{color:var(--warn)}.sunset a{display:inline-block;margin-left:8px;color:var(--fg);font-weight:600;text-decoration:underline}
 
@@ -648,3 +648,9 @@ button,select{border-color:var(--line);border-radius:10px}button:hover,select:ho
 
 /* Explicit, cost-labeled continuation action for long or truncated site replies. */
 .continue-btn{display:inline-flex;margin:8px 0 2px;padding:6px 12px;min-height:34px;border-color:color-mix(in srgb,var(--acc) 45%,var(--line));color:var(--acc);font-size:13px}.continue-btn:disabled{opacity:.55;cursor:wait}
+
+/* credits pill next to the chat box: always readable, never covered, same on phone and PC */
+#crBox{display:inline-flex;font-weight:600;letter-spacing:.2px;border-color:var(--line)}
+#crBox.low{color:var(--warn);border-color:var(--warn)}
+#crBox.zero{color:#f85149;border-color:#f85149}
+#crBox{min-height:30px;font-size:13px;padding:5px 12px}

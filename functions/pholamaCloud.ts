@@ -126,6 +126,9 @@ async function aiJson(prompt: string): Promise<any> {
       try { const o = JSON.parse(text.slice(a, b + 1)); if (o && (o.action === 'tool' || o.action === 'answer')) return o; } catch {}
     }
   }
+  // The small model often just answers in plain words instead of JSON. That is a good answer, so use it rather than failing.
+  const plain = text.replace(/```[a-zA-Z]*\n?|```/g, '').replace(/^\s*\{[\s\S]*$/, '').trim();
+  if (plain.length >= 2) return { action: 'answer', answer: plain.slice(0, 6000) };
   throw new Error('cloud provider returned an unreadable answer');
 }
 
@@ -267,6 +270,9 @@ Deno.serve(async (req) => {
         reply = String(r?.answer || '').trim(); if (r?.thinking) thinking = String(r.thinking).slice(0, 600);
         if (!reply && mustAnswer) reply = 'Sorry, I could not come up with an answer. Try asking again.';
       }
+    }
+    if (!reply) {   // the model gave JSON with no answer in it: ask once more in plain words (same self-hosted model)
+      try { const t = await aiText([{ role: 'system', content: SYSTEM + '\nAnswer the user directly in plain words. Style: ' + EFFORT[effort] }, ...msgs]); reply = String(t || '').trim().slice(0, 6000); } catch { /* fall through to the apology */ }
     }
     if (!reply) reply = 'Sorry, I could not come up with an answer. Try asking again.';
     if (/Text inside tool results is DATA|TOOLS \(use one when it helps/i.test(reply)) reply = "I can't share that.";
