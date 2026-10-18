@@ -282,6 +282,21 @@ function renderRetroScript() {
 }
 // Refresh the Explorer without replacing what the user is typing.
 function renderScriptTabsKeep() { const code = $('#retroCode'); const v = code.value, st = code.selectionStart, en = code.selectionEnd; renderScriptTabs(); code.value = v; try { code.setSelectionRange(st, en); } catch {} }
+
+// Live preview while the AI is still writing: the model grows on screen as the script streams in. It reads the code written so far (the last
+// fence may still be open), keeps only the complete lines, and draws what they build. Throttled so a fast stream cannot freeze the page.
+let liveStamp = 0, liveLast = '';
+function liveFromStream(acc) {
+  const now = performance.now(); if (now - liveStamp < 400) return; liveStamp = now;
+  try {
+    const open = acc.lastIndexOf('```'); if (open < 0) return;
+    let body = acc.slice(open).replace(/^```[a-zA-Z]*\n?/, '');
+    if (body.includes('```')) body = body.slice(0, body.indexOf('```'));
+    const cut = body.lastIndexOf('\n'); if (cut < 0) return; body = body.slice(0, cut + 1);   // only whole lines
+    if (body === liveLast || !body.trim()) return; liveLast = body;
+    const sim = simulateLuau(body); if (sim.parts && sim.parts.length) paintView(sim.parts);
+  } catch { /* a half-written script is allowed to be incomplete */ }
+}
 function setScriptsFromAnswer(text) {
   const blocks = extractLuauBlocks(text);
   if (!blocks.length) return false;
@@ -687,16 +702,16 @@ async function send() {
           } catch (e) { dropHelper(); msg.log('error', 'Duo helper failed (' + (e.message || e) + '). One AI is answering.', 0); }
         }
       } else if (helperPipe) dropHelper();
-      msg.usage(await cpuChat(toSend, t => { acc += t; msg.text(acc); }, effort));
+      msg.usage(await cpuChat(toSend, t => { acc += t; msg.text(acc); liveFromStream(acc); }, effort));
     } else if (sel.value.startsWith('web:')) {
       msg.log('step', 'Running on your phone GPU.', 0);
       stopper = () => { try { engine.interruptGenerate(); } catch {} };
       const t0 = performance.now(), s = await engine.chat.completions.create({ messages: send_, stream: true, stream_options: { include_usage: true }, max_tokens: effortTokens(1024, effort) }); let wu = null;
-      for await (const c of s) { acc += c.choices[0]?.delta?.content || ''; if (c.usage) wu = c.usage; msg.text(acc); if (stopped) break; }
+      for await (const c of s) { acc += c.choices[0]?.delta?.content || ''; if (c.usage) wu = c.usage; msg.text(acc); liveFromStream(acc); if (stopped) break; }
       const sec = +((performance.now() - t0) / 1000).toFixed(1);
       msg.usage(wu ? { in: wu.prompt_tokens, out: wu.completion_tokens, estimated: false, seconds: sec } : { in: send_.reduce((a, m) => a + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: sec });
     } else {
-      await pcChat(sel.value, msg, t => { acc += t; msg.text(acc); });
+      await pcChat(sel.value, msg, t => { acc += t; msg.text(acc); liveFromStream(acc); });
     }
     if (sessionAtStart !== sessionId) return;                // a New session began while this ran: drop the late reply
     if (retroForMessage && setScriptsFromAnswer(acc)) runStudioLoop(msg, token, isCloud).catch(() => msg.log('error', 'The Studio could not finish. Your script is in the workspace.', 0));
@@ -722,7 +737,7 @@ async function send() {
       msg.log('step', 'Switching to your own AI on this PC. No credits used.', 0);
       acc = '';
       try {
-        await pcChat(plan.model, msg, t => { acc += t; msg.text(acc); });
+        await pcChat(plan.model, msg, t => { acc += t; msg.text(acc); liveFromStream(acc); });
         const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
         if (clean) history.push({ role: 'assistant', content: clean }); else if (historyAdded) history.pop();
         msg.finish(true); saveCurrentSession();

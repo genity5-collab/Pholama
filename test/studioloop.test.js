@@ -15,7 +15,7 @@ ok('a good script passes the check', judge(...Object.values(run(GOOD))).ok);
 ok('an empty script is rejected', !judge(...Object.values(run('print("x")'))).ok);
 ok('unparented parts are called out', judge(...Object.values(run('local p = Instance.new("Part")\np.Size = Vector3.new(1,1,1)'))).problems.some(p => /parented/.test(p)));
 ok('lines the encoder cannot convert are reported', judge(...Object.values(run(GOOD + 'while true do\nwait(1)\nend\n'))).problems.some(p => /cannot be converted/.test(p)));
-ok('far away parts are reported', judge(...Object.values(run('local p = Instance.new("Part", workspace)\np.Position = Vector3.new(500, 0, 0)'))).problems.some(p => /far outside/.test(p)));
+ok('far away parts are reported', judge(...Object.values(run('local p = Instance.new("Part", workspace)\np.Position = Vector3.new(500, 0, 0)'))).problems.some(p => /far outside|out of bounds/.test(p)));
 ok('overlapping parts are reported', judge(...Object.values(run('local a = Instance.new("Part", workspace)\nlocal b = Instance.new("Part", workspace)\na.Position = Vector3.new(0,1,0)\nb.Position = Vector3.new(0,1,0)'))).problems.some(p => /same place/.test(p)));
 
 // pickScript / fixRequest / rules
@@ -58,7 +58,7 @@ const passes = src => judge(...Object.values(run(src))).ok;
 { const bad = 'local a = Instance.new("Part", workspace)\nlocal b = Instance.new("Part", workspace)\na.Position = Vector3.new(0,1,0)\nb.Position = Vector3.new(0,1,0)\n', r = rep(bad);
   ok('repair (real Lua is understood, so it is left untouched): overlapping parts are moved apart', r.changes.length === 0 && r.source === bad, r.source); }
 { const bad = 'local a = Instance.new("Part", workspace)\na.Position = Vector3.new(500, 3, -400)\n', r = rep(bad);
-  ok('repair (real Lua is understood, so it is left untouched): far-away parts are pulled into view', r.changes.length === 0 && r.source === bad, r.source); }
+  ok('repair (real Lua is understood): a far-away part is pulled back with one exact line, and the rest of the script is untouched', r.changes.length === 1 && r.source.startsWith(bad.trim()) && /-- Studio fix\n\w+\.Position = Vector3\.new\(/.test(r.source) && passes(r.source), r.source); }
 ok('repair: a good script is left exactly alone', rep(GOOD).changes.length === 0 && rep(GOOD).source.trim() === GOOD.trim());
 ok('repair: it never invents parts for an empty script', !/Instance\.new/.test(rep('print("x")\n').source));
 ok('repair: the user\'s own code is kept', /print\("ready"\)/.test(rep(GOOD + 'while true do\nend\n').source));

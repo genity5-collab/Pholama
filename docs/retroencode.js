@@ -179,7 +179,7 @@ function compile(source) {
     return b;
   };
   const objVars = new Set();   // names made by `local X = Instance.new(...)`: later uses of X are VARIABLE references (mode 2), not literal paths
-  const objRef = name => (objVars.has(name) ? ESC + '2' + ESC + name : ESC + '0' + ESC + name);
+  const objRef = name => ESC + '0' + ESC + name;   // every real sample names an object as plain text (Object, 0, part), including Parent
   const setProp = (obj, prop, valueRef) => add('SetObjectProperty', 'Set Object Property',
     ESC + 'Value' + valueRef + ESC + 'Property' + ESC + '0' + ESC + prop + ESC + 'Object' + objRef(obj));
   const ref = name => ESC + '2' + ESC + name;
@@ -255,7 +255,15 @@ function compile(source) {
     }
     if ((m = /^local\s+(\w+)\s*=\s*\{\s*\}$/.exec(line))) { add('CreateTable', 'Create Table', '', ESC + 'TableVariable' + ESC + m[1]); continue; }
     if ((m = /^local\s+(\w+)\s*=\s*Instance\.new\s*\(\s*(['"])(\w+)\2\s*,\s*([\w.]+)\s*\)$/.exec(line))) {
-      add('CreateObject', 'Create Object', ESC + 'Parent' + objRef(m[4]) + ESC + 'ClassName' + ESC + '0' + ESC + m[3], ESC + 'Object' + ESC + m[1]);
+      // The real samples never put an object VARIABLE in a Create Object parent. They create the object, then run "part.Parent = value" as a Set Object Property
+      // with the value in variable mode 2 (get_service_and_property.json). So a part inside a model is made in the workspace and then moved with that same proven block.
+      if (objVars.has(m[4])) {
+        add('CreateObject', 'Create Object', ESC + 'Parent' + ESC + '0' + ESC + 'workspace' + ESC + 'ClassName' + ESC + '0' + ESC + m[3], ESC + 'Object' + ESC + m[1]);
+        objVars.add(m[1]);
+        setProp(m[1], 'Parent', ref(m[4]));
+        continue;
+      }
+      add('CreateObject', 'Create Object', ESC + 'Parent' + ESC + '0' + ESC + m[4] + ESC + 'ClassName' + ESC + '0' + ESC + m[3], ESC + 'Object' + ESC + m[1]);
       objVars.add(m[1]);
       continue;
     }

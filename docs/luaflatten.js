@@ -366,7 +366,7 @@ function flattenInner(source, opts = {}) {
     for (const s of body) {
       tick(s.line);
       switch (s.t) {
-        case 'local': { const vals = evalMulti(s.vals, env); s.names.forEach((nm, i) => env.vars.set(nm, vals[i] === undefined ? null : vals[i])); break; }
+        case 'local': { const vals = evalMulti(s.vals, env); s.names.forEach((nm, i) => { const v = vals[i] === undefined ? null : vals[i]; if (v instanceof Inst && !v.scriptVar) v.scriptVar = nm; env.vars.set(nm, v); }); break; }
         case 'localfn': { env.vars.set(s.name, null); env.vars.set(s.name, new Fn(s.fn, env)); break; }
         case 'assign': {
           const vals = evalMulti(s.vals, env);
@@ -431,8 +431,8 @@ function flattenInner(source, opts = {}) {
       const sh = enumName(pr.Shape); if (sh && /^(Ball|Cylinder|Block)$/.test(String(sh))) lines.push(`${v}.Shape = Enum.PartType.${sh}`);
       // Roblox has Y up; the viewport draws [x, depth, height], so Y and Z swap here and only here. The rotation matrix is swapped the same way (P * R * P).
       const rm = pr.CFrame instanceof Cf ? pr.CFrame.r : IDENT, sw = [0, 2, 1], rot = []; for (let i = 0; i < 3; i++) for (let j = 0; j < 3; j++) rot.push(rm[sw[i] * 3 + sw[j]]);
-      result.parts.push({ rot, name: typeof pr.Name === 'string' ? pr.Name : v, type: inst.cls === 'WedgePart' || inst.cls === 'CornerWedgePart' || inst.cls === 'TrussPart' ? inst.cls : 'Part', size: [size.x, size.z, size.y].map(n => Math.max(0.2, Math.min(60, n))), trueSize: [size.x, size.z, size.y], position: [pos.x, pos.z, pos.y].map(n => Math.max(-200, Math.min(200, n))), color: col ? [col.r, col.g, col.b] : [163, 162, 165], material: String(enumName(pr.Material) || 'Plastic'), anchored: pr.Anchored === undefined ? true : truthy(pr.Anchored), shape: sh || 'Block', transparency: typeof pr.Transparency === 'number' ? pr.Transparency : 0, parented: true, model: parentVar === 'workspace' ? null : parentVar });
-    } else result.models.push({ name: typeof pr.Name === 'string' ? pr.Name : v, parts: 0 });
+      result.parts.push({ rot, name: typeof pr.Name === 'string' ? pr.Name : v, type: inst.cls === 'WedgePart' || inst.cls === 'CornerWedgePart' || inst.cls === 'TrussPart' ? inst.cls : 'Part', size: [size.x, size.z, size.y].map(n => Math.max(0.2, Math.min(60, n))), trueSize: [size.x, size.z, size.y], position: [pos.x, pos.z, pos.y].map(n => Math.max(-200, Math.min(200, n))), color: col ? [col.r, col.g, col.b] : [163, 162, 165], material: String(enumName(pr.Material) || 'Plastic'), anchored: pr.Anchored === undefined ? true : truthy(pr.Anchored), shape: sh || 'Block', transparency: typeof pr.Transparency === 'number' ? pr.Transparency : 0, parented: true, model: parentVar === 'workspace' ? null : parentVar, varName: inst.scriptVar || v, modelVar: inst.parent && inst.parent !== ws ? (inst.parent.scriptVar || parentVar) : null, trueAt: [pos.x, pos.z, pos.y] });
+    } else result.models.push({ name: typeof pr.Name === 'string' ? pr.Name : v, parts: 0, varName: inst.scriptVar || v });
     for (const k of inst.kids) emit(k, v);
   };
   for (const k of ws.kids) emit(k, 'workspace');

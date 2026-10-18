@@ -1,3 +1,4 @@
+import { lookReport } from './studiolook.js';
 // The Studio loop: the AI writes a script, the workspace "runs" it into a model preview, the result is checked,
 // and if it is wrong the AI is shown what is wrong and fixes it. Only when it looks right is the script encoded.
 // Nothing here runs Lua. "Running" means the safe preview that reads the script and builds the parts it describes.
@@ -48,7 +49,9 @@ export function judge(sim, skipped = [], opts = {}) {
     if (/not parented|No supported Part/.test(d)) continue;   // already said above
     problems.push(d);
   }
-  const off = parts.filter(p => p.position.some(n => Math.abs(n) > 90));
+  const located = diagnose(sim).filter(i => i.kind === 'outlier' || i.kind === 'far');
+  for (const i of located) problems.push(i.text);
+  const off = parts.filter(p => (p.trueAt || p.position).some(n => Math.abs(n) > 90) && !located.some(i => i.part === (p.varName || p.name)));
   if (off.length) problems.push(`${off.length} part${off.length === 1 ? ' is' : 's are'} far outside the visible area (position beyond 90). Move ${off.length === 1 ? 'it' : 'them'} closer to 0,0,0.`);
   const tiny = parts.filter(p => p.size.some(n => n < 0.3));
   if (tiny.length && opts.strictSize) problems.push(`${tiny.length} part${tiny.length === 1 ? ' is' : 's are'} too thin to see.`);
@@ -71,7 +74,7 @@ export function judge(sim, skipped = [], opts = {}) {
     // A part that touches nothing else is a stray piece: its box is not within 0.6 stud of any other part's box.
     const near = (a, b) => [0, 1, 2].every(i => a.lo[i] <= b.hi[i] + 0.6 && b.lo[i] <= a.hi[i] + 0.6);
     const stray = parts.filter((_, i) => !bx.some((b, j) => j !== i && near(bx[i], b)));
-    if (stray.length && stray.length < parts.length) problems.push(`${stray.length} part${stray.length === 1 ? '' : 's'} touch nothing else (${stray.slice(0, 3).map(p => p.name).join(', ')}). Position ${stray.length === 1 ? 'it' : 'them'} from the sizes of the neighbouring parts so the pieces meet.`);
+    if (stray.length && stray.length < parts.length) problems.push(`${stray.length} part${stray.length === 1 ? '' : 's'} touch nothing else (${stray.slice(0, 3).map(p => (p.modelVar ? p.modelVar + '.' : '') + (p.varName || p.name)).join(', ')}). Position ${stray.length === 1 ? 'it' : 'them'} from the sizes of the neighbouring parts so the pieces meet.`);
   }
   const unconvertible = (skipped || []).filter(s => !/^Skip: end$/.test(s));
   if (unconvertible.length) problems.push(`${unconvertible.length} line${unconvertible.length === 1 ? '' : 's'} cannot be converted to blocks: ${unconvertible.slice(0, 4).map(s => s.replace(/^Skip(?:ped[^:]*)?:\s*/, '').slice(0, 60)).join(' | ')}. Rewrite using only the allowed lines, or a --@block directive.`);
@@ -81,9 +84,70 @@ export function judge(sim, skipped = [], opts = {}) {
 
 // ---- Automatic repair: fixes the common problems WITHOUT asking the AI, so no cloud message is spent. ----
 // Each repair is small and safe; the result is always checked again by judge(). Returns { source, changes }.
+
+// A located diagnosis. Each issue names the part, the model it belongs to, where it is now, and the exact assignment that fixes it, so a repair never has to guess.
+// Positions here are the preview's [x, depth, height]; the Lua line is written back in Roblox order (x, height, depth).
+export function diagnose(sim) {
+  const parts = (sim && sim.parts) || [], issues = [];
+  if (!parts.length) return issues;
+  const lua = (name, v) => `${name}.Position = Vector3.new(${r1(v[0])}, ${r1(v[2])}, ${r1(v[1])})`;
+  const r1 = n => Math.round(n * 10) / 10;
+  const half = p => { const R = p.rot || [1, 0, 0, 0, 1, 0, 0, 0, 1]; return [0, 1, 2].map(i => (Math.abs(R[i * 3]) * p.size[0] + Math.abs(R[i * 3 + 1]) * p.size[1] + Math.abs(R[i * 3 + 2]) * p.size[2]) / 2); };
+  const at = p => (p.trueAt || p.position);
+  const vn = p => p.varName || p.name;
+  const who = p => ((p.modelVar || p.model) ? `${p.modelVar || p.model}.${vn(p)}` : vn(p));
+  // Group by model so a part can be judged against the model it belongs to.
+  const groups = new Map(); for (const p of parts) { const k = p.modelVar || p.model || ''; (groups.get(k) || groups.set(k, []).get(k)).push(p); }
+  const centre = ps => [0, 1, 2].map(i => ps.reduce((a, p) => a + p.position[i], 0) / ps.length);
+  for (const [model, ps] of groups) {
+    if (ps.length < 2) continue;
+    // The median is not dragged by one bad part, so it is where the model really is.
+    const med = [0, 1, 2].map(i => { const a = ps.map(p => at(p)[i]).sort((x, y) => x - y); return a[Math.floor(a.length / 2)]; });
+    const spread = Math.max(1, ...ps.map(p => Math.max(...p.size)));
+    for (const p of ps) {
+      const d = Math.hypot(at(p)[0] - med[0], at(p)[1] - med[1], at(p)[2] - med[2]);
+      if (d > 3 * Math.max(8, spread * 1.5) && ps.length >= 3) {
+        const ownH = at(p)[2], fixed = [med[0], med[1], Math.abs(ownH) > 90 ? Math.max(p.size[2] / 2, med[2]) : ownH];   // it slid sideways, so it goes back sideways; its own height was probably right
+        issues.push({ kind: 'outlier', part: vn(p), model: model || '(workspace)', now: at(p).map(r1), fix: lua(vn(p), fixed), text: `${who(p)} sits ${Math.round(d)} studs away from the rest of its model, at (${at(p)[0] !== undefined ? [at(p)[0], at(p)[2], at(p)[1]].map(r1).join(', ') : ''}). Move it back with: ${lua(vn(p), fixed)}` });
+      }
+    }
+  }
+  // Anything beyond the visible area, whichever model it is in.
+  for (const p of parts) if (at(p).some(n => Math.abs(n) > 90)) {
+    const c = at(p).map(n => Math.max(-80, Math.min(80, n)));
+    if (!issues.some(i => i.part === vn(p))) issues.push({ kind: 'far', part: vn(p), model: p.modelVar || p.model || '(workspace)', now: at(p).map(r1), fix: lua(vn(p), c), text: `${who(p)} is out of bounds at (${[at(p)[0], at(p)[2], at(p)[1]].map(r1).join(', ')}). Bring it in with: ${lua(vn(p), c)}` });
+  }
+  // Floating or sunken as a whole (per model).
+  for (const [model, ps] of groups) {
+    if (ps.length < 3) continue;
+    const lo = Math.min(...ps.map(p => at(p)[2] - half(p)[2]));
+    if (Math.abs(lo) > 1.5 && Math.abs(lo) < 90) {
+      const base = ps.reduce((a, p) => (at(p)[2] - half(p)[2] < at(a)[2] - half(a)[2] ? p : a));
+      const fixed = [at(base)[0], at(base)[1], at(base)[2] - lo];
+      issues.push({ kind: lo > 0 ? 'floating' : 'sunken', part: vn(base), model: model || '(workspace)', now: at(base).map(r1), shift: -lo, text: `${model || 'The model'} ${lo > 0 ? 'floats ' + r1(lo) + ' studs above' : 'sinks ' + r1(-lo) + ' studs below'} the ground. Move every part ${lo > 0 ? 'down' : 'up'} by ${r1(Math.abs(lo))} studs (the lowest part, ${vn(base)}, becomes ${lua(vn(base), fixed)})` });
+    }
+  }
+  return issues;
+}
+
+// Apply the located fixes by writing the corrected assignments at the end of the script. The reader runs top to bottom, so a last assignment wins and nothing else is touched.
+export function applyDiagnosis(source, sim, issues) {
+  const lines = [], done = new Set(), r1 = n => Math.round(n * 10) / 10;
+  for (const i of issues) {
+    if (i.kind === 'outlier' || i.kind === 'far') { if (!done.has(i.part)) { done.add(i.part); lines.push(i.fix); } }
+    else if (i.shift) {
+      for (const p of (sim.parts || [])) {
+        const vn = p.varName || p.name, k = p.modelVar || p.model || '(workspace)', a = p.trueAt || p.position;
+        if (k === i.model && !done.has(vn)) { done.add(vn); lines.push(`${vn}.Position = Vector3.new(${r1(a[0])}, ${r1(a[2] + i.shift)}, ${r1(a[1])})`); }
+      }
+    }
+  }
+  return lines.length ? { source: String(source).replace(/\n+$/, '') + '\n-- Studio fix\n' + lines.join('\n') + '\n', changes: lines.map(l => 'fixed ' + l.split('.')[0]) } : { source, changes: [] };
+}
+
 export function autoRepair(source, sim, skipped = []) {
   // A script the Lua reader understood (loops, functions, models) is already fully worked out. Editing its lines would damage it, so the AI fixes real problems.
-  if (sim && sim.flat) return { source: String(source || ''), changes: [] };
+  if (sim && sim.flat) { const fixes = applyDiagnosis(source, sim, diagnose(sim)); return { source: fixes.source, changes: fixes.changes }; }
   let lines = String(source || '').split(/\r?\n/), changes = [];
   const drop = new Set((skipped || []).map(x => String(x).replace(/^Skip(?:ped[^:]*)?:\s*/, '').trim()).filter(Boolean));
 
@@ -134,11 +198,12 @@ export function autoRepair(source, sim, skipped = []) {
 }
 
 // The message sent back to the AI when its script needs fixing.
-export function fixRequest(source, verdict, round) {
+export function fixRequest(source, verdict, round, sim = null) {
   return [
     `The script you wrote did not pass the Studio check (attempt ${round} of ${MAX_FIX_ROUNDS}). Problems found:`,
     ...verdict.problems.map(p => '- ' + p),
     '',
+    ...(sim && sim.parts && sim.parts.length ? [lookReport(sim.parts, { prints: sim.prints, gui: sim.gui }), ''] : []),
     'Here is the script as it is now:',
     '```lua', source, '```',
     '',
@@ -176,7 +241,7 @@ export async function studioLoop({ source, ask, run, encode, show = () => {}, ma
     round += 1;
     show({ type: 'fix', round, problems: verdict.problems });
     let reply = '';
-    try { reply = await ask(fixRequest(current, verdict, round)); } catch (e) { show({ type: 'gaveup', verdict, round, error: String(e && e.message || e) }); return { ok: false, source: current, verdict, rounds: round, repairs }; }
+    try { reply = await ask(fixRequest(current, verdict, round, r.sim)); } catch (e) { show({ type: 'gaveup', verdict, round, error: String(e && e.message || e) }); return { ok: false, source: current, verdict, rounds: round, repairs }; }
     const next = pickScript(reply);
     if (!next.trim() || next.trim() === current.trim()) { show({ type: 'gaveup', verdict, round, reason: 'no change' }); return { ok: false, source: current, verdict, rounds: round, repairs }; }
     current = next;
