@@ -194,9 +194,11 @@ Deno.serve(async (req) => {
     const studioMode = body.studio === true;   // Studio: the PC sends its own rules + tools; this function only thinks and writes, the PC does the file work
     const rawMsgs = Array.isArray(body.messages) ? body.messages : [];
     const studioSystem = studioMode ? String((rawMsgs.find((m: any) => m && m.role === 'system' && typeof m.content === 'string') || {}).content || '').slice(0, 14000) : '';
+    // The page puts its Studio rules and docs after a "[Studio]" line. Keep up to 9000 characters of that part (so the model really sees the rules), but only 2000 of what was typed.
+    const keepStudio = (t: string) => { const i = t.indexOf('\n\n[Studio]\n'); return i >= 0 ? t.slice(0, Math.min(i, 2000)) + t.slice(i, i + 9000) : t.slice(0, 2000); };
     const msgs = rawMsgs
       .filter((m: any) => m && (m.role === 'user' || m.role === 'assistant') && typeof m.content === 'string')
-      .slice(-12).map((m: any) => ({ role: m.role, content: m.content.slice(0, studioMode ? 9000 : 2000) }));
+      .slice(-12).map((m: any) => ({ role: m.role, content: studioMode ? m.content.slice(0, 9000) : keepStudio(m.content) }));
     const last = msgs[msgs.length - 1];
     if (!last || last.role !== 'user' || !last.content.trim()) return out({ error: 'Type a message first.', code: 'empty' }, 400);
 
@@ -209,7 +211,9 @@ Deno.serve(async (req) => {
 
     // 3) credits. Cost of what you wrote: 5 per word. Work time is charged after the answer (3 per minute).
     const wordCount = (text: string) => (String(text).match(/\S+/g) || []).length;
-    const sendCost = Math.max(WORD_COST, wordCount(last.content) * WORD_COST);
+    // The page adds its own Studio rules and docs after a "[Studio]" line. That is not what the person wrote, so only the typed part is billed.
+    const typedPart = (t: string) => { const i = String(t).indexOf('\n\n[Studio]\n'); return i >= 0 ? String(t).slice(0, i) : String(t); };
+    const sendCost = Math.max(WORD_COST, wordCount(typedPart(last.content)) * WORD_COST);
     const weekCap = isPro ? WEEK_CREDITS + PRO_EXTRA_CREDITS : WEEK_CREDITS;
     const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     let weekUsed = 0;
