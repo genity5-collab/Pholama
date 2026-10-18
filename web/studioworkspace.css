@@ -590,10 +590,3 @@
 
 .ide-host { display: flex; flex-direction: column; width: 100%; overflow: hidden; background: #1e1f22; color: #dfe1e5; box-sizing: border-box; }
 .ide-host * { box-sizing: border-box; }
-
-/* RetroStudio encode dialog */
-.ws-enc-dialog { position: absolute; z-index: 50; right: 16px; top: 56px; width: min(520px, calc(100% - 32px)); background: var(--card); border: 1px solid var(--line); border-radius: 4px; padding: 12px; display: flex; flex-direction: column; gap: 8px; box-shadow: 0 8px 24px rgba(0,0,0,.5); }
-.ws-enc-text { height: 130px; width: 100%; font-family: ui-monospace, Consolas, monospace; font-size: 11px; word-break: break-all; }
-.ws-enc-actions { display: flex; gap: 8px; justify-content: flex-end; }
-.ws-enc-skip { color: var(--warn, #e0b04a); font-size: 12px; margin: 0; }
-.retro-steps { margin: 0; padding-left: 18px; color: var(--mut); font-size: 12.5px; line-height: 1.6; }

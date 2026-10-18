@@ -1,6 +1,6 @@
 // The RetroStudio encoder must reproduce the reference encoder's output EXACTLY (byte for byte),
 // otherwise the RetroStudio plugin cannot import what we give the user.
-const fs = require('fs'), path = require('path'), enc = require('../server/retroencoder');
+const fs = require('fs'), path = require('path'), enc = require('../site-only/retroencoder');
 let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : '  -> ' + String(x).slice(0, 200))); if (!c) bad++; };
 const dir = path.join(__dirname, 'golden');
 for (const f of fs.readdirSync(dir).filter(x => x.endsWith('.json')).sort()) {

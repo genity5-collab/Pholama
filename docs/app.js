@@ -18,6 +18,7 @@ import { remoteBase, remoteHeaders, remoteTest } from './remote.js';
 import { downloadDecision, readCached, writeCached } from './pclink.js';
 import { extractLuauBlocks, simulateLuau, drawPreview } from './retrostudio.js';
 import { studioLoop, STUDIO_RULES } from './studioloop.js';
+import * as WS from './studioworkspace-model.js';
 
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
@@ -30,7 +31,10 @@ const deviceRam = () => navigator.deviceMemory || 0; // Chrome reports 0.25-8 (r
 let catalog = null, server = null, tab = 'browser', engine = null, engineModel = null, history = [], busy = false;
 let stopper = null, stopped = false, sessionId = 1;   // stopper() cancels whatever reply is running right now
 let effort = cleanEffort(localStorage.getItem('pholama.effort'));
-let retroEnabled = false, scriptDocuments = [], activeScript = 0;
+let retroEnabled = false, studioWs = WS.newWorkspace(), liveTimer = 0;
+// Compatibility views over the workspace so older code (sessions, download, screenshot) keeps working.
+const scriptList = () => WS.scripts(studioWs);
+const activeScriptItem = () => { const a = WS.active(studioWs); return a && a.kind === 'script' ? a : (a && a.kind === 'model' && a.fromScript ? WS.find(studioWs, a.fromScript) : scriptList()[0]) || null; };
 
 // Unified API fetch helper supporting remote PC connection
 async function api(path, opts = {}, bodyData) {
@@ -197,7 +201,7 @@ async function init() {
 
 async function refreshSelect() {
   sel.innerHTML = '';
-  for (const id of saved()) {
+  if (server) for (const id of saved()) {   // the website has no local models: only the PC lists downloaded ones
     const m = catalog.browser.find(x => x.id === id || x.fallback === id); if (m) sel.add(new Option('📱 ' + m.name, 'web:' + id));
     const c = (catalog.cpu || []).find(x => 'cpu:' + x.id === id); if (c) sel.add(new Option('📱 ' + c.name, id));
   }
@@ -220,18 +224,28 @@ function setRetroEnabled(on) {
   if (panel) panel.hidden = !retroEnabled;
   if (retroEnabled) renderRetroScript();
 }
+// Explorer: every model and script in the project, like Roblox's Explorer. Click to open.
 function renderScriptTabs() {
-  const tabs = $('#retroTabs'), code = $('#retroCode'); if (!tabs || !code) return;
-  if (!scriptDocuments.length) scriptDocuments = [{ name: 'Script 1', source: '' }];
-  activeScript = Math.max(0, Math.min(activeScript, scriptDocuments.length - 1));
-  tabs.textContent = '';
-  scriptDocuments.forEach((s, i) => {
-    const b = document.createElement('button'); b.type = 'button'; b.role = 'tab'; b.setAttribute('aria-selected', String(i === activeScript)); b.className = i === activeScript ? 'on' : ''; b.textContent = s.name || `Script ${i + 1}`;
-    b.onclick = () => { scriptDocuments[activeScript].source = code.value; activeScript = i; renderScriptTabs(); renderRetroScript(); saveCurrentSession(); };
-    tabs.appendChild(b);
-  });
-  code.value = scriptDocuments[activeScript].source || '';
+  const host = $('#wsTree'), code = $('#retroCode'); if (!host || !code) return;
+  if (!scriptList().length) WS.addScript(studioWs, 'Script', '');
+  host.textContent = '';
+  for (const group of WS.tree(studioWs)) {
+    const f = document.createElement('div'); f.className = 'ws-folder'; f.textContent = group.label + ' (' + group.children.length + ')'; host.appendChild(f);
+    for (const c of group.children) {
+      const b = document.createElement('button'); b.type = 'button'; b.className = 'ws-item' + (c.active ? ' on' : ''); b.setAttribute('role', 'treeitem');
+      const dot = document.createElement('span'); dot.className = 'ws-dot ' + c.kind; const nm = document.createElement('span'); nm.textContent = c.label;
+      const meta = document.createElement('small'); meta.textContent = c.kind === 'model' ? c.count + ' part' + (c.count === 1 ? '' : 's') : c.lines + ' line' + (c.lines === 1 ? '' : 's');
+      b.append(dot, nm, meta);
+      b.onclick = () => { flushEditor(); WS.activate(studioWs, c.id); renderScriptTabs(); renderRetroScript(); saveCurrentSession(); };
+      host.appendChild(b);
+    }
+  }
+  const sc = activeScriptItem(); code.value = sc ? sc.source : '';
+  const t = $('#wsTitle'); if (t) t.textContent = sc ? sc.name : 'Script';
+  const hint = $('#wsHint'); if (hint) hint.hidden = WS.models(studioWs).length > 0;
 }
+function flushEditor() { const code = $('#retroCode'), sc = activeScriptItem(); if (code && sc && code.value !== sc.source) WS.editScript(studioWs, sc.id, code.value); }
+// Run = read the active script, rebuild its model, and draw every model in the project.
 function runRetroSafeTest() {
   const code = $('#retroCode'), log = $('#retroLog'); if (!code || !log) return false;
   const result = simulateLuau(code.value);
@@ -245,21 +259,28 @@ function readLighting() {
 }
 function renderRetroScript() {
   const code = $('#retroCode'), canvas = $('#retroCanvas'), log = $('#retroLog'); if (!code || !canvas || !log) return;
-  if (scriptDocuments.length) { if (!$('#retroTabs button')) renderScriptTabs(); else scriptDocuments[activeScript].source = code.value; }
-  const result = simulateLuau(code.value);
-  drawPreview(canvas, result.parts, readLighting());
-  log.textContent = result.diagnostics.length ? `${result.created} part${result.created === 1 ? '' : 's'} recognized. ${result.diagnostics.join(' ')}` : `${result.created} supported part${result.created === 1 ? '' : 's'} simulated. No code was executed.`;
+  flushEditor();
+  const sc = activeScriptItem(); const result = simulateLuau(sc ? sc.source : code.value);
+  if (sc) WS.syncModel(studioWs, sc.id, result.parts);
+  drawPreview(canvas, WS.allParts(studioWs), readLighting());
+  const tree = $('#wsTree'); if (tree && tree.dataset.rev !== String(studioWs.rev)) { tree.dataset.rev = String(studioWs.rev); const keep = document.activeElement === code; renderScriptTabsKeep(); if (keep) code.focus(); }
+  log.textContent = result.diagnostics.length ? `${result.created} part${result.created === 1 ? '' : 's'} recognized. ${result.diagnostics.join(' ')}` : `${result.created} supported part${result.created === 1 ? '' : 's'} built. ${WS.models(studioWs).length} model${WS.models(studioWs).length === 1 ? '' : 's'}, ${scriptList().length} script${scriptList().length === 1 ? '' : 's'} in the project. No code was executed.`;
 }
+// Refresh the Explorer without replacing what the user is typing.
+function renderScriptTabsKeep() { const code = $('#retroCode'); const v = code.value, st = code.selectionStart, en = code.selectionEnd; renderScriptTabs(); code.value = v; try { code.setSelectionRange(st, en); } catch {} }
 function setScriptsFromAnswer(text) {
   const blocks = extractLuauBlocks(text);
   if (!blocks.length) return false;
-  scriptDocuments = blocks.map((source, i) => ({ name: `Script ${i + 1}`, source })); activeScript = 0;
+  flushEditor();
+  let first = null;
+  blocks.forEach((source, i) => { const it = WS.addScript(studioWs, 'Script', source); if (!first) first = it; });
+  WS.activate(studioWs, first.id);
   renderScriptTabs(); renderRetroScript(); saveCurrentSession();
   return true;
 }
 function downloadActiveScript() {
-  const code = $('#retroCode'), active = scriptDocuments[activeScript]; if (!code || !active || !code.value.trim()) return;
-  active.source = code.value;
+  const code = $('#retroCode'), active = activeScriptItem(); if (!code || !active || !code.value.trim()) return;
+  WS.editScript(studioWs, active.id, code.value);
   const url = URL.createObjectURL(new Blob([code.value], { type: 'text/plain;charset=utf-8' }));
   const a = document.createElement('a'); a.href = url; a.download = (active.name || 'script').toLowerCase().replace(/[^a-z0-9_-]+/g, '-') + '.lua'; a.click(); setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
@@ -284,63 +305,60 @@ async function runStudioLoop(msg, token, isCloud) {
     return { sim, skipped: e.skipped || [], enc: e };
   };
   const ask = async prompt => {
-    if (!isCloud || !token) throw new Error('fixing needs Pholama Cloud');
-    history.push({ role: 'user', content: prompt });
-    const r = await cloudChat(history, effort, token, undefined);
-    history.push({ role: 'assistant', content: r.reply });
-    return r.reply;
+    // Fixing uses whichever AI is selected: the cloud AI, the in-browser GPU model, or the phone CPU model. Local ones are free and unlimited.
+    history.push({ role: 'user', content: prompt }); let historyAdded = true;
+    let reply = '';
+    try {
+      if (isCloud) {
+        if (!token) throw new Error('Sign in to use Pholama Cloud.');
+        reply = (await cloudChat(history, effort, token, undefined)).reply;
+      } else if (sel.value.startsWith('cpu:')) {
+        await cpuChat(history, t => { reply += t; }, effort);
+      } else if (sel.value.startsWith('web:')) {
+        const st = await engine.chat.completions.create({ messages: history, stream: true, max_tokens: effortTokens(1024, effort) });
+        for await (const c of st) reply += c.choices[0]?.delta?.content || '';
+      } else throw new Error('Pick a model first.');
+    } catch (e) { if (historyAdded) history.pop(); throw e; }
+    history.push({ role: 'assistant', content: reply });
+    return reply;
   };
-  const labels = { edit: e => e.round ? `AI is editing the script (fix ${e.round})...` : 'AI wrote the script. Putting it in the workspace...', run: e => `Ran the preview: ${e.parts} part${e.parts === 1 ? '' : 's'} built.`, check: e => e.verdict.ok ? 'Looks right.' : 'Found ' + e.verdict.problems.length + ' problem(s): ' + e.verdict.problems[0], fix: e => `Asking the AI to fix it (attempt ${e.round})...`, gaveup: () => 'Could not make it work after several tries.', done: e => e.encoded ? 'Encoded. Copy the string and paste it into RetroStudio.' : 'It works, but the encoder is not available right now.' };
+  const labels = { edit: e => e.round ? `AI is editing the script (fix ${e.round})...` : 'AI wrote the script. Putting it in the workspace...', run: e => `Ran the preview: ${e.parts} part${e.parts === 1 ? '' : 's'} built.`, check: e => e.verdict.ok ? 'Looks right.' : 'Found ' + e.verdict.problems.length + ' problem(s): ' + e.verdict.problems[0], repair: e => 'Fixed automatically (no AI message used): ' + e.changes.join(', ') + '.', fix: e => `Asking the AI to fix it (attempt ${e.round})...`, gaveup: () => 'Could not make it work after several tries.', done: e => e.encoded ? 'Encoded. Copy the string and paste it into RetroStudio.' : 'It works, but the encoder is not available right now.' };
   const result = await studioLoop({
     source: code.value, ask, run,
     encode,
     show: e => {
       const l = labels[e.type] && labels[e.type](e); if (l) { say(l); msg.log(e.type === 'gaveup' ? 'error' : 'step', l, 0); }
-      if (e.type === 'edit') { code.value = e.source; if (scriptDocuments[activeScript]) scriptDocuments[activeScript].source = e.source; }
+      if (e.type === 'edit') { const sc = activeScriptItem(); if (sc) WS.editScript(studioWs, sc.id, e.source); code.value = e.source; renderRetroScript(); }
     }
   });
   if (result.ok) {
     const t = $('#retroEncText'), out = $('#retroEncOut'); if (t && out) { t.value = result.encoded; out.hidden = false; $('#retroEncInfo').textContent = result.blocks + ' blocks'; }
-    msg.log('result', `Ready: ${result.blocks} blocks encoded` + (result.rounds ? ` after ${result.rounds} fix${result.rounds === 1 ? '' : 'es'}.` : '.') + ' Copy it from the Studio panel.', 0);
+    msg.log('result', `Ready: ${result.blocks} blocks encoded` + (result.repairs ? `, ${result.repairs} auto-repair${result.repairs === 1 ? '' : 's'}` : '') + (result.rounds ? `, ${result.rounds} AI fix${result.rounds === 1 ? '' : 'es'}.` : '.') + ' Copy it from the Studio panel.', 0);
   } else if (result.verdict && !result.verdict.ok) {
     const out = $('#retroEncOut'); if (out) out.hidden = true;
     msg.log('error', 'Not encoded: ' + result.verdict.problems.join(' '), 0);
   } else if (result.error) msg.log('error', 'Not encoded: ' + result.error, 0);
 }
-// Encode the active script into the string the RetroStudio plugin imports. The encoder lives on the Pholama server so its block table is never shipped to the browser.
-async function encodeActiveScript() {
-  const code = $('#retroCode'), out = $('#retroEncOut'), log = $('#retroLog'), btn = $('#retroEncode'); if (!code || !out) return;
-  const source = code.value; if (!source.trim()) { if (log) log.textContent = 'Nothing to encode yet. Ask the chat to write a script first.'; return false; }
-  const base = (window.PHOLAMA && window.PHOLAMA.STUDIO_URL) || '';
-  const old = btn.textContent; btn.disabled = true; btn.textContent = 'Encoding...';
-  try {
-    const r = await fetch(base ? base + '/retro/encode' : '/api/retro/encode', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ source }) });
-    const d = await r.json().catch(() => ({}));
-    if (!r.ok || !d.encoded) throw new Error(d.error || (d.errors && d.errors.errorMessage) || 'The encoder is not available right now.');
-    $('#retroEncText').value = d.encoded; out.hidden = false;
-    const skipped = (d.skipped || []).length;
-    $('#retroEncInfo').textContent = d.blocks + ' blocks' + (skipped ? ', ' + skipped + ' line(s) skipped' : '');
-    if (log) log.textContent = skipped ? 'Encoded. These lines could not become blocks: ' + d.skipped.slice(0, 4).join(' | ') : 'Encoded ' + d.blocks + ' blocks. Copy the string and paste it into RetroStudio.';
-    return true;
-  } catch (e) { out.hidden = true; if (log) log.textContent = 'Could not encode: ' + String(e.message || e); return false; }
-  finally { btn.disabled = false; btn.textContent = old; }
-}
 function initSiteAgentUi() {
   const plugin = $('#retroPluginBtn'); if (plugin) plugin.onclick = () => setRetroEnabled(!retroEnabled);
-  const code = $('#retroCode'); if (code) code.addEventListener('input', () => { if (scriptDocuments[activeScript]) scriptDocuments[activeScript].source = code.value; renderRetroScript(); saveCurrentSession(); });
+  const code = $('#retroCode'); if (code) code.addEventListener('input', () => {
+    const sc = activeScriptItem(); if (sc) WS.editScript(studioWs, sc.id, code.value);
+    const live = $('#wsLive'); if (live && !live.checked) { saveCurrentSession(); return; }   // Live edit off: only the Run button rebuilds
+    clearTimeout(liveTimer); liveTimer = setTimeout(() => { renderRetroScript(); saveCurrentSession(); }, 250);                // Live edit on: rebuild the model as you type
+  });
+  const newScript = $('#wsNewScript'); if (newScript) newScript.onclick = () => { flushEditor(); const it = WS.addScript(studioWs, 'Script', ''); WS.activate(studioWs, it.id); renderScriptTabs(); renderRetroScript(); const c = $('#retroCode'); if (c) c.focus(); saveCurrentSession(); };
   const test = $('#retroTest'); if (test) test.onclick = runRetroSafeTest;
   const preview = $('#retroPreview'); if (preview) preview.onclick = renderRetroScript;
   const download = $('#retroDownload'); if (download) download.onclick = downloadActiveScript;
-  const enc = $('#retroEncode'); if (enc) enc.onclick = encodeActiveScript;
   const copy = $('#retroCopy'); if (copy) copy.onclick = async () => { const t = $('#retroEncText'); if (!t) return; try { await navigator.clipboard.writeText(t.value); } catch { t.select(); document.execCommand('copy'); } copy.textContent = 'Copied'; setTimeout(() => { copy.textContent = 'Copy'; }, 1500); };
   for (const id of ['lightTime', 'lightBright', 'lightAmbient', 'lightFog']) { const el = document.getElementById(id); if (el) el.addEventListener('input', renderRetroScript); }
   const shot = $('#retroScreenshot'); if (shot) shot.onclick = async () => {
     const canvas = $('#retroCanvas'); if (!canvas || !canvas.toBlob) return alert('This browser cannot capture the preview.');
     if (!Account.token()) { needLogin('use'); return; }
-    const source = scriptDocuments[activeScript]?.source || '';
+    const source = (activeScriptItem() || {}).source || '';
     canvas.toBlob(async blob => { if (!blob) return alert('Could not capture the preview.');
       const before = attachedNames().length;
-      await addAttachmentFiles([new File([blob], `retrostudio-preview-${activeScript + 1}.png`, { type: 'image/png' })]);
+      await addAttachmentFiles([new File([blob], `retrostudio-preview.png`, { type: 'image/png' })]);
       if (attachedNames().length > before) { inEl.value = `Review this simulated RetroStudio preview against the active script and suggest a fix if needed.\n\n\`\`\`lua\n${source}\n\`\`\``; inEl.focus(); inEl.dispatchEvent(new Event('input')); }
     }, 'image/png');
   };
@@ -674,7 +692,7 @@ async function send() {
       if (historyAdded) history.pop();
       if (plan && plan.why) msg.log('step', plan.why, 0);
       if (e && e.code === 'login') { msg.fail(e.message); needLogin('use'); }
-      else if (e && (e.code === 'limit-day' || e.code === 'limit-month')) { msg.fail(e.message); if (e.info) paintCloudLeft(e.info); }
+      else if (e && (e.code === 'limit-day' || e.code === 'limit-month')) { msg.fail(e.message + (retroForMessage ? (server ? ' RetroStudio also works with the free local models: open Models, pick one, and ask again.' : ' RetroStudio uses Pholama Cloud on the website. For unlimited free use, install Pholama on your PC and use a local model.') : '')); if (e.info) paintCloudLeft(e.info); }
       else msg.fail(e.message);
     }
   }
@@ -1045,7 +1063,7 @@ function newSession() {
   stopGen(); sessionId++; stopper = null; stopped = false;
   saveCurrentSession();
   currentSessionId = 's_' + Date.now() + '_' + Math.random().toString(36).slice(2, 6);
-  history = []; scriptDocuments = []; activeScript = 0; retroEnabled = false; setRetroEnabled(false); renderScriptTabs(); setBusy(false);
+  history = []; studioWs = WS.newWorkspace(); retroEnabled = false; setRetroEnabled(false); renderScriptTabs(); setBusy(false);
   chatEl.innerHTML = ''; chatEl.appendChild(heroEl); inEl.value = ''; paintCloudLeft(null); inEl.focus();
 }
 $('#newSess').onclick = () => { if (history.length && !confirm('Start a new session? This clears the current chat.')) return; newSession(); };
@@ -1282,7 +1300,7 @@ function saveCurrentSession() {
       model: modelName,
       ts: Date.now(),
       messages: trimmedMsgs,
-      retroScripts: scriptDocuments.slice(0, 6).map(s => ({ name: String(s.name || '').slice(0, 48), source: String(s.source || '').slice(0, 50000) })),
+      retroWorkspace: (t => t.length <= 400000 ? t : '')(WS.save(studioWs)), retroScripts: scriptList().slice(0, 6).map(s => ({ name: String(s.name || '').slice(0, 48), source: String(s.source || '').slice(0, 50000) })),
       retroPlugin: retroEnabled,
     };
 
@@ -1343,7 +1361,7 @@ function paintHistoryList() {
       stopGen(); sessionId++; stopper = null; stopped = false; setBusy(false);
           currentSessionId = s.id;
           history = [...(s.messages || [])];
-          scriptDocuments = Array.isArray(s.retroScripts) ? s.retroScripts.slice(0, 6) : []; activeScript = 0;
+          studioWs = s.retroWorkspace ? WS.load(s.retroWorkspace) : (() => { const w = WS.newWorkspace(); (Array.isArray(s.retroScripts) ? s.retroScripts.slice(0, 6) : []).forEach(x => WS.addScript(w, x.name, x.source)); return w; })();
           setRetroEnabled(!!s.retroPlugin); renderScriptTabs(); renderRetroScript();
       chatEl.innerHTML = '';
       hideHero();

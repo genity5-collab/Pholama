@@ -1,9 +1,9 @@
 // The Studio loop: AI writes -> preview runs -> result is checked -> AI fixes -> encode only when right.
 // Uses the REAL preview and the REAL encoder; only the AI is a fake that replies with scripted answers.
 import { simulateLuau } from '../docs/retrostudio.js';
-import { judge, pickScript, fixRequest, studioLoop, STUDIO_RULES, MAX_FIX_ROUNDS } from '../docs/studioloop.js';
+import { judge, pickScript, fixRequest, studioLoop, autoRepair, STUDIO_RULES, MAX_FIX_ROUNDS } from '../docs/studioloop.js';
 import { createRequire } from 'module';
-const enc = createRequire(import.meta.url)('../server/retroencoder.js');
+const enc = createRequire(import.meta.url)('../site-only/retroencoder.js');
 let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n + (c ? '' : '  -> ' + String(x).slice(0, 220))); if (!c) bad++; };
 
 const GOOD = 'local part = Instance.new("Part", workspace)\npart.Size = Vector3.new(6, 1, 6)\npart.Position = Vector3.new(0, 3, 0)\npart.Anchored = true\nprint("ready")\n';
@@ -44,5 +44,30 @@ ok('the rules tell the AI which lines are allowed', /Instance\.new/.test(STUDIO_
   ok('an AI failure ends the loop cleanly with no encode', !r.ok && !r.encoded); }
 { const r = await studioLoop({ source: GOOD, ask: async () => '', run, encode: async () => ({ ok: false, error: 'service down' }) });
   ok('encode failure is reported, not hidden', !r.ok && r.error === 'service down'); }
+
+
+// ---- automatic repair: fixes the common problems with NO AI message spent ----
+const rep = src => { const r = run(src); return autoRepair(src, r.sim, r.skipped); };
+const passes = src => judge(...Object.values(run(src))).ok;
+{ const bad = 'local p = Instance.new("Part")\np.Size = Vector3.new(4,1,4)\np.Position = Vector3.new(0,3,0)\n', r = rep(bad);
+  ok('repair: an unparented part gets workspace', /Instance\.new\("Part", workspace\)/.test(r.source) && passes(r.source), r.source); }
+{ const bad = GOOD + 'while true do\nwait(1)\nprint("loop")\nend\nprint("after")\n', r = rep(bad);
+  ok('repair: an unsupported while block is removed with its whole body', !/while|loop/.test(r.source) && /print\("after"\)/.test(r.source) && passes(r.source), r.source); }
+{ const bad = GOOD + 'if 1 == 1 then\nwhile true do\nwait(1)\nend\nend\nprint("kept")\n', r = rep(bad);
+  ok('repair: nested blocks inside a removed block do not leave a stray end', passes(r.source) && /kept/.test(r.source), r.source); }
+{ const bad = 'local a = Instance.new("Part", workspace)\nlocal b = Instance.new("Part", workspace)\na.Position = Vector3.new(0,1,0)\nb.Position = Vector3.new(0,1,0)\n', r = rep(bad);
+  ok('repair: overlapping parts are moved apart', passes(r.source) && /moved overlapping/.test(r.changes.join()), r.source); }
+{ const bad = 'local a = Instance.new("Part", workspace)\na.Position = Vector3.new(500, 3, -400)\n', r = rep(bad);
+  ok('repair: far-away parts are pulled into view', passes(r.source) && /Vector3\.new\(80, 3, -80\)/.test(r.source), r.source); }
+ok('repair: a good script is left exactly alone', rep(GOOD).changes.length === 0 && rep(GOOD).source.trim() === GOOD.trim());
+ok('repair: it never invents parts for an empty script', !/Instance\.new/.test(rep('print("x")\n').source));
+ok('repair: the user\'s own code is kept', /print\("ready"\)/.test(rep(GOOD + 'while true do\nend\n').source));
+{ let asked = 0, events = [];
+  const r = await studioLoop({ source: 'local p = Instance.new("Part")\np.Size = Vector3.new(4,1,4)\np.Position = Vector3.new(0,3,0)\nwhile true do\nwait(1)\nend\n', ask: async () => { asked++; return ''; }, run, encode, show: e => events.push(e.type) });
+  ok('a repairable script is fixed with ZERO AI messages and encoded', r.ok && asked === 0 && r.repairs >= 1 && !!r.encoded, JSON.stringify({ ok: r.ok, asked, repairs: r.repairs }));
+  ok('the UI is told a repair happened', events.includes('repair') && !events.includes('fix'), events.join()); }
+{ let asked = 0;
+  const r = await studioLoop({ source: 'print("only a print")\n', ask: async () => { asked++; return '```lua\n' + GOOD + '```'; }, run, encode });
+  ok('an unrepairable script (no parts at all) still asks the AI once', r.ok && asked === 1); }
 
 console.log(bad ? bad + ' FAILED' : 'ALL PASSED'); process.exit(bad ? 1 : 0);
