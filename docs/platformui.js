@@ -85,7 +85,7 @@ export async function mountPlatform(host, ctx) {
     const quick = el('section', 'dcard'); quick.append(el('h3', null, 'Quick links'));
     const row = el('div', 'dact'); row.append(btn('Write a post', () => go('posts'), 'p'), btn('Show a project', () => go('projects')), btn('Read the rules', () => go('rules'))); quick.append(row); grid.append(quick);
     const ai = el('section', 'dcard'); ai.append(el('h3', null, 'Pholama assistant'), el('p', 'dmut', 'Chat on the website is Agent Max, the cloud assistant: nothing to download. For local models, tools, programming languages, web search and Roblox Studio, use the PC app.'));
-    const a = el('a', 'btnlink', 'Get the PC app'); a.href = 'https://github.com/genity5-collab/Pholama#on-your-pc-more-power-tools-web-search'; a.target = '_blank'; a.rel = 'noopener'; ai.append(a); grid.append(ai);
+    const a = el('a', 'btnlink', 'Get the PC app'); a.href = 'https://github.com/genity5-collab/Pholama-PC#on-your-pc-more-power-tools-web-search'; a.target = '_blank'; a.rel = 'noopener'; ai.append(a); grid.append(ai);
     pane.append(grid, profileCard());
   }
 

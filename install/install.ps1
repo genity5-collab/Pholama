@@ -1,8 +1,8 @@
 # Pholama installer for Windows. In PowerShell run:
-#   irm https://raw.githubusercontent.com/genity5-collab/Pholama/main/install/install.ps1 | iex
+#   irm https://raw.githubusercontent.com/genity5-collab/Pholama-PC/main/install/install.ps1 | iex
 $ErrorActionPreference = 'Stop'
 $dir = Join-Path $env:USERPROFILE 'Pholama'
-$zip = 'https://github.com/genity5-collab/Pholama/archive/refs/heads/main.zip'
+$zip = 'https://github.com/genity5-collab/Pholama-PC/archive/refs/heads/main.zip'
 function Say($m) { Write-Host ""; Write-Host "  $m" }
 
 # Use the Node.js already on this PC when it is new enough; otherwise fetch a private copy (no install, no admin, nothing system-wide).

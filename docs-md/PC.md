@@ -7,7 +7,7 @@
 You do not need to install anything first. The one-line installer downloads its own private Node.js (about 30 MB) if your PC has none. If you run from a git clone instead (below), that route needs [Node.js 18+](https://nodejs.org).
 
 ```
-git clone https://github.com/genity5-collab/Pholama
+git clone https://github.com/genity5-collab/Pholama-PC
 cd Pholama
 node server/server.js      # or double-click start.bat (Pholama for PC is for Windows)
 ```

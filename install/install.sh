@@ -1,12 +1,12 @@
 #!/usr/bin/env bash
 # Pholama installer for Mac and Linux. Run:
-#   curl -fsSL https://raw.githubusercontent.com/genity5-collab/Pholama/main/install/install.sh | bash
+#   curl -fsSL https://raw.githubusercontent.com/genity5-collab/Pholama-PC/main/install/install.sh | bash
 set -e
 # Pholama for PC is for Windows, Mac and Linux computers. Refuse phones (Android via Termux) so it is never installed by accident.
 if [ -n "${TERMUX_VERSION:-}" ] || [ -d /data/data/com.termux ] || uname -a | grep -qi android; then
   printf '\n  Pholama for PC is for computers, not phones. On your phone just open the Pholama website.\n\n'; exit 1
 fi
-DIR="$HOME/Pholama"; TAR="https://github.com/genity5-collab/Pholama/archive/refs/heads/main.tar.gz"
+DIR="$HOME/Pholama"; TAR="https://github.com/genity5-collab/Pholama-PC/archive/refs/heads/main.tar.gz"
 say() { printf '\n  %s\n' "$1"; }
 NODE="node"
 if ! command -v node >/dev/null 2>&1 || [ "$(node -p 'process.versions.node.split(".")[0]')" -lt 18 ]; then

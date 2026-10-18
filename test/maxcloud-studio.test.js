@@ -12,12 +12,12 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
     if (q.url.startsWith('/auth/v1/user')) return s.end(JSON.stringify({ id: 'u1', user_metadata: { name: 'Sam' } }));
     if (q.url.includes('pholama_max_spend')) { seen.spend++; used++; return s.end(JSON.stringify([{ ok: true, day_used: used, month_used: 20 + used }])); }
     if (q.url.includes('pholama_max_refund')) { seen.refund++; return s.end('{}'); }
-    if (q.url.includes('chat/completions')) { const j = JSON.parse(b); seen.model.push(j); if (modelMode === 'fail') { s.statusCode = 500; return s.end('{}'); } return s.end(JSON.stringify({ choices: [{ message: { content: '<think>plan</think>I will add it.\n<tool>{"name":"studio_write","args":{"file":"a.js","content":"let x=1"}}</tool>' } }] })); }
+    if (q.url.includes('chat/completions') || q.url.includes('/v1/chat')) { const j = JSON.parse(b); seen.model.push(j); if (modelMode === 'fail') { s.statusCode = 500; return s.end('{}'); } return s.end(JSON.stringify({ choices: [{ message: { content: '<think>plan</think>I will add it.\n<tool>{"name":"studio_write","args":{"file":"a.js","content":"let x=1"}}</tool>' } }], free_ai_usage: { source: modelMode === 'paid' ? 'paid_pool' : 'self_hosted' } })); }
     s.statusCode = 404; s.end('{}'); }); }).listen(0, '127.0.0.1');
   await new Promise(r => setTimeout(r, 150)); const base = 'http://127.0.0.1:' + net.address().port;
   // fake Deno + fetch rewrite: everything the function sends to Supabase / OpenRouter / Groq goes to the fake server
-  let handler; global.Deno = { serve: h => { handler = h; }, env: { get: k => ({ PHOLAMA_SUPABASE_SERVICE_KEY: 'svc', OPENROUTER_API_KEY: 'orkey', GROQ_API_KEY: 'g1' }[k]) } };
-  const realFetch = global.fetch; global.fetch = (u, o) => { u = String(u); if (/nyswblzzvqzheaxvrqtq\.supabase\.co|openrouter\.ai|api\.groq\.com|github\.io/.test(u)) u = base + u.replace(/^https?:\/\/[^/]+/, ''); return realFetch(u, o); };
+  let handler; global.Deno = { serve: h => { handler = h; }, env: { get: k => ({ PHOLAMA_SUPABASE_SERVICE_KEY: 'svc', FREE_AI_API_KEY: 'fk' }[k]) } };
+  const realFetch = global.fetch; global.fetch = (u, o) => { u = String(u); if (/nyswblzzvqzheaxvrqtq\.supabase\.co|api\.free\.ai|github\.io/.test(u)) u = base + u.replace(/^https?:\/\/[^/]+/, ''); return realFetch(u, o); };
   await import('file://' + out);
   const call = body => handler(new Request('http://x/f', { method: 'POST', headers: { authorization: 'Bearer tok', 'content-type': 'application/json' }, body: JSON.stringify(body) })).then(async r => ({ status: r.status, j: await r.json() }));
   const SYS = 'STUDIO RULES: call tools like <tool>{"name":"studio_write"}</tool>. PROJECT MAP: index.html, app.js. ' + 'x'.repeat(6000);
@@ -34,11 +34,16 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   // normal (non Studio) chat is unchanged: still the JSON site helper
   seen.model.length = 0; modelMode = 'ok';
   r = await call({ messages: [{ role: 'user', content: 'what is pholama' }] });
-  ok('normal chat still uses the old JSON helper (response_format json)', seen.model[0] && seen.model[0].response_format && seen.model[0].response_format.type === 'json_object', JSON.stringify(seen.model[0] && seen.model[0].response_format));
+  ok('normal chat still uses the JSON helper prompt (JSON_RULE)', seen.model[0] && seen.model[0].messages && /ONLY one JSON object/.test(String(seen.model[0].messages[0] && seen.model[0].messages[0].content)), JSON.stringify(seen.model[0] && seen.model[0].messages && seen.model[0].messages[0]).slice(0, 120));
   // nobody pays for a failure
   modelMode = 'fail'; const refundBefore = seen.refund;
   r = await call({ studio: true, messages: [{ role: 'system', content: 'S' }, { role: 'user', content: 'go' }] });
   ok('when every model fails, the message is refunded', r.status === 500 && seen.refund === refundBefore + 1, r.status + ' refunds=' + (seen.refund - refundBefore));
+  // zero-spend guarantee: a reply that did not come from the self-hosted pool is refused and refunded
+  modelMode = 'paid'; const refundPaid = seen.refund;
+  r = await call({ studio: true, messages: [{ role: 'system', content: 'S' }, { role: 'user', content: 'go' }] });
+  ok('a non-self-hosted (paid) model reply is refused and the message refunded', r.status === 500 && seen.refund === refundPaid + 1 && !(r.j && r.j.reply), r.status + ' refunds=' + (seen.refund - refundPaid));
+  modelMode = 'ok';
   // the PC side: in a long job the rules survive the "last 12" cut
   const { keepRules } = require('../server/maxcloud');
   const long = [{ role: 'system', content: 'RULES' }]; for (let i = 0; i < 30; i++) long.push({ role: i % 2 ? 'assistant' : 'user', content: 'm' + i });

@@ -6,7 +6,7 @@ const lib = u => u.startsWith('http://') ? http : https;
 const { execSync } = require('child_process');
 
 const ROOT = path.join(__dirname, '..');
-const REPO = process.env.PHOLAMA_REPO || 'genity5-collab/Pholama';
+const REPO = process.env.PHOLAMA_REPO || 'genity5-collab/Pholama-PC';
 const BRANCH = process.env.PHOLAMA_BRANCH || 'main';
 const RAW = process.env.PHOLAMA_UPDATE_BASE || `https://raw.githubusercontent.com/${REPO}/${BRANCH}`;   // overridable for testing or your own mirror
 const ARCHIVE = process.env.PHOLAMA_UPDATE_ARCHIVE || `https://github.com/${REPO}/archive/refs/heads/${BRANCH}.tar.gz`;

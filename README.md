@@ -89,15 +89,15 @@ The PC version can also search the web, use tools and show a **live log** of wha
 
 Windows (PowerShell):
 ```
-irm https://raw.githubusercontent.com/genity5-collab/Pholama/main/install/install.ps1 | iex
+irm https://raw.githubusercontent.com/genity5-collab/Pholama-PC/main/install/install.ps1 | iex
 ```
 Pholama for PC is for Windows. It sets up everything it needs by itself the first time it runs (the model engine and a small Python, about 30 MB in total, and never a model you did not pick).
 
-**B. Zip file:** [download](https://github.com/genity5-collab/Pholama/archive/refs/heads/main.zip), unzip, then double-click **start.bat**. This route needs [Node.js 18+](https://nodejs.org) already installed; the installer above does not.
+**B. Zip file:** [download](https://github.com/genity5-collab/Pholama-PC/archive/refs/heads/main.zip), unzip, then double-click **start.bat**. This route needs [Node.js 18+](https://nodejs.org) already installed; the installer above does not.
 
 **C. One command with npx** (only if you already have [Node.js 18+](https://nodejs.org))
 ```
-npx github:genity5-collab/Pholama
+npx github:genity5-collab/Pholama-PC
 ```
 
 **Look for the llama icon.** The installer (A) puts a **Pholama** icon on your Desktop and in the Start Menu. Double-click it to open Pholama. If you used the zip (C), the first time you run **start.bat** it adds the icon to your Desktop too.

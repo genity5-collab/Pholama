@@ -12,11 +12,11 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
     if (q.url.includes('pholama_is_pro')) { proAsked = JSON.parse(b); if (proMode === 'drop') return q.socket.destroy(); if (proMode === 'error') { s.statusCode = 500; return s.end('{}'); } if (proMode === 'garbage') return s.end('"yes please"'); return s.end(JSON.stringify(proMode === 'pro')); }
     if (q.url.includes('pholama_max_spend')) { spendArgs = JSON.parse(b); return s.end(JSON.stringify([{ ok: !global.__deny, reason: global.__deny, day_used: 3, month_used: 9 }])); }
     if (q.url.includes('pholama_max_refund')) return s.end('{}');
-    if (q.url.includes('chat/completions')) return s.end(JSON.stringify({ choices: [{ message: { content: '{"action":"answer","text":"hi"}' } }] }));
+    if (q.url.includes('chat/completions') || q.url.includes('/v1/chat')) return s.end(JSON.stringify({ choices: [{ message: { content: '{"action":"answer","text":"hi"}' } }], free_ai_usage: { source: 'self_hosted' } }));
     s.statusCode = 404; s.end('{}'); }); }).listen(0, '127.0.0.1');
   await new Promise(r => setTimeout(r, 150)); const base = 'http://127.0.0.1:' + net.address().port;
-  let handler; global.Deno = { serve: h => { handler = h; }, env: { get: k => ({ PHOLAMA_SUPABASE_SERVICE_KEY: 'svc', OPENROUTER_API_KEY: 'orkey', GROQ_API_KEY: 'g1' }[k]) } };
-  const realFetch = global.fetch; global.fetch = (u, o) => { u = String(u); if (/nyswblzzvqzheaxvrqtq\.supabase\.co|openrouter\.ai|api\.groq\.com|github\.io/.test(u)) u = base + u.replace(/^https?:\/\/[^/]+/, ''); return realFetch(u, o); };
+  let handler; global.Deno = { serve: h => { handler = h; }, env: { get: k => ({ PHOLAMA_SUPABASE_SERVICE_KEY: 'svc', FREE_AI_API_KEY: 'fk' }[k]) } };
+  const realFetch = global.fetch; global.fetch = (u, o) => { u = String(u); if (/nyswblzzvqzheaxvrqtq\.supabase\.co|api\.free\.ai|github\.io/.test(u)) u = base + u.replace(/^https?:\/\/[^/]+/, ''); return realFetch(u, o); };
   await import('file://' + out);
   const call = body => handler(new Request('http://x/f', { method: 'POST', headers: { authorization: 'Bearer tok', 'content-type': 'application/json' }, body: JSON.stringify(body) })).then(async r => ({ status: r.status, j: await r.json().catch(() => ({})) }));
   const M = { messages: [{ role: 'user', content: 'hi' }] };

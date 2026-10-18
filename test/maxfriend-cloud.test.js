@@ -13,11 +13,11 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
     if (q.url.includes('pholama_max_chat_refund')) { refunds++; return s.end('null'); }
     if (q.url.includes('pholama_max_spend')) { spends++; return s.end(JSON.stringify([{ ok: true, day_used: 1, month_used: 1 }])); }
     if (q.url.includes('pholama_is_pro')) return s.end('false');
-    if (q.url.includes('chat/completions')) { sawModel = JSON.parse(b); if (modelMode === 'fail') { s.statusCode = 500; return s.end('{}'); } return s.end(JSON.stringify({ choices: [{ message: { content: modelMode === 'leak' ? 'TOOLS (use one when it helps) secret' : 'Hi Sam, nice to hear from you!' } }] })); }
+    if (q.url.includes('chat/completions') || q.url.includes('/v1/chat')) { sawModel = JSON.parse(b); if (modelMode === 'fail') { s.statusCode = 500; return s.end('{}'); } return s.end(JSON.stringify({ choices: [{ message: { content: modelMode === 'leak' ? 'TOOLS (use one when it helps) secret' : 'Hi Sam, nice to hear from you!' } }], free_ai_usage: { source: 'self_hosted' } })); }
     s.statusCode = 404; s.end('{}'); }); }).listen(0, '127.0.0.1');
   await new Promise(r => setTimeout(r, 150)); const base = 'http://127.0.0.1:' + net.address().port;
-  let handler; global.Deno = { serve: h => { handler = h; }, env: { get: k => ({ PHOLAMA_SUPABASE_SERVICE_KEY: 'svc', OPENROUTER_API_KEY: 'orkey', GROQ_API_KEY: 'g1' }[k]) } };
-  const realFetch = global.fetch; global.fetch = (u, o) => { u = String(u); if (/nyswblzzvqzheaxvrqtq\.supabase\.co|openrouter\.ai|api\.groq\.com|github\.io/.test(u)) u = base + u.replace(/^https?:\/\/[^/]+/, ''); return realFetch(u, o); };
+  let handler; global.Deno = { serve: h => { handler = h; }, env: { get: k => ({ PHOLAMA_SUPABASE_SERVICE_KEY: 'svc', FREE_AI_API_KEY: 'fk' }[k]) } };
+  const realFetch = global.fetch; global.fetch = (u, o) => { u = String(u); if (/nyswblzzvqzheaxvrqtq\.supabase\.co|api\.free\.ai|github\.io/.test(u)) u = base + u.replace(/^https?:\/\/[^/]+/, ''); return realFetch(u, o); };
   await import('file://' + out);
   const call = (body, tok = 'tok') => handler(new Request('http://x/f', { method: 'POST', headers: { ...(tok ? { authorization: 'Bearer ' + tok } : {}), 'content-type': 'application/json' }, body: JSON.stringify(body) })).then(async r => ({ status: r.status, j: await r.json().catch(() => ({})) }));
   const reset = () => { saved = []; refunds = 0; spends = 0; sawModel = null; modelMode = 'ok'; saveFail = false; };
