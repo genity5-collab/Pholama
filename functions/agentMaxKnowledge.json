@@ -24,7 +24,7 @@
   {
    "id": "tools",
    "keys": "tools search web calculator clock mcp credits thinking switches icons log live tokens",
-   "text": "TOOLS (PC app only; the website is plain chat with Agent Max): web search (20 credits), read a web page (10), calculator and clock (1 each), MCP tool call (15), Thinking (25, charged only when the model really thinks). There are 1000 credits per day on the PC, resetting at local midnight. At 0, tools switch off and the model answers alone. Plain local chat is always free. Next to the message box there are icon buttons for Search, Tools, MCP and Thinking. An icon only appears if the selected model can really do it; tap to turn it off or on and Pholama remembers. Each reply shows a token line like '42 in, 17 out, 59 tokens'; a leading ~ means it is an estimate. The PC host also shows a live log of each step the AI takes."
+   "text": "TOOLS (PC app only; the website is plain chat with Agent Max): web search, read a web page, calculator and clock, GitHub, MCP tool calls, terminal approvals and Thinking. Integration credits are separate from the cloud allowance and are shown in Settings. Cloud Agent Max has a rolling 1,000-credit Monday-to-Sunday UTC allowance; Qwen costs 5 credits per word, Mistral costs 15, and started work minutes cost 5. At 0, cloud AI stops; local PC chat and local tools remain free. Next to the message box there are icon buttons for Search, Tools, MCP and Thinking. An icon only appears if the selected model can really do it; tap to turn it off or on and Pholama remembers. Each reply shows a token line like '42 in, 17 out, 59 tokens'; a leading ~ means it is an estimate. The PC host also shows a live log of each step the AI takes."
   },
   {
    "id": "controls",
