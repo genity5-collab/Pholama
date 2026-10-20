@@ -22,6 +22,7 @@ import { studioLoop, rulesFor } from './studioloop.js';
 import * as WS from './studioworkspace-model.js';
 import { encodeLua } from './retroencode.js';
 import { lookup as docsLookup, briefFor as docsBrief } from './robloxdocs.js';
+import { mountCloudStudio } from './cloudstudio.js';
 
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
@@ -1471,12 +1472,13 @@ $('#clearHistBtn').onclick = () => {
 
 // ---------- views: guides, platform and chat ----------
 function showView(name) {
-  const dh = name === 'dash', ph = name === 'plat', ch = name === 'chat';
-  document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph);
-  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph; const cz = $('#chat'); if (cz) cz.hidden = !ch;
-  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vChat', ch]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  const dh = name === 'dash', ph = name === 'plat', ch = name === 'chat', st = name === 'studio';
+  document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph); document.body.classList.toggle('studio-on', st);
+  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph; const cz = $('#chat'); if (cz) cz.hidden = !ch; const sz = $('#studioView'); if (sz) sz.hidden = !st;
+  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vChat', ch], ['#vStudio', st]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
   if (dh) paintDashboard();
   if (ph) paintPlatform();
+  if (st) paintStudio();
 }
 // The public website and PC app use the same Pholama Cloud cloud route when cloud chat is selected.
 const siteOnly = () => !server;
@@ -1505,9 +1507,20 @@ async function paintDashboard() {
     if (!server) { try { const infoMod = await import('./info.js'); const rel = await (await fetch('releases.json', { cache: 'no-cache' })).json().catch(() => null); const host = document.createElement('div'); host.id = 'infoHost'; el.appendChild(host); infoMod.mountInfo(host, { releases: rel && rel.releases }); } catch {} }
   } catch (e) { el.textContent = 'The dashboard could not load: ' + (e && e.message || e); }
 }
+let studioMod = null;
+async function paintStudio() {
+  const host = $('#siteStudioHost'); if (!host) return;
+  try {
+    studioMod = studioMod || mountCloudStudio(host, { Account, cfg: () => window.PHOLAMA || {} });
+    await studioMod.ready;
+  } catch (e) { host.textContent = 'Code Studio could not load: ' + (e && e.message || e); }
+}
 $('#vDash').onclick = () => showView('dash');
 $('#vChat').onclick = () => showView('chat');
 $('#vPlat').onclick = () => showView('plat');
+$('#vStudio').onclick = () => showView('studio');
+$('#studioRefresh').onclick = () => { if (studioMod && studioMod.refresh) studioMod.refresh(); else paintStudio(); };
+$('#studioConnectors').onclick = () => { showView('chat'); openSettings('tools'); };
 init().then(refreshCredits).then(() => { markSite(); showView(siteOnly() ? 'chat' : 'dash'); });
 
 // ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----
