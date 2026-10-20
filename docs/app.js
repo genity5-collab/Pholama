@@ -1461,14 +1461,15 @@ $('#clearHistBtn').onclick = () => {
   paintHistoryList();
 };
 
-// ---------- views: guides, platform and the chat-first mock Studio are separate views ----------
+// ---------- views: guides, platform, chat and the Supabase-backed Studio ----------
 function showView(name) {
-  const dh = name === 'dash', ph = name === 'plat', ch = name === 'chat';
-  document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph);
-  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph;
-  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vChat', ch]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  const dh = name === 'dash', ph = name === 'plat', ch = name === 'chat', st = name === 'studio';
+  document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph); document.body.classList.toggle('studio-on', st);
+  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph; const sz = $('#siteStudio'); if (sz) sz.hidden = !st; const cz = $('#chat'); if (cz) cz.hidden = !ch;
+  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vChat', ch], ['#vStudio', st]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
   if (dh) paintDashboard();
   if (ph) paintPlatform();
+  if (st) paintSiteStudio();
 }
 // The public website and PC app use the same Pholama Cloud cloud route when cloud chat is selected.
 const siteOnly = () => !server;
@@ -1480,6 +1481,17 @@ async function paintPlatform() {
     platMod = platMod || await import('./platformui.js');
     await platMod.mountPlatform(host, { Account, cfg: () => window.PHOLAMA || {}, login: () => { openSettings('account'); }, onProfile: paintWhoami });
   } catch (e) { host.textContent = 'The Platform could not load: ' + (e && e.message || e); }
+}
+let siteStudioMod = null, siteStudioMount = null;
+async function paintSiteStudio() {
+  const host = $('#siteStudio'); if (!host || siteStudioMount) return;
+  try {
+    siteStudioMod = siteStudioMod || await import('./cloudstudio.js');
+    siteStudioMount = siteStudioMod.mountCloudStudio(host, { Account, cfg: () => window.PHOLAMA || {} });
+    await siteStudioMount.ready;
+  } catch (e) {
+    host.textContent = 'Pholama Studio could not load: ' + (e && e.message || e);
+  }
 }
 // "Logged in as Name" in the header, on PC and on phones. Shows the platform name when there is one.
 async function paintWhoami(name) {
@@ -1500,6 +1512,7 @@ async function paintDashboard() {
 $('#vDash').onclick = () => showView('dash');
 $('#vChat').onclick = () => showView('chat');
 $('#vPlat').onclick = () => showView('plat');
+$('#vStudio').onclick = () => showView('studio');
 init().then(refreshCredits).then(() => { markSite(); showView(siteOnly() ? 'chat' : 'dash'); });
 
 // ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----
