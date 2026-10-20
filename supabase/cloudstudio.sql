@@ -46,3 +46,13 @@ begin
 end $$;
 revoke all on function public.pholama_cloud_weekly_spend(uuid, integer) from public, anon, authenticated;
 grant execute on function public.pholama_cloud_weekly_spend(uuid, integer) to service_role;
+
+create or replace function public.pholama_cloud_weekly_refund(p_user uuid, p_cost integer) returns jsonb
+language plpgsql security definer set search_path = public as $$
+declare d date := (now() at time zone 'utc')::date - extract(isodow from (now() at time zone 'utc'))::int + 1; n int; c int := greatest(0, least(coalesce(p_cost, 0), 1000));
+begin
+  update public.pholama_cloud_weekly_usage set used = greatest(0, used - c), updated_at = now() where user_id = p_user and week_start = d returning used into n;
+  return jsonb_build_object('ok', n is not null, 'used', coalesce(n, 0), 'cap', 1000);
+end $$;
+revoke all on function public.pholama_cloud_weekly_refund(uuid, integer) from public, anon, authenticated;
+grant execute on function public.pholama_cloud_weekly_refund(uuid, integer) to service_role;

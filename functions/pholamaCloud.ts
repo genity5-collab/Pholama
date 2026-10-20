@@ -152,6 +152,11 @@ Deno.serve(async (req) => {
     const who = await fetch(SB + '/auth/v1/user', { headers: { apikey: key, Authorization: 'Bearer ' + tok } });
     if (!who.ok) return out({ error: 'Your login expired. Log in again.', code: 'login' }, 401);
     const user = await who.json(); if (!user?.id) return out({ error: 'Log in to use Agent Max.', code: 'login' }, 401);
+    const weekStart = (() => { const d = new Date(); const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() - day + 1); return d.toISOString().slice(0, 10); })();
+    const weeklyUsage = async () => {
+      const ur = await fetch(SB + '/rest/v1/pholama_cloud_weekly_usage?user_id=eq.' + encodeURIComponent(user.id) + '&week_start=eq.' + weekStart + '&select=used', { headers: { apikey: key, Authorization: 'Bearer ' + key } });
+      if (!ur.ok) throw new Error('usage'); const rows = await ur.json() as any[]; return Number(rows[0]?.used || 0);
+    };
 
     // 2) read the request
     const body = await req.json().catch(() => ({}));
@@ -183,10 +188,7 @@ Deno.serve(async (req) => {
     // Balance only: lets the page show the credits before the first message. Free, never charges, never calls a model.
     if (body.status === true) {
       try {
-        const since0 = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
-        const ur0 = await fetch(SB + '/rest/v1/pholama_cloud_usage?user_id=eq.' + encodeURIComponent(user.id) + '&day=gte.' + since0 + '&select=units', { headers: { apikey: key, Authorization: 'Bearer ' + key } });
-        if (!ur0.ok) throw new Error('usage');
-        const used0 = ((await ur0.json()) as any[]).reduce((n, r) => n + Number(r.units || 0), 0);
+        const used0 = await weeklyUsage();
         const cap0 = WEEK_CREDITS + PRO_EXTRA_CREDITS;
         return out({ status: true, day_used: used0, day_cap: cap0, month_used: used0, month_cap: cap0, credits_left: Math.max(0, cap0 - used0), week_cap: cap0 });
       } catch { return out({ error: 'Could not read your credits. Try again.', code: 'limit-check' }, 502); }
@@ -219,24 +221,16 @@ Deno.serve(async (req) => {
     const typedPart = (t: string) => { const i = String(t).indexOf('\n\n[Studio]\n'); return i >= 0 ? String(t).slice(0, i) : String(t); };
     const sendCost = Math.max(modelSpec.cost, wordCount(typedPart(last.content)) * modelSpec.cost);
     const weekCap = isPro ? WEEK_CREDITS + PRO_EXTRA_CREDITS : WEEK_CREDITS;
-    const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     let weekUsed = 0;
-    try {
-      const ur = await fetch(SB + '/rest/v1/pholama_cloud_usage?user_id=eq.' + encodeURIComponent(user.id) + '&day=gte.' + since + '&select=units', { headers: { apikey: key, Authorization: 'Bearer ' + key } });
-      if (!ur.ok) throw new Error('usage');
-      weekUsed = ((await ur.json()) as any[]).reduce((n, r) => n + Number(r.units || 0), 0);
-    } catch { return out({ error: 'Could not check your credits. Try again.', code: 'limit-check' }, 502); }
+    try { weekUsed = await weeklyUsage(); } catch { return out({ error: 'Could not check your credits. Try again.', code: 'limit-check' }, 502); }
     const left = weekCap - weekUsed;
     const info = { day_used: weekUsed, day_cap: weekCap, month_used: weekUsed, month_cap: weekCap, credits_left: Math.max(0, left), week_cap: weekCap, cost: sendCost };
     if (left < sendCost) {
       return out({ error: `Not enough credits (${Math.max(0, left)} left, this message needs ${sendCost}). You get ${weekCap} credits a week, and they come back by themselves as the week moves on. Local models stay free.`, code: 'limit-month', ...info }, 429);
     }
-    // today's row carries the spend; the database refuses it if it would pass the cap we hand it (the room left this week plus what today already holds)
-    const todayUsed = await (async () => { try { const tr = await fetch(SB + '/rest/v1/pholama_cloud_usage?user_id=eq.' + encodeURIComponent(user.id) + '&day=eq.' + new Date().toISOString().slice(0, 10) + '&select=units', { headers: { apikey: key, Authorization: 'Bearer ' + key } }); const j = tr.ok ? await tr.json() : []; return Number(j[0]?.units || 0); } catch { return 0; } })();
-    const spendCap = todayUsed + left;
-    const sp = await rpc('pholama_cloud_spend', { p_user: user.id, p_cost: sendCost, p_cap: spendCap });
+    const sp = await rpc('pholama_cloud_weekly_spend', { p_user: user.id, p_cost: sendCost });
     if (!sp.ok) return out({ error: 'Could not check your credits. Try again.', code: 'limit-check' }, 502);
-    const row = (await sp.json())[0] || {};
+    const rawRow = await sp.json(); const row = Array.isArray(rawRow) ? (rawRow[0] || {}) : (rawRow || {});
     if (!row.ok) return out({ error: `Not enough credits for this message (${sendCost} needed). They come back by themselves as the week moves on. Local models stay free.`, code: 'limit-month', ...info }, 429);
     info.day_used = info.month_used = weekUsed + sendCost; info.credits_left = Math.max(0, left - sendCost);
     charged = user.id; chargedCostRef = sendCost; const startedAt = Date.now();
@@ -245,7 +239,7 @@ Deno.serve(async (req) => {
       try {
         const mins = Math.floor((Date.now() - startedAt) / 60000);   // quick answers (under a minute) are free; a full minute of AI work costs 3
         const cost = Math.min(mins * MINUTE_COST, Math.max(0, info.credits_left));
-        if (cost > 0) { const w = await rpc('pholama_cloud_spend', { p_user: user.id, p_cost: cost, p_cap: spendCap }); if (w.ok) { info.day_used += cost; info.month_used += cost; info.credits_left -= cost; chargedCostRef = (chargedCostRef || 0) + cost; } }
+        if (cost > 0) { const w = await rpc('pholama_cloud_weekly_spend', { p_user: user.id, p_cost: cost }); if (w.ok) { info.day_used += cost; info.month_used += cost; info.credits_left -= cost; chargedCostRef = (chargedCostRef || 0) + cost; } }
       } catch { /* the answer is still delivered */ }
     };
 
@@ -288,7 +282,7 @@ Deno.serve(async (req) => {
     await billWork();
     return out({ reply, tools: used, actions, thinking, ...info });
   } catch (e) {
-    if (charged) await rpc('pholama_cloud_refund', { p_user: charged, p_cost: typeof chargedCostRef === 'number' ? chargedCostRef : 0 }).catch(() => {});   // nobody pays for an answer they did not get
+    if (charged) await rpc('pholama_cloud_weekly_refund', { p_user: charged, p_cost: typeof chargedCostRef === 'number' ? chargedCostRef : 0 }).catch(() => {});   // nobody pays for an answer they did not get
     console.log('AgentMax error:', String(e).slice(0, 200));   // server log only
     return out({ error: 'Agent Max did not answer. You were not charged. Try again.', code: 'server' }, 500);
   }
