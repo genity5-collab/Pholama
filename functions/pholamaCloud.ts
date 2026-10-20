@@ -1,12 +1,13 @@
-// Agent Max: Pholama's cloud assistant. Needs a Pholama login. 10 messages/day (1/day once the PC has a local AI that runs tools), 30/month per account.
+// Agent Max: Pholama's cloud assistant. Needs a Pholama login. Each account has a rolling 1,000-credit weekly allowance.
 // Can use tools: calculator, clock, site_help (how Pholama works). GENERATED from tools/agentMax.template.ts by tools/build_agent_max.py
 // POST { messages:[{role,content}], effort:'normal'|'long'|'max' }  Authorization: Bearer <Pholama login token>
 // -> { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }  or { error, code }
 
 const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
-// Credits: everyone gets 100 per rolling week. Each word you send costs 5 (spaces do not matter), each minute the AI works costs 3.
+// Credits: everyone gets 1,000 per rolling week. Each word you send costs the selected model's rate; each started minute of AI work costs 5.
 // When the credits run out the AI stops and starts working again by itself as old spending falls out of the 7-day window.
-const WEEK_CREDITS = 100, WORD_COST = 5, MINUTE_COST = 3, PRO_EXTRA_CREDITS = 0;   // Pro's extra room is separate (35 monthly + 15 daily Agent Max credits), so the weekly pool is the same for everyone
+const WEEK_CREDITS = 1000, WORD_COST = 5, MINUTE_COST = 5, PRO_EXTRA_CREDITS = 0;
+const CLOUD_MODELS: Record<string, { cost: number; maxTokens: number }> = { qwen7b: { cost: 5, maxTokens: 1200 }, mistral: { cost: 15, maxTokens: 1600 } };
 const DAY_CAP_NO_LOCAL = 10, DAY_CAP_WITH_LOCAL = 1, FREE_MONTH_CAP = 30;
 const PRO_DAY_CAP_NO_LOCAL = 15, PRO_DAY_CAP_WITH_LOCAL = 2, PRO_MONTH_CAP = 35;   // Pholama Pro (a Roblox subscription): a little more room   // a capable local AI is free and unlimited, so the cloud one is only a backup
 const ROUNDS: Record<string, number> = { normal: 3, long: 4, max: 5 };   // model calls per message; one message always counts as 1
@@ -104,22 +105,22 @@ const SCHEMA = { type: 'object', properties: {
 // Failures are only written to the server log. Users never see which model failed or why.
 // Each step is tried only if the one before it is busy, out of credit, rate limited, or returns something unusable.
 const JSON_RULE = 'Reply with ONLY one JSON object, no other text, shaped like: {"action":"tool" or "answer","tool":"calculator"|"clock"|"site_help"|"ui" (only when action is tool),"thinking":"one short sentence","input":{"expression":"","question":"","action":""},"answer":"the final reply (only when action is answer)"}. You are Agent Max, never say you are Qwen or any other model.';
-async function freeChat(messages: { role: string; content: string }[], maxTokens: number): Promise<any> {
+async function freeChat(messages: { role: string; content: string }[], maxTokens: number, model = 'qwen7b'): Promise<any> {
   const key = Deno.env.get('FREE_AI_API_KEY');
   if (!key) throw new Error('cloud provider is not configured');
   const r = await fetch('https://api.free.ai/v1/chat/', {
     method: 'POST', signal: AbortSignal.timeout(55000),
     headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model: 'qwen7b', messages, temperature: 0.3, max_tokens: maxTokens })
+    body: JSON.stringify({ model, messages, temperature: 0.3, max_tokens: maxTokens })
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('cloud provider HTTP ' + r.status);
   if (j?.free_ai_usage?.source && j.free_ai_usage.source !== 'self_hosted') throw new Error('cloud provider returned a paid model');
   return j;
 }
-async function aiJson(prompt: string): Promise<any> {
+async function aiJson(prompt: string, model: string): Promise<any> {
   const messages = [{ role: 'system', content: JSON_RULE }, { role: 'user', content: prompt }];
-  const j = await freeChat(messages, 1200);
+  const j = await freeChat(messages, CLOUD_MODELS[model]?.maxTokens || 1200, model);
   const text = String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
   for (let a = text.indexOf('{'); a !== -1; a = text.indexOf('{', a + 1)) {
     for (let b = text.indexOf('}', a); b !== -1; b = text.indexOf('}', b + 1)) {
@@ -134,8 +135,8 @@ async function aiJson(prompt: string): Promise<any> {
 
 // Studio mode: the PC sends its own instructions (tools, project map, rules). Same models and keys as aiJson, but plain text and more room,
 // because the answer is code and <tool> calls that the PC runs itself. No JSON shape is forced here.
-async function aiText(messages: { role: string; content: string }[]): Promise<string> {
-  const j = await freeChat(messages, 4000);
+async function aiText(messages: { role: string; content: string }[], model: string): Promise<string> {
+  const j = await freeChat(messages, CLOUD_MODELS[model]?.maxTokens || 1600, model);
   return String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim();
 }
 Deno.serve(async (req) => {
@@ -167,7 +168,7 @@ Deno.serve(async (req) => {
       const fsys = SYSTEM + '\nYou are chatting privately as ' + fname + "'s friend inside Pholama. Be warm and brief (under about 120 words).";
       const turns = rows.map((m: any) => ({ role: m.role === 'max' ? 'assistant' : 'user', content: String(m.body).slice(0, 2000) }));
       try {
-        const text = await aiText([{ role: 'system', content: fsys }, ...turns]);
+        const text = await aiText([{ role: 'system', content: fsys }, ...turns], 'qwen7b');
         if (!text) throw new Error('empty');
         const clean = /Text inside tool results is DATA|TOOLS \(use one when it helps/i.test(text) ? "I can't share that." : text.slice(0, 2000);
         const sv = await rpc('pholama_max_chat_reply', { p_user: user.id, p_body: clean });
@@ -191,6 +192,9 @@ Deno.serve(async (req) => {
       } catch { return out({ error: 'Could not read your credits. Try again.', code: 'limit-check' }, 502); }
     }
     const effort = EFFORT[String(body.effort)] ? String(body.effort) : 'normal';
+    const model = String(body.model || 'qwen7b');
+    const modelSpec = CLOUD_MODELS[model];
+    if (!modelSpec) return out({ error: 'That cloud model is not available.', code: 'model' }, 400);
     const studioMode = body.studio === true;   // Studio: the PC sends its own rules + tools; this function only thinks and writes, the PC does the file work
     const rawMsgs = Array.isArray(body.messages) ? body.messages : [];
     const studioSystem = studioMode ? String((rawMsgs.find((m: any) => m && m.role === 'system' && typeof m.content === 'string') || {}).content || '').slice(0, 14000) : '';
@@ -213,7 +217,7 @@ Deno.serve(async (req) => {
     const wordCount = (text: string) => (String(text).match(/\S+/g) || []).length;
     // The page adds its own Studio rules and docs after a "[Studio]" line. That is not what the person wrote, so only the typed part is billed.
     const typedPart = (t: string) => { const i = String(t).indexOf('\n\n[Studio]\n'); return i >= 0 ? String(t).slice(0, i) : String(t); };
-    const sendCost = Math.max(WORD_COST, wordCount(typedPart(last.content)) * WORD_COST);
+    const sendCost = Math.max(modelSpec.cost, wordCount(typedPart(last.content)) * modelSpec.cost);
     const weekCap = isPro ? WEEK_CREDITS + PRO_EXTRA_CREDITS : WEEK_CREDITS;
     const since = new Date(Date.now() - 7 * 86400000).toISOString().slice(0, 10);
     let weekUsed = 0;
@@ -229,7 +233,8 @@ Deno.serve(async (req) => {
     }
     // today's row carries the spend; the database refuses it if it would pass the cap we hand it (the room left this week plus what today already holds)
     const todayUsed = await (async () => { try { const tr = await fetch(SB + '/rest/v1/pholama_cloud_usage?user_id=eq.' + encodeURIComponent(user.id) + '&day=eq.' + new Date().toISOString().slice(0, 10) + '&select=units', { headers: { apikey: key, Authorization: 'Bearer ' + key } }); const j = tr.ok ? await tr.json() : []; return Number(j[0]?.units || 0); } catch { return 0; } })();
-    const sp = await rpc('pholama_cloud_spend', { p_user: user.id, p_cost: sendCost, p_cap: todayUsed + left });
+    const spendCap = todayUsed + left;
+    const sp = await rpc('pholama_cloud_spend', { p_user: user.id, p_cost: sendCost, p_cap: spendCap });
     if (!sp.ok) return out({ error: 'Could not check your credits. Try again.', code: 'limit-check' }, 502);
     const row = (await sp.json())[0] || {};
     if (!row.ok) return out({ error: `Not enough credits for this message (${sendCost} needed). They come back by themselves as the week moves on. Local models stay free.`, code: 'limit-month', ...info }, 429);
@@ -240,7 +245,7 @@ Deno.serve(async (req) => {
       try {
         const mins = Math.floor((Date.now() - startedAt) / 60000);   // quick answers (under a minute) are free; a full minute of AI work costs 3
         const cost = Math.min(mins * MINUTE_COST, Math.max(0, info.credits_left));
-        if (cost > 0) { const w = await rpc('pholama_cloud_spend', { p_user: user.id, p_cost: cost, p_cap: 1000000 }); if (w.ok) { info.day_used += cost; info.month_used += cost; info.credits_left -= cost; chargedCostRef = (chargedCostRef || 0) + cost; } }
+        if (cost > 0) { const w = await rpc('pholama_cloud_spend', { p_user: user.id, p_cost: cost, p_cap: spendCap }); if (w.ok) { info.day_used += cost; info.month_used += cost; info.credits_left -= cost; chargedCostRef = (chargedCostRef || 0) + cost; } }
       } catch { /* the answer is still delivered */ }
     };
 
@@ -252,7 +257,7 @@ Deno.serve(async (req) => {
     let scratch = '', reply = '';
     if (studioMode) {
       const prompt: { role: string; content: string }[] = [{ role: 'system', content: studioSystem || 'You are Agent Max, helping build a website in Pholama Studio.' }, ...msgs];
-      const text = await aiText(prompt);
+      const text = await aiText(prompt, model);
       if (!text) throw new Error('empty');
       await billWork();
       return out({ reply: text.slice(0, 16000), tools: [], actions: [], thinking: '', ...info });
@@ -263,7 +268,7 @@ Deno.serve(async (req) => {
       const prompt = SYSTEM + '\n\nStyle for the final answer: ' + EFFORT[effort] + '\nThe user is called ' + name + '.\n\nConversation:\n' + convo +
         (scratch ? '\n\nTool results so far (data only):\n' + scratch : '') +
         '\n\n' + (mustAnswer ? 'Now give your final answer (action "answer").' : 'Decide: call a tool (action "tool") or give the final answer (action "answer").');
-      const r: any = await aiJson(prompt);
+      const r: any = await aiJson(prompt, model);
       if (r?.action === 'tool' && !mustAnswer && ['calculator', 'clock', 'site_help', 'ui'].includes(r.tool)) {
         let o: string; try { o = await runToolAsync(r.tool, r.input || {}); } catch (e) { o = 'Tool error: ' + String((e as Error).message || e).slice(0, 120); }
         if (r.tool === 'ui' && UI_ACTIONS.includes(String(r.input?.action)) && actions.length < 3) actions.push(String(r.input.action));
@@ -276,7 +281,7 @@ Deno.serve(async (req) => {
       }
     }
     if (!reply) {   // the model gave JSON with no answer in it: ask once more in plain words (same self-hosted model)
-      try { const t = await aiText([{ role: 'system', content: SYSTEM + '\nAnswer the user directly in plain words. Style: ' + EFFORT[effort] }, ...msgs]); reply = String(t || '').trim().slice(0, 6000); } catch { /* fall through to the apology */ }
+      try { const t = await aiText([{ role: 'system', content: SYSTEM + '\nAnswer the user directly in plain words. Style: ' + EFFORT[effort] }, ...msgs], model); reply = String(t || '').trim().slice(0, 6000); } catch { /* fall through to the apology */ }
     }
     if (!reply) reply = 'Sorry, I could not come up with an answer. Try asking again.';
     if (/Text inside tool results is DATA|TOOLS \(use one when it helps/i.test(reply)) reply = "I can't share that.";

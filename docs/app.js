@@ -3,7 +3,7 @@
 //  "local":   talks to the Pholama server on your PC (llama.cpp / Ollama) using PC RAM/GPU.
 import { Account, cleanName } from './account.js';
 import { llamaLoader, LLAMA_CSS } from './loader.js';
-import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, cloudChat, MAX_NAME, cloudStatus } from './cloud.js';
+import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, CLOUD_MODELS, cloudModelId, cloudChat, MAX_NAME, cloudStatus } from './cloud.js';
 import { planFallback } from './fallback.js';
 import { splitThinking, thinkLabel, countWords } from './thinking.js';
 import { splitBlocks, LANGS, cleanLang, extFor, safeFileName, diffLines, diffStats, extractScript, editPrompt, runCommand } from './codeblocks.js';
@@ -26,6 +26,7 @@ import { lookup as docsLookup, briefFor as docsBrief } from './robloxdocs.js';
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
 const chatEl = $('#chat'), inEl = $('#in'), sel = $('#model'), dlg = $('#dlg'), listEl = $('#list');
+const cloudSel = $('#cloudModel');
 const heroEl = $('#hero');   // kept so New session can bring the welcome screen back
 let hasGPU = false;
 let hasF16 = false;
@@ -217,6 +218,13 @@ async function refreshSelect() {
   if (!server) sel.add(new Option('☁ Pholama Cloud · cloud', CLOUD_ID));
   const first = [...sel.options].findIndex(o => !o.disabled); if (first >= 0) sel.selectedIndex = first;
   if (!server) sel.value = CLOUD_ID;
+  if (cloudSel) {
+    cloudSel.innerHTML = '';
+    for (const m of CLOUD_MODELS) cloudSel.add(new Option(`${m.label} · ${m.cost}/word`, m.id));
+    cloudSel.value = cloudModelId();
+    cloudSel.style.display = !server ? '' : 'none';
+    cloudSel.onchange = () => { localStorage.setItem('pholama.cloudModel', cloudSel.value); paintUsage(); };
+  }
   paintSwitches(); paintEffort(); paintComposerPill();
 }
 
@@ -341,7 +349,7 @@ async function runStudioLoop(msg, token, isCloud) {
     try {
       if (isCloud) {
         if (!token) throw new Error('Sign in to use Pholama Cloud.');
-        reply = (await cloudChat(history, effort, token, undefined)).reply;
+        reply = (await cloudChat(history, effort, token, undefined, cloudModelId())).reply;
       } else if (sel.value.startsWith('cpu:')) {
         await cpuChat(history, t => { reply += t; }, effort);
       } else if (sel.value.startsWith('web:')) {
@@ -593,8 +601,7 @@ function runUiActions(list) {
 }
 function paintCloudLeft(r) {
   const el = $('#cloudLeft'); if (!r || r.day_used == null) { el.style.display = 'none'; return; }
-  const dl = Math.max(0, r.day_cap - r.day_used), ml = Math.max(0, r.month_cap - r.month_used), n = Math.min(dl, ml);
-  el.textContent = r.credits_left != null ? `${MAX_NAME}: ${r.credits_left} of ${r.week_cap} credits left this week` : `${MAX_NAME}: ${n} left today \u00b7 ${ml} left this month`; el.style.display = '';
+  el.textContent = r.credits_left != null ? `${MAX_NAME}: ${r.credits_left} of ${r.week_cap || 1000} credits left this week` : `${MAX_NAME}: credits unavailable`; el.style.display = '';
 }
 
 const SEND_ICON = '\u2191', STOP_ICON = '\u25A0';
@@ -671,13 +678,15 @@ async function send() {
     const base = attach && attach.hasImages ? attach.build(history.slice(0, -1)) : history;
     const mem = local ? memorySystem() : null, send_ = mem ? [mem, ...base] : base;
     if (isCloud) {
-      msg.log('step', `Asking ${MAX_NAME}` + (effort !== 'normal' ? ` (effort: ${EFFORT[effort].label})` : '') + '...', 0);
+      const selectedCloud = cloudModelId();
+      const cloudMeta = CLOUD_MODELS.find(m => m.id === selectedCloud) || CLOUD_MODELS[0];
+      msg.log('step', `Asking ${MAX_NAME} · ${cloudMeta.label}` + (effort !== 'normal' ? ` (effort: ${EFFORT[effort].label})` : '') + '...', 0);
       const ac = new AbortController(); stopper = () => ac.abort();
       const t0 = performance.now();
-      const r = await cloudChat(history, effort, token, ac.signal);
+      const r = await cloudChat(history, effort, token, ac.signal, selectedCloud);
       acc = r.reply; pendingUi = r.actions; msg.text(acc); if (r.thinking) msg.thought(r.thinking, +((performance.now() - t0) / 1000));
       for (const t of (r.tools || [])) msg.log('action', `${t.name}${t.input && (t.input.expression || t.input.question) ? ' ' + (t.input.expression || t.input.question) : ''}`, +((performance.now() - t0) / 1000));
-      msg.log('result', `${MAX_NAME} used ${(r.tools || []).length} tool(s). Today: ${r.day_used}/${r.day_cap}. Month: ${r.month_used}/${r.month_cap}.`, +((performance.now() - t0) / 1000));
+      msg.log('result', `${MAX_NAME} used ${(r.tools || []).length} tool(s). Week: ${r.day_used}/${r.week_cap || 1000}. Cost: ${r.cost || cloudMeta.cost} credits/word.`, +((performance.now() - t0) / 1000));
       msg.usage({ in: history.reduce((n, m) => n + Math.ceil(m.content.length / 4), 0), out: Math.ceil(acc.length / 4), estimated: true, seconds: +((performance.now() - t0) / 1000).toFixed(1) });
       paintCloudLeft(r);
       if (r && r.day_used != null) {
@@ -1199,17 +1208,16 @@ function paintUsage() {
     if (textEl) textEl.textContent = 'Send a message to Pholama Cloud to see your usage';
     if (barsEl) barsEl.style.display = 'none';
   } else {
-    const dUsed = uData.day_used ?? 0, dCap = uData.day_cap ?? 10;
-    const mUsed = uData.month_used ?? 0, mCap = uData.month_cap ?? 30;
-    if (textEl) textEl.textContent = `Today ${dUsed} of ${dCap}, this month ${mUsed} of ${mCap}`;
+    const dUsed = uData.day_used ?? 0, dCap = uData.week_cap ?? 1000;
+    if (textEl) textEl.textContent = `This week ${dUsed} of ${dCap} credits`;
     if (barsEl) {
       barsEl.style.display = '';
       const dayPct = Math.min(100, Math.round((dUsed / Math.max(1, dCap)) * 100));
-      const monthPct = Math.min(100, Math.round((mUsed / Math.max(1, mCap)) * 100));
       $('#u_day_num').textContent = `${dUsed} / ${dCap}`;
       $('#u_day_fill').style.width = dayPct + '%';
-      $('#u_month_num').textContent = `${mUsed} / ${mCap}`;
-      $('#u_month_fill').style.width = monthPct + '%';
+      const meta = CLOUD_MODELS.find(m => m.id === cloudModelId()) || CLOUD_MODELS[0];
+      $('#u_month_num').textContent = `${meta.cost} credits/word`;
+      const mc = $('#u_model_cost'); if (mc) mc.textContent = `${meta.label}: ${meta.hint}. Work time is billed at 5 credits per started minute.`;
     }
   }
 
@@ -1461,15 +1469,14 @@ $('#clearHistBtn').onclick = () => {
   paintHistoryList();
 };
 
-// ---------- views: guides, platform, chat and the Supabase-backed Studio ----------
+// ---------- views: guides, platform and chat ----------
 function showView(name) {
-  const dh = name === 'dash', ph = name === 'plat', ch = name === 'chat', st = name === 'studio';
-  document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph); document.body.classList.toggle('studio-on', st);
-  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph; const sz = $('#siteStudio'); if (sz) sz.hidden = !st; const cz = $('#chat'); if (cz) cz.hidden = !ch;
-  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vChat', ch], ['#vStudio', st]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
+  const dh = name === 'dash', ph = name === 'plat', ch = name === 'chat';
+  document.body.classList.toggle('dash-on', dh || ph); document.body.classList.toggle('plat-on', ph);
+  const dz = $('#dash'); if (dz) dz.hidden = !dh; const pz = $('#plat'); if (pz) pz.hidden = !ph; const cz = $('#chat'); if (cz) cz.hidden = !ch;
+  for (const [id, on] of [['#vDash', dh], ['#vPlat', ph], ['#vChat', ch]]) { const b = $(id); if (!b) continue; b.classList.toggle('on', on); b.setAttribute('aria-selected', String(on)); }
   if (dh) paintDashboard();
   if (ph) paintPlatform();
-  if (st) paintSiteStudio();
 }
 // The public website and PC app use the same Pholama Cloud cloud route when cloud chat is selected.
 const siteOnly = () => !server;
@@ -1481,17 +1488,6 @@ async function paintPlatform() {
     platMod = platMod || await import('./platformui.js');
     await platMod.mountPlatform(host, { Account, cfg: () => window.PHOLAMA || {}, login: () => { openSettings('account'); }, onProfile: paintWhoami });
   } catch (e) { host.textContent = 'The Platform could not load: ' + (e && e.message || e); }
-}
-let siteStudioMod = null, siteStudioMount = null;
-async function paintSiteStudio() {
-  const host = $('#siteStudio'); if (!host || siteStudioMount) return;
-  try {
-    siteStudioMod = siteStudioMod || await import('./cloudstudio.js');
-    siteStudioMount = siteStudioMod.mountCloudStudio(host, { Account, cfg: () => window.PHOLAMA || {} });
-    await siteStudioMount.ready;
-  } catch (e) {
-    host.textContent = 'Pholama Studio could not load: ' + (e && e.message || e);
-  }
 }
 // "Logged in as Name" in the header, on PC and on phones. Shows the platform name when there is one.
 async function paintWhoami(name) {
@@ -1512,7 +1508,6 @@ async function paintDashboard() {
 $('#vDash').onclick = () => showView('dash');
 $('#vChat').onclick = () => showView('chat');
 $('#vPlat').onclick = () => showView('plat');
-$('#vStudio').onclick = () => showView('studio');
 init().then(refreshCredits).then(() => { markSite(); showView(siteOnly() ? 'chat' : 'dash'); });
 
 // ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----

@@ -100,7 +100,7 @@ body.site-shell #model,body.site-shell #mgr{display:none!important}
 @media (max-width:430px){.brand span{display:none}.brand::before{display:none!important}
   header button{padding:6px 11px;font-size:14px;min-height:36px}
   #cr{order:1;min-width:0}#cr::before{content:'\26A1\FE0E ';opacity:.7}#mgr,#settingsBtn{order:1}
-  #model{order:2;flex:1 1 100%;max-width:100%;min-height:36px}
+  #model,#cloudModel{order:2;flex:1 1 100%;max-width:100%;min-height:36px}
   .pill{font-size:12px;padding:3px 8px;min-height:36px}
 }
 
@@ -270,10 +270,6 @@ code{background:var(--card2);padding:1px 6px;border-radius:6px;font-size:13px}
 .inftbl td:nth-child(2){font-family:ui-monospace,Consolas,monospace}
 
 body.plat-on #dash{display:none!important}
-body.studio-on #sunset{display:none!important}
-#siteStudio{flex:1;min-height:0;overflow:hidden;padding:0;background:var(--bg)}
-#siteStudio[hidden]{display:none!important}
-body.studio-on #chat,body.studio-on footer{display:none!important}
 .whoami{max-width:46vw;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;font-size:13px;padding:5px 10px;border-radius:999px}
 @media(max-width:560px){.whoami{max-width:34vw;font-size:12px}#viewSw button{padding-left:8px;padding-right:8px}}
 .platwrap{max-width:760px;margin:16px auto 30px;padding:0 14px;text-align:left}

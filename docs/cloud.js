@@ -10,6 +10,14 @@ export const EFFORT = {
 };
 import { agentName } from './agentname.js';
 export const MAX_NAME = agentName(), MAX_DAY = 10, MAX_MONTH = 30;   // no fixed product name: the member's chosen name, or a random one
+// Free.ai self-hosted choices. The server validates this list again; the browser never sends a provider key.
+export const CLOUD_MODELS = [
+  { id: 'qwen7b', label: 'Qwen 7B', cost: 5, hint: 'Fast and economical' },
+  { id: 'mistral', label: 'Mistral', cost: 15, hint: 'Better answers, higher credit cost' },
+];
+export const cloudModelId = () => {
+  try { const id = localStorage.getItem('pholama.cloudModel'); return CLOUD_MODELS.some(m => m.id === id) ? id : CLOUD_MODELS[0].id; } catch { return CLOUD_MODELS[0].id; }
+};
 export const effortKeys = () => Object.keys(EFFORT);
 export const cleanEffort = e => (EFFORT[e] ? e : 'normal');
 
@@ -41,10 +49,10 @@ export async function cloudStatus(token) {
 // ---- cloud chat ----
 // Returns { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }.
 // Throws Error with .code = login | limit-day | limit-month | server | setup | network (and .info with the counts).
-export async function cloudChat(messages, effort, token, signal) {
+export async function cloudChat(messages, effort, token, signal, model = cloudModelId()) {
   let r;
   try {
-    r = await fetch(FN, { method: 'POST', signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ messages: messages.slice(-12), effort: cleanEffort(effort) }) });
+    r = await fetch(FN, { method: 'POST', signal, headers: { 'Content-Type': 'application/json', Authorization: 'Bearer ' + token }, body: JSON.stringify({ messages: messages.slice(-12), effort: cleanEffort(effort), model }) });
   } catch (e) {
     if (e && e.name === 'AbortError') throw e;
     const err = new Error('Could not reach the cloud model. Check your connection.'); err.code = 'network'; throw err;

@@ -5,25 +5,24 @@
 <link rel="icon" href="icon.svg"><link rel="icon" type="image/png" sizes="192x192" href="icon-192.png"><link rel="apple-touch-icon" href="icon-192.png"><title>Pholama Platform</title>
 <link rel="stylesheet" href="style.css">
 <link rel="stylesheet" href="ide-theme.css">
-<link rel="stylesheet" href="studioworkspace.css">
 </head><body class="site-shell">
 <header>
   <div class="brand"><img class="brand-mark" src="icon-512.png" alt="Pholama"><span>Pholama</span></div>
-  <div class="viewsw" id="viewSw" role="tablist" aria-label="View"><button id="vDash" role="tab" aria-selected="false">Guides</button><button id="vPlat" role="tab" aria-selected="false">Platform</button><button id="vChat" role="tab" aria-selected="false">Chat</button><button id="vStudio" role="tab" aria-selected="false">Studio</button></div>
+  <div class="viewsw" id="viewSw" role="tablist" aria-label="View"><button id="vDash" role="tab" aria-selected="false">Guides</button><button id="vPlat" role="tab" aria-selected="false">Platform</button><button id="vChat" role="tab" aria-selected="false">Chat</button></div>
   <button class="whoami" id="whoami" style="display:none" title="Your Platform profile"></button><span class="pcbadge" id="pcBadge" style="display:none" title="You are running Pholama on your own PC">PC</span><span class="sp"></span>
   <span class="pill" id="updPill" style="display:none;cursor:pointer" title="A new version was downloaded">Update ready</span>
-  <span class="pill" id="cr" title="Daily credits" style="display:none"></span>
+  <span class="pill" id="cr" title="Weekly cloud credits" style="display:none"></span>
   <select id="model" title="Model"></select>
+  <select id="cloudModel" title="Cloud model" aria-label="Cloud model" style="display:none"></select>
   <button id="mgr">Models</button>
   <button id="settingsBtn" class="ib" title="Settings" aria-label="Settings"><svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg></button>
   <button id="opt" style="display:none"></button>
   <button id="acct" style="display:none"></button>
 </header>
 
-<div id="sunset" class="sunset" role="status"><b>Welcome to Pholama.</b> Chat with Pholama Cloud, or open Studio for a Supabase-backed workspace where the cloud agent can inspect, edit, test and repair your project.</div>
+<div id="sunset" class="sunset" role="status"><b>Welcome to Pholama.</b> Chat with Pholama Cloud, or switch on RetroStudio to safely preview scripts in your browser.</div>
 <div id="dash"></div>
 <div id="plat" hidden><div id="platHost"></div></div>
-<div id="siteStudio" hidden aria-label="Pholama Studio"></div>
 <div id="chat">
   <div id="retroWorkspace" class="retro-workspace" hidden>
     <div class="retro-head"><div><b>Studio</b><span>The AI writes the Lua. Press Encode to turn it into a RetroStudio string</span></div><span class="retro-sim-badge" id="retroBadge">PREVIEW</span></div>
@@ -121,10 +120,10 @@
       <h4><span data-agent-name="{n}">Your assistant</span> (Cloud)</h4>
       <div id="u_cloud_text" class="sys" style="text-align:left;margin:4px 0">Send a message to your assistant to see your usage</div>
       <div id="u_cloud_bars" style="display:none;margin-top:8px">
-        <div class="pbar-label"><span>Today</span><span id="u_day_num"></span></div>
+        <div class="pbar-label"><span>This week</span><span id="u_day_num"></span></div>
         <div class="pbar"><i id="u_day_fill"></i></div>
-        <div class="pbar-label" style="margin-top:8px"><span>This month</span><span id="u_month_num"></span></div>
-        <div class="pbar"><i id="u_month_fill"></i></div>
+        <div class="pbar-label" style="margin-top:8px"><span>Selected model cost</span><span id="u_month_num"></span></div>
+        <div class="sys" id="u_model_cost" style="text-align:left;margin-top:4px"></div>
       </div>
       <div id="fbBox" class="fbbox" style="display:none">
         <b>Backup AI on your PC</b>
