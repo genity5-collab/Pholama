@@ -14,7 +14,8 @@ const send = (status: number, body: unknown) => new Response(JSON.stringify(body
 Deno.serve(async req => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   // Proves the code that is live behaves exactly like the code that was tested. No login, no data, no secrets.
-  if (new URL(req.url).pathname.endsWith('/selfcheck')) return send(200, await selfcheck());
+  // (the Base44 host does not forward sub-paths, so ?path=selfcheck works too)
+  { const u0 = new URL(req.url); if (u0.pathname.endsWith('/selfcheck') || u0.searchParams.get('path') === 'selfcheck') return send(200, await selfcheck()); }
   const service = Deno.env.get('PHOLAMA_SUPABASE_SERVICE_KEY') || '', aiKey = Deno.env.get('FREE_AI_API_KEY') || '', seal = Deno.env.get('PHOLAMA_SEAL_KEY') || '';
   if (!service || !aiKey || seal.length < 32) return send(503, { error: 'Pholama Studio is not configured yet.' });
   if (!isSelfHosted(MODEL)) return send(500, { error: 'Pholama Studio is not available right now.' });      // a premium model can never be called
