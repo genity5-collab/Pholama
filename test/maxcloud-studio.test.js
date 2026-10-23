@@ -6,13 +6,11 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'mcs-')), out = path.join(dir, 'cloud.mjs');
   execFileSync(process.execPath.replace(/node$/, 'node'), ['-e', 'process.exit(0)']);
   execFileSync('npx', ['--no-install', 'esbuild', path.join(__dirname, '..', 'functions', 'pholamaCloud.ts'), '--format=esm', '--log-level=error', '--outfile=' + out], { cwd: path.join(__dirname, '..') });
-  const seen = { model: [], spend: 0, refund: 0 }; let modelMode = 'ok', used = 0;
+  const W = require('./helpers/weeklyfake')({ used: 20 }); const seen = { model: [], spend: 0, refund: 0 }; let modelMode = 'ok';
   const net = http.createServer((q, s) => { let b = ''; q.on('data', c => b += c); q.on('end', () => {
     s.setHeader('Content-Type', 'application/json');
     if (q.url.startsWith('/auth/v1/user')) return s.end(JSON.stringify({ id: 'u1', user_metadata: { name: 'Sam' } }));
-    if (q.url.includes('/rest/v1/pholama_cloud_usage')) return s.end(JSON.stringify([{ units: 20 + used * 5 }]));
-    if (q.url.includes('pholama_cloud_spend')) { seen.spend++; used++; return s.end(JSON.stringify([{ ok: true, used: 20 + used * 5, msgs: used }])); }
-    if (q.url.includes('pholama_cloud_refund')) { seen.refund++; return s.end('{}'); }
+    if (W.handle(decodeURIComponent(q.url), b, s)) { seen.spend = W.spends.length; seen.refund = W.refunds.length; return; }
     if (q.url.includes('chat/completions') || q.url.includes('/v1/chat')) { const j = JSON.parse(b); seen.model.push(j); if (modelMode === 'fail') { s.statusCode = 500; return s.end('{}'); } return s.end(JSON.stringify({ choices: [{ message: { content: '<think>plan</think>I will add it.\n<tool>{"name":"studio_write","args":{"file":"a.js","content":"let x=1"}}</tool>' } }], free_ai_usage: { source: modelMode === 'paid' ? 'paid_pool' : 'self_hosted' } })); }
     s.statusCode = 404; s.end('{}'); }); }).listen(0, '127.0.0.1');
   await new Promise(r => setTimeout(r, 150)); const base = 'http://127.0.0.1:' + net.address().port;
@@ -29,9 +27,9 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   ok('a long prompt (6000+ chars) is NOT cut to 2000', sent && sent[0].content.length > 6000, sent && sent[0].content.length);
   ok('the model is NOT forced into the old site-helper JSON shape', seen.model[0] && !seen.model[0].response_format && !/calculator/.test(JSON.stringify(sent)), JSON.stringify(seen.model[0]).slice(0, 200));
   ok('the model has room to write real code (max_tokens 3500)', seen.model[0] && seen.model[0].max_tokens >= 3000, seen.model[0] && seen.model[0].max_tokens);
-  ok('the raw <tool> call comes back untouched for the PC to run', /<tool>\{"name":"studio_write"/.test(r.j.reply) && !/<think>/.test(r.j.reply), r.j.reply);
+  ok('the tool call comes back in the form the PC runs (<tool_call>, with "arguments")', /<tool_call>\{"name":"studio_write","arguments"/.test(r.j.reply) && !/<think>/.test(r.j.reply), r.j.reply);
   ok('ONE model call and ONE message charged', seen.model.length === 1 && seen.spend === 1, seen.model.length + '/' + seen.spend);
-  ok('the credits used and the weekly pool come back for the counter', r.j.month_used === 35 && r.j.month_cap === 100 && r.j.credits_left === 65 && r.j.day_cap === 100, JSON.stringify(r.j));
+  ok('the credits used and the 1,000 weekly pool come back for the counter (3 words x 5 = 15)', r.j.month_used === 35 && r.j.month_cap === 1000 && r.j.credits_left === 965 && r.j.day_cap === 1000 && r.j.cost === 15, JSON.stringify(r.j));
   // normal (non Studio) chat is unchanged: still the JSON site helper
   seen.model.length = 0; modelMode = 'ok';
   r = await call({ messages: [{ role: 'user', content: 'what is pholama' }] });

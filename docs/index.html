@@ -21,19 +21,22 @@
   <button id="acct" style="display:none"></button>
 </header>
 
-<div id="sunset" class="sunset" role="status"><b>Welcome to Pholama.</b> Chat with Pholama Cloud, or switch on RetroStudio to safely preview scripts in your browser.</div>
+<div id="sunset" class="sunset" role="status"><b>Welcome to Pholama.</b> Chat with Pholama Cloud. Open <b>Studio</b> to build projects and preview Roblox scripts safely in your browser.</div>
 <div id="dash"></div>
 <div id="plat" hidden><div id="platHost"></div></div>
 <div id="studioView" hidden>
   <div class="site-studio-shell">
-    <div class="site-studio-top"><div><b>Pholama Code Studio</b><span>Cloud planning, PC execution</span></div><button id="studioRefresh" type="button">Refresh workspace</button></div>
-    <div class="site-studio-note"><b>Connectors</b><span>GitHub, GitLab, Bitbucket, Notion, Slack, Discord, Linear, Sentry, Supabase and Jira run through a connected Pholama PC. Browser cloud stays sandboxed.</span><button id="studioConnectors" type="button">Open tools</button></div>
-    <div id="siteStudioHost"></div>
-  </div>
-</div>
-<div id="chat">
-  <div id="retroWorkspace" class="retro-workspace" hidden>
-    <div class="retro-head"><div><b>Studio</b><span>The AI writes the Lua. Press Encode to turn it into a RetroStudio string</span></div><span class="retro-sim-badge" id="retroBadge">PREVIEW</span></div>
+    <div class="site-studio-top"><div><b>Studio</b><span>Cloud planning, PC execution</span></div>
+      <div class="st-tabs" role="tablist" aria-label="Studio"><button id="stTabCode" type="button" role="tab" aria-selected="true" class="on">Code</button><button id="stTabConn" type="button" role="tab" aria-selected="false">Connectors</button><button id="stTabRetro" type="button" role="tab" aria-selected="false" hidden>RetroStudio</button></div>
+      <button id="studioRefresh" type="button">Refresh workspace</button></div>
+    <div id="stPaneCode">
+      <div class="site-studio-note"><b>Connectors</b><span>GitHub, GitLab, Bitbucket, Notion, Slack, Discord, Linear, Sentry, Supabase and Jira run through a connected Pholama PC. Browser cloud stays sandboxed.</span><button id="studioConnectors" type="button">Open tools</button></div>
+      <div id="siteStudioHost"></div>
+    </div>
+    <div id="stPaneConn" hidden><div id="connHost"></div><p class="cn-foot" id="connFoot"></p></div>
+    <div id="stPaneRetro" hidden>
+  <div id="retroWorkspace" class="retro-workspace in-studio">
+    <div class="retro-head"><div><b>RetroStudio</b><span>Write or paste Luau, preview it, then Encode it into a RetroStudio import string. Ask the chat for a script and it lands here.</span></div><span class="retro-sim-badge" id="retroBadge">PREVIEW</span></div>
     <div class="retro-grid">
       <aside class="retro-explorer" aria-label="Explorer">
         <div class="retro-card-head"><b>Explorer</b><span><button type="button" id="wsNewScript" title="New script">+ Script</button></span></div>
@@ -49,7 +52,7 @@
           <textarea id="retroEncText" readonly spellcheck="false" aria-label="Encoded string for RetroStudio"></textarea>
           <ol class="retro-steps"><li>Press <b>Copy</b>.</li><li>In RetroStudio, paste it into your script to import the blocks.</li></ol>
         </div>
-        <div id="retroLog" class="retro-log" role="status" aria-live="polite">No script yet. Ask the chat to build one.</div>
+        <div id="retroLog" class="retro-log" role="status" aria-live="polite">No script yet. Type one here, or ask the chat to build one.</div>
       </section>
       <section class="retro-view-card" aria-label="Viewport">
         <div class="retro-card-head"><b>Viewport</b><span id="retroEra">All models</span></div>
@@ -71,10 +74,14 @@
       </section>
     </div>
   </div>
+    </div>
+  </div>
+</div>
+<div id="chat">
   <div id="hero">
     <div id="heroLogo"></div>
     <h1>Chat, create, preview</h1>
-    <p>Chat with Pholama Cloud, attach files when needed, and optionally use RetroStudio to preview simple scripts safely in your browser.</p>
+    <p>Chat with Pholama Cloud, attach files when needed, and open Studio to build projects or preview Roblox scripts safely in your browser.</p>
     <div id="pcStatus" class="pcstatus" style="display:none"></div>
     <div class="chips" id="heroChips"></div>
     <div id="pcPromo" class="promo" hidden>
@@ -90,7 +97,6 @@
   <div class="toolbar">
     <div id="swrow" class="swrow" style="display:none"></div>
     <div class="tbr">
-      <button id="retroPluginBtn" type="button" class="ib" aria-pressed="false" title="RetroStudio encoder: turn on to preview your scripts and convert them to RetroStudio blocks. Off: the AI just writes Lua.">RetroStudio</button>
       <div class="effort" id="effort" role="group" aria-label="Think effort"></div>
       <button id="histBtn" class="ib" title="Chat history" aria-label="Chat history"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></button>
       <button id="newSess" class="ib" title="New session" aria-label="New session"><svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M5 12h14"/></svg></button>

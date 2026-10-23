@@ -22,7 +22,7 @@ setTimeout(() => { console.log('FAIL timed out after 90s'); process.exit(1); }, 
     await send('Runtime.enable'); await send('Page.enable'); await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
     await send('Page.navigate', { url: `http://127.0.0.1:${port}/` }); await wait(3200);
     await ev(`document.querySelector('#vChat').click()`); await wait(700);
-    await ev(`document.querySelector('#retroPluginBtn').click()`); await wait(800);
+    await ev(`localStorage.setItem('pholama.connectors', JSON.stringify({retrostudio:true}))`); await ev(`document.querySelector('#vStudio').click()`); await wait(500); await ev(`document.querySelector('#stTabRetro').click()`); await wait(800);
     const NOOB = `local model = Instance.new("Model", workspace)
 model.Name = "Noob"
 local function makePart(name, size, pos, color)

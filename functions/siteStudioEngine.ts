@@ -223,7 +223,8 @@ export async function advance(run: R.Run, d: EngineDeps): Promise<R.Run> {
         R.closeStep(run, st, { ok: true, output: fallback ? 'The model did not return a readable plan, so the request itself is the single task.' : run.plan.map(t => t.id + ' ' + t.title).join('\n') });
       } else R.setPlan(run, [{ title: clip(run.prompt, 120) }]);
       R.setStage(run, 'plan', 'completed', run.plan.length + ' task(s).');
-      const system = 'You are Pholama Studio, editing the project "' + run.project + '". Tools: ' + names.map(n => n + ' ' + (TOOL_DOCS[n] || '')).join(' | ') + '\nCall ONE tool at a time as <tool_call>{"name":"studio_patch","arguments":{"file":"index.html","find":"...","replace":"..."}}</tool_call>. Read a file before you edit it. When every task is done, reply in plain words with no tool call.\n' + ((await d.notes?.()) || '') + '\nTasks:\n' + run.plan.map(t => '- ' + t.id + ' ' + t.title).join('\n');
+      // The tag is <tool>, NOT <tool_call>: Free.ai's gateway treats <tool_call> as its own reserved function-call tag and returns an EMPTY message (content null), so the run would end with no change. parseTool still accepts both.
+      const system = 'You are Pholama Studio, editing the project "' + run.project + '". Tools: ' + names.map(n => n + ' ' + (TOOL_DOCS[n] || '')).join(' | ') + '\nCall ONE tool at a time as <tool>{"name":"studio_patch","args":{"file":"index.html","find":"...","replace":"..."}}</tool>. Read a file before you edit it. When every task is done, reply in plain words with no tool call.\n' + ((await d.notes?.()) || '') + '\nTasks:\n' + run.plan.map(t => '- ' + t.id + ' ' + t.title).join('\n');
       cur.msgs = [{ role: 'system', content: system }, { role: 'user', content: run.prompt + '\n\nProject facts:' + cur.digest }]; cur.phase = 'execute';
       R.setStage(run, 'execute', 'running'); await persist(); return run;
     }

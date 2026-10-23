@@ -27,7 +27,7 @@ ok('the website Models panel shows the ended notice, not a list', /Model downloa
 ok('the website hero no longer promises browser models', !/run inside your browser/.test(R('docs/index.html')));
 
 // Studio stylesheet (Studio only exists in the PC app, so the website stylesheet must simply not carry Studio rules)
-ok('the website has no Studio styles (Studio is PC only)', !/\.st-|#studio/.test(R('docs/style.css')));
+ok('the website has Studio styles, including the connectors grid', /\.cn-cols/.test(R('docs/style.css')) && /\.st-tabs/.test(R('docs/style.css') + R('docs/studioworkspace.css')));
 {
   const css = R('web/style.css');
   ok('Studio no longer forces white text on its panels', !/#studio\{[^}]*color:#f8fafc|\.st-code\{[^}]*color:#fff/.test(css));

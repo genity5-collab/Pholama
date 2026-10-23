@@ -22,11 +22,11 @@ setTimeout(() => { console.log('FAIL timed out after 90s'); process.exit(1); }, 
     await send('Runtime.enable'); await send('Page.enable'); await send('Emulation.setDeviceMetricsOverride', { width: 1280, height: 900, deviceScaleFactor: 1, mobile: false });
     await send('Page.navigate', { url: `http://127.0.0.1:${port}/` }); await wait(3200);
     await ev(`document.querySelector('#vChat').click()`); await wait(700);
-    await ev(`document.querySelector('#retroPluginBtn').click()`); await wait(800);
+    await ev(`localStorage.setItem('pholama.connectors', JSON.stringify({retrostudio:true}))`); await ev(`document.querySelector('#vStudio').click()`); await wait(500); await ev(`document.querySelector('#stTabRetro').click()`); await wait(800);
     const type = async src => { await ev(`(() => { const t = document.querySelector('#retroCode'); t.value = ${JSON.stringify(src)}; t.dispatchEvent(new Event('input')); })()`); await wait(700); };
     const state = async () => JSON.parse(await ev(`JSON.stringify((() => { const c = document.querySelector('#retroCanvas'), d = c.getContext('2d').getImageData(0,0,c.width,c.height).data; let n = 0; const f = [d[0],d[1],d[2]]; for (let i = 0; i < d.length; i += 40) if (Math.abs(d[i]-f[0])+Math.abs(d[i+1]-f[1])+Math.abs(d[i+2]-f[2]) > 40) n++;
       return { items: [...document.querySelectorAll('.ws-item')].map(b => b.querySelector('span:nth-child(2)').textContent), folders: [...document.querySelectorAll('.ws-folder')].map(f => f.textContent), title: document.querySelector('#wsTitle').textContent, code: document.querySelector('#retroCode').value, drawn: n, w: c.getBoundingClientRect().width, h: c.getBoundingClientRect().height, log: document.querySelector('#retroLog').textContent }; })())`));
-    ok('the panel is called Studio', (await ev(`document.querySelector('.retro-head b').textContent`)) === 'Studio');
+    ok('the panel is called RetroStudio', (await ev(`document.querySelector('.retro-head b').textContent`)) === 'RetroStudio');
     ok('the viewport is really on screen', (await state()).w > 200 && (await state()).h > 200);
 
     const A = 'local a = Instance.new("Part", workspace)\na.Size = Vector3.new(4,1,4)\na.Position = Vector3.new(-6,3,0)\n', B = 'local b = Instance.new("Part", workspace)\nb.Size = Vector3.new(6,1,6)\nb.Position = Vector3.new(6,3,0)\n';

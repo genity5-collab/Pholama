@@ -23,6 +23,7 @@ import * as WS from './studioworkspace-model.js';
 import { encodeLua } from './retroencode.js';
 import { lookup as docsLookup, briefFor as docsBrief } from './robloxdocs.js';
 import { mountCloudStudio } from './cloudstudio.js';
+import * as CN from './studioconnectors.js';
 
 const $ = s => document.querySelector(s);
 { const st = document.createElement('style'); st.textContent = LLAMA_CSS; document.head.appendChild(st); }
@@ -232,11 +233,61 @@ async function refreshSelect() {
 // The public site uses the same Pholama Cloud chat as the PC app.
 // RetroStudio is deliberately local and safe: it only previews an allowlisted subset of Luau.
 function setRetroEnabled(on) {
+  // RetroStudio now lives in the Studio view (RetroStudio tab). "Enabled" only means the chat should treat Lua asks as Studio work.
   retroEnabled = !!on;
-  const b = $('#retroPluginBtn'), panel = $('#retroWorkspace');
-  if (b) { b.setAttribute('aria-pressed', String(retroEnabled)); b.textContent = retroEnabled ? '✓ RetroStudio encoder' : '+ RetroStudio encoder'; }
-  if (panel) panel.hidden = !retroEnabled;
   if (retroEnabled) renderRetroScript();
+}
+// ----- Studio view: Code | Connectors | RetroStudio (RetroStudio appears once its connector is connected) -----
+// RetroStudio is a connector. It unlocks for people who are in the Pholama Discord server (checked with their own Discord sign-in).
+const CONN_KEY = 'pholama.connectors', MEMBER_KEY = 'pholama.discordMember';
+const DISCORD_INVITE = 'https://discord.gg/pholama';
+let memberState = 'unknown';
+const connectedMap = () => { try { return JSON.parse(localStorage.getItem(CONN_KEY) || '{}') || {}; } catch { return {}; } };
+const saveConnected = m => { try { localStorage.setItem(CONN_KEY, JSON.stringify(m)); } catch {} };
+// A remembered answer for 12 hours, so the page does not ask Discord on every visit and still works after the sign-in token expires.
+function cachedMember() {
+  try { const c = JSON.parse(localStorage.getItem(MEMBER_KEY) || 'null'); if (c && c.uid === (Account.user() || {}).id && Date.now() - c.at < 12 * 3600e3 && c.state === 'member') return 'member'; } catch {}
+  return '';
+}
+async function refreshMember() {
+  const u = Account.user();
+  if (!u) { memberState = 'needs-signin'; return memberState; }
+  const cached = cachedMember(); if (cached) { memberState = cached; return memberState; }
+  const r = await CN.checkMembership({ providerToken: Account.discordToken(), isDiscord: Account.isDiscord() });
+  memberState = r.state;
+  if (r.state === 'member') { try { localStorage.setItem(MEMBER_KEY, JSON.stringify({ uid: u.id, state: 'member', at: Date.now() })); } catch {} }
+  else if (r.state === 'not-member') { try { localStorage.removeItem(MEMBER_KEY); } catch {} }
+  return memberState;
+}
+function paintConnectors() {
+  const host = $('#connHost'); if (!host) return;
+  const conn = connectedMap();
+  // If someone left the server, RetroStudio disconnects itself.
+  if (conn.retrostudio && memberState !== 'member' && memberState !== 'unknown' && memberState !== 'error') { delete conn.retrostudio; saveConnected(conn); }
+  CN.renderConnectors(host, { member: memberState, pcConnected: !!server, connected: conn }, async (c, action) => {
+    if (action === 'login') { Account.startLogin('discord'); return; }
+    if (action === 'join') { window.open(DISCORD_INVITE, '_blank', 'noopener'); return; }
+    if (action === 'check') { memberState = 'unknown'; paintConnectors(); try { localStorage.removeItem(MEMBER_KEY); } catch {} await refreshMember(); paintConnectors(); return; }
+    if (action === 'pc') { $('#connFoot').textContent = c.name + ' runs through Pholama PC. Download it from the Pholama PC page, then open this site from the app.'; return; }
+    if (action === 'open') { studioTab('retro'); return; }
+    const m = connectedMap();
+    if (action === 'connect') { m[c.id] = true; saveConnected(m); paintStudioTabs(); paintConnectors(); if (c.opens) studioTab(c.opens); return; }
+    if (action === 'disconnect') { delete m[c.id]; saveConnected(m); paintStudioTabs(); paintConnectors(); }
+  });
+  const f = $('#connFoot');
+  if (f && !f.textContent) f.textContent = memberState === 'member' ? 'You are in the Pholama Discord, so the RetroStudio connector is unlocked.' : 'RetroStudio unlocks when you are in the Pholama Discord server and logged in with Discord.';
+}
+function paintStudioTabs() {
+  const t = $('#stTabRetro'); if (t) t.hidden = !connectedMap().retrostudio;
+  if (t && t.hidden && !$('#stPaneRetro').hidden) studioTab('code');
+}
+function studioTab(name) {
+  if (name === 'retro' && !connectedMap().retrostudio) name = 'conn';       // not connected: send them to Connectors, never show a locked panel
+  const panes = { code: '#stPaneCode', conn: '#stPaneConn', retro: '#stPaneRetro' }, tabs = { code: '#stTabCode', conn: '#stTabConn', retro: '#stTabRetro' };
+  for (const k of Object.keys(panes)) { const p = $(panes[k]), t = $(tabs[k]); if (p) p.hidden = k !== name; if (t) { t.classList.toggle('on', k === name); t.setAttribute('aria-selected', String(k === name)); } }
+  const r = $('#studioRefresh'); if (r) r.style.display = name === 'code' ? '' : 'none';
+  if (name === 'retro') { renderScriptTabs(); renderRetroScript(); }
+  if (name === 'conn') { const f = $('#connFoot'); if (f) f.textContent = ''; paintConnectors(); refreshMember().then(paintConnectors); }
 }
 // Explorer: every model and script in the project, like Roblox's Explorer. Click to open.
 function renderScriptTabs() {
@@ -316,6 +367,13 @@ function setScriptsFromAnswer(text) {
   renderScriptTabs(); renderRetroScript(); saveCurrentSession();
   return true;
 }
+// After the AI writes a script, put a button under the answer that opens it in Studio > RetroStudio.
+function openInStudio() { showView('studio'); studioTab('retro'); }
+function addOpenInStudio(msgEl) {
+  if (!msgEl || msgEl.querySelector('.open-studio') || !connectedMap().retrostudio) return;   // only offered once the RetroStudio connector is connected
+  const b = document.createElement('button'); b.type = 'button'; b.className = 'open-studio'; b.textContent = 'Open in Studio';
+  b.title = 'See the script, the 3D preview and the encoder'; b.onclick = openInStudio; msgEl.appendChild(b);
+}
 function downloadActiveScript() {
   const code = $('#retroCode'), active = activeScriptItem(); if (!code || !active || !code.value.trim()) return;
   WS.editScript(studioWs, active.id, code.value);
@@ -393,7 +451,7 @@ async function encodeNow() {
   } catch (e) { say('The encoder could not process that script.'); }
 }
 function initSiteAgentUi() {
-  const plugin = $('#retroPluginBtn'); if (plugin) plugin.onclick = () => setRetroEnabled(!retroEnabled);
+  const tc = $('#stTabCode'), tn = $('#stTabConn'), tr = $('#stTabRetro'); if (tc) tc.onclick = () => studioTab('code'); if (tn) tn.onclick = () => studioTab('conn'); if (tr) tr.onclick = () => studioTab('retro'); paintStudioTabs();
   const code = $('#retroCode'); if (code) code.addEventListener('input', () => {
     const sc = activeScriptItem(); if (sc) WS.editScript(studioWs, sc.id, code.value);
     const live = $('#wsLive'); if (live && !live.checked) { saveCurrentSession(); return; }   // Live edit off: only the Run button rebuilds
@@ -649,7 +707,7 @@ async function send() {
   if (needLogin('use')) return;
   const isCloud = sel.value === CLOUD_ID, token = Account.token();
   // The RetroStudio encoder is OFF unless the RetroStudio switch is on (or the message says @retrostudio). With it off the AI only writes Lua.
-  const retroForMessage = retroEnabled || /@(?:roblox\s*:\s*retro\s*studio|retrostudio)\b/i.test(text);
+  const retroForMessage = retroEnabled || LUA_ASK.test(text) || /@(?:roblox\s*:\s*retro\s*studio|retrostudio)\b/i.test(text);
   if (retroForMessage) setRetroEnabled(true);
   const luaRequest = retroForMessage || LUA_ASK.test(text);
   if (isCloud && !token) return needLogin('use');
@@ -725,7 +783,7 @@ async function send() {
       await pcChat(sel.value, msg, t => { acc += t; msg.text(acc); liveFromStream(acc); });
     }
     if (sessionAtStart !== sessionId) return;                // a New session began while this ran: drop the late reply
-    if (retroForMessage && setScriptsFromAnswer(acc)) runStudioLoop(msg, token, isCloud).catch(() => msg.log('error', 'The Studio could not finish. Your script is in the workspace.', 0));
+    if (retroForMessage && setScriptsFromAnswer(acc)) { addOpenInStudio(msg.el); runStudioLoop(msg, token, isCloud).catch(() => msg.log('error', 'The Studio could not finish. Your script is in the workspace.', 0)); }
     const clean = acc.replace(/<think>[\s\S]*?(<\/think>|$)/, '').trim();
     if (stopped) {                                           // user pressed Stop: keep what was written, say so, no error
       if (clean) history.push({ role: 'assistant', content: clean }); else if (historyAdded) history.pop();
@@ -1520,7 +1578,7 @@ $('#vChat').onclick = () => showView('chat');
 $('#vPlat').onclick = () => showView('plat');
 $('#vStudio').onclick = () => showView('studio');
 $('#studioRefresh').onclick = () => { if (studioMod && studioMod.refresh) studioMod.refresh(); else paintStudio(); };
-$('#studioConnectors').onclick = () => { showView('chat'); openSettings('tools'); };
+$('#studioConnectors').onclick = () => studioTab('conn');
 init().then(refreshCredits).then(() => { markSite(); showView(siteOnly() ? 'chat' : 'dash'); });
 
 // ----- Login bonus: the PC asks the Pholama server itself; this page only hands over the login token -----

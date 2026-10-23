@@ -31,8 +31,9 @@ function niceError(j, fallback) {
 export const PROVIDERS = ['discord', 'github'];
 export function oauthUrl(supabaseUrl, returnTo, provider = 'discord') {
   const p = PROVIDERS.includes(provider) ? provider : 'discord';   // only known providers, never a value from the address bar
-  // GitHub needs the repo scope so Pholama can write to repositories without a pasted token. Discord needs nothing extra.
-  const scopes = p === 'github' ? '&scopes=' + encodeURIComponent('read:user user:email repo') : '';
+  // GitHub needs the repo scope so Pholama can write to repositories without a pasted token.
+  // Discord asks for "guilds" too: it only lets Pholama see WHICH servers you are in (never messages), which unlocks the RetroStudio connector for Pholama Discord members.
+  const scopes = p === 'github' ? '&scopes=' + encodeURIComponent('read:user user:email repo') : '&scopes=' + encodeURIComponent('identify email guilds');
   return String(supabaseUrl).replace(/\/+$/, '') + '/auth/v1/authorize?provider=' + p + '&prompt=consent' + scopes + '&redirect_to=' + encodeURIComponent(returnTo);
 }
 // Where to come back to: this exact page, without any old query or hash.
@@ -63,6 +64,8 @@ export const Account = {
   provider: () => (session && session.user && session.user.app_metadata && session.user.app_metadata.provider) || '',
   isGithub: () => !!(session && session.user && session.user.app_metadata && session.user.app_metadata.provider === 'github'),
   // The GitHub permission token Supabase hands back at sign-in. Only present for GitHub logins; kept on this device like the session.
+  // Discord's own permission token (only present right after a Discord sign-in that asked for "guilds").
+  discordToken: () => (session && session.provider_token && session.user && session.user.app_metadata && session.user.app_metadata.provider === 'discord') ? String(session.provider_token) : '',
   githubToken: () => (session && session.provider_token && session.user && session.user.app_metadata && session.user.app_metadata.provider === 'github') ? String(session.provider_token) : '',
   isDiscord: () => !!(session && session.user && session.user.app_metadata && session.user.app_metadata.provider === 'discord'),
 

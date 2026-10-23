@@ -6,6 +6,7 @@
 const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
 // Credits: everyone gets 1,000 per rolling week. Each word you send costs the selected model's rate; each started minute of AI work costs 5.
 // When the credits run out the AI stops and starts working again by itself as old spending falls out of the 7-day window.
+const STUDIO_MAX_TOKENS = 3500;
 const WEEK_CREDITS = 1000, WORD_COST = 5, MINUTE_COST = 5, PRO_EXTRA_CREDITS = 0;
 const CLOUD_MODELS: Record<string, { cost: number; maxTokens: number }> = { qwen7b: { cost: 5, maxTokens: 1200 }, mistral: { cost: 15, maxTokens: 1600 } };
 const DAY_CAP_NO_LOCAL = 10, DAY_CAP_WITH_LOCAL = 1, FREE_MONTH_CAP = 30;
@@ -105,13 +106,17 @@ const SCHEMA = { type: 'object', properties: {
 // Failures are only written to the server log. Users never see which model failed or why.
 // Each step is tried only if the one before it is busy, out of credit, rate limited, or returns something unusable.
 const JSON_RULE = 'Reply with ONLY one JSON object, no other text, shaped like: {"action":"tool" or "answer","tool":"calculator"|"clock"|"site_help"|"ui" (only when action is tool),"thinking":"one short sentence","input":{"expression":"","question":"","action":""},"answer":"the final reply (only when action is answer)"}. You are Agent Max, never say you are Qwen or any other model.';
+// Free.ai's gateway treats <tool_call> as its OWN reserved function-call tag: the model answers, but the message comes back EMPTY (content null).
+// So the cloud never sends that tag. Out: <tool_call> becomes <tool> and "arguments" becomes "args". Back: <tool> becomes <tool_call> again, which the PC tool loop reads.
+const noTc = (t: unknown) => String(t || '').replace(/<(\/?)tool_call>/gi, '<$1tool>').replace(/"arguments"\s*:/g, '"args":');
+const withTc = (t: string) => t.replace(/<(\/?)tool>/gi, '<$1tool_call>').replace(/"args"\s*:/g, '"arguments":');
 async function freeChat(messages: { role: string; content: string }[], maxTokens: number, model = 'qwen7b'): Promise<any> {
   const key = Deno.env.get('FREE_AI_API_KEY');
   if (!key) throw new Error('cloud provider is not configured');
   const r = await fetch('https://api.free.ai/v1/chat/', {
     method: 'POST', signal: AbortSignal.timeout(55000),
     headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages, temperature: 0.3, max_tokens: maxTokens })
+    body: JSON.stringify({ model, messages: messages.map(x => ({ role: x.role, content: noTc(x.content) })), temperature: 0.3, max_tokens: maxTokens })
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('cloud provider HTTP ' + r.status);
@@ -135,9 +140,9 @@ async function aiJson(prompt: string, model: string): Promise<any> {
 
 // Studio mode: the PC sends its own instructions (tools, project map, rules). Same models and keys as aiJson, but plain text and more room,
 // because the answer is code and <tool> calls that the PC runs itself. No JSON shape is forced here.
-async function aiText(messages: { role: string; content: string }[], model: string): Promise<string> {
-  const j = await freeChat(messages, CLOUD_MODELS[model]?.maxTokens || 1600, model);
-  return String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim();
+async function aiText(messages: { role: string; content: string }[], model: string, maxTokens = 0): Promise<string> {
+  const j = await freeChat(messages, maxTokens || CLOUD_MODELS[model]?.maxTokens || 1600, model);
+  return withTc(String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim());
 }
 Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
@@ -251,7 +256,7 @@ Deno.serve(async (req) => {
     let scratch = '', reply = '';
     if (studioMode) {
       const prompt: { role: string; content: string }[] = [{ role: 'system', content: studioSystem || 'You are Agent Max, helping build a website in Pholama Studio.' }, ...msgs];
-      const text = await aiText(prompt, model);
+      const text = await aiText(prompt, model, STUDIO_MAX_TOKENS);   // a Studio answer can be a whole file, so it gets far more room than a chat reply
       if (!text) throw new Error('empty');
       await billWork();
       return out({ reply: text.slice(0, 16000), tools: [], actions: [], thinking: '', ...info });

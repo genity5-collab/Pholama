@@ -1,0 +1,20 @@
+// A fake of the weekly-credit tables for tests of functions/pholamaCloud.ts.
+// The function reads  GET /rest/v1/pholama_cloud_weekly_usage?...&select=used  and writes  POST /rpc/pholama_cloud_weekly_spend / _weekly_refund.
+// Usage:  const W = weeklyFake({ used: 0, cap: 1000 });   inside the fake server:  if (W.handle(u, b, s)) return;
+module.exports = function weeklyFake(opts = {}) {
+  const st = { used: opts.used || 0, spends: [], refunds: [], pro: !!opts.pro, usageFails: false, spendFails: false };
+  st.cap = () => st.pro ? (opts.proCap || 1500) : (opts.cap || 1000);
+  st.handle = (u, body, s) => {
+    if (u.includes('/rpc/pholama_is_pro')) { s.end(JSON.stringify(st.pro)); return true; }
+    if (u.includes('/rest/v1/pholama_cloud_weekly_usage')) { if (st.usageFails) { s.statusCode = 500; s.end('{}'); return true; } s.end(JSON.stringify(st.used ? [{ used: st.used }] : [])); return true; }
+    if (u.includes('/rpc/pholama_cloud_weekly_spend')) {
+      if (st.spendFails) { s.statusCode = 500; s.end('{}'); return true; }
+      const a = JSON.parse(body || '{}'); st.spends.push(a);
+      if (st.used + a.p_cost > st.cap()) { s.end(JSON.stringify([{ ok: false, used: st.used }])); return true; }
+      st.used += a.p_cost; s.end(JSON.stringify([{ ok: true, used: st.used }])); return true;
+    }
+    if (u.includes('/rpc/pholama_cloud_weekly_refund')) { const a = JSON.parse(body || '{}'); st.refunds.push(a); st.used = Math.max(0, st.used - a.p_cost); s.end('{}'); return true; }
+    return false;
+  };
+  return st;
+};

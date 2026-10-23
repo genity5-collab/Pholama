@@ -657,3 +657,32 @@ button,select{border-color:var(--line);border-radius:10px}button:hover,select:ho
 #crBox.low{color:var(--warn);border-color:var(--warn)}
 #crBox.zero{color:#f85149;border-color:#f85149}
 #crBox{min-height:30px;font-size:13px;padding:5px 12px}
+
+/* RetroStudio now lives inside the Studio view */
+.st-tabs{display:flex;gap:4px;padding:3px;border:1px solid var(--line);border-radius:10px;background:var(--card2)}
+.st-tabs button{border:0;background:transparent;color:var(--mut);padding:6px 14px;border-radius:8px;font:inherit;font-size:13px;cursor:pointer}
+.st-tabs button.on{background:var(--acc);color:var(--acct)}
+.site-studio-top{gap:12px;flex-wrap:wrap}
+#stPaneRetro{padding:10px}
+.retro-workspace.in-studio{max-width:none;margin:0;border:0;border-radius:0;background:transparent;padding:0;box-shadow:none}
+.open-studio{margin:8px 0 2px;padding:6px 12px;border:1px solid var(--line);border-radius:8px;background:var(--card2);color:var(--fg);font:inherit;font-size:13px;cursor:pointer}
+.open-studio:hover{border-color:var(--acc)}
+
+/* Studio connectors: an Ollama-style grid, grouped by purpose */
+.cn-wrap{padding:22px 18px 8px;max-width:1040px;margin:0 auto}
+.cn-title{margin:0 0 18px;text-align:center;font-size:20px;font-weight:600;color:var(--fg)}
+.cn-cols{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:18px;align-items:start}
+.cn-group{font-size:12px;color:var(--mut);margin:0 0 8px 2px;letter-spacing:.02em}
+.cn-card{display:flex;align-items:center;gap:10px;padding:9px 10px;margin-bottom:8px;border:1px solid var(--line);border-radius:12px;background:var(--card)}
+.cn-card.ready,.cn-card.connected{border-color:color-mix(in srgb,var(--acc) 55%,var(--line))}
+.cn-mark{flex:none;display:grid;place-items:center;width:30px;height:30px;border-radius:8px;background:var(--card2);color:var(--fg);font-size:11px;font-weight:700}
+.cn-card.connected .cn-mark{background:var(--ok);color:#fff}
+.cn-txt{display:flex;flex-direction:column;min-width:0;flex:1}.cn-txt b{font-size:13px;font-weight:600;color:var(--fg)}
+.cn-txt small{font-size:11px;color:var(--mut);line-height:1.3;overflow:hidden;text-overflow:ellipsis;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical}
+.cn-btn{flex:none;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--card2);color:var(--fg);font:inherit;font-size:12px;cursor:pointer;white-space:nowrap}
+.cn-btn.p{background:var(--acc);color:var(--acct);border-color:var(--acc)}
+.cn-btn:hover{border-color:var(--acc)}
+.cn-card.locked .cn-mark{opacity:.55}
+.cn-foot{text-align:center;color:var(--mut);font-size:12px;margin:10px 0 16px;min-height:16px}
+@media(max-width:900px){.cn-cols{grid-template-columns:repeat(2,minmax(0,1fr))}}
+@media(max-width:520px){.cn-cols{grid-template-columns:1fr}.cn-wrap{padding:14px 8px}}

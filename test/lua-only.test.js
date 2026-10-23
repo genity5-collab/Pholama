@@ -14,9 +14,9 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   ok('the older STUDIO_RULES export still works and equals the encoder-on set', L.STUDIO_RULES === on);
   // the page: the loop and the encoder service hang off the switch only
   const handler = app.slice(app.indexOf('const retroForMessage'), app.indexOf('if (sessionAtStart === sessionId) { stopper = null'));
-  ok('the encoder is on only when the switch is on or @retrostudio is typed', /const retroForMessage = retroEnabled \|\| \/@\(\?:roblox/.test(handler));
+  ok('the encoder is on only when it was on, a Lua request is detected, or @retrostudio is typed', /const retroForMessage = retroEnabled \|\| LUA_ASK\.test\(text\) \|\| \/@\(\?:roblox/.test(handler));
   ok('the rules sent follow the switch (rulesFor(retroForMessage))', /rulesFor\(retroForMessage\)/.test(handler));
-  ok('the preview + encode loop runs only when the switch is on', /if \(retroForMessage && setScriptsFromAnswer\(acc\)\) runStudioLoop\(/.test(handler));
+  ok('the preview + encode loop runs only when the switch is on', /if \(retroForMessage && setScriptsFromAnswer\(acc\)\) \{[^}]*runStudioLoop\(/.test(handler));
   ok('the encoder runs in the page, only from the Studio loop and the manual Encode button (no server call)', !/retro\/encode/.test(app) && (app.match(/await encodeLua\(/g) || []).length === 2 && app.indexOf('await encodeLua(') > app.indexOf('async function runStudioLoop') && app.indexOf('await encodeLua(') < app.indexOf('const result = await studioLoop('));
   ok('nothing outside the Studio loop calls the encoder (no auto-encode while typing)', app.slice(0, app.indexOf('async function runStudioLoop')).indexOf('retro/encode') < 0 && app.slice(app.indexOf('const result = await studioLoop(')).indexOf('retro/encode') < 0);
   // when is a message a Lua request

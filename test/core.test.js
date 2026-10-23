@@ -210,12 +210,12 @@ ok('json path', w.run('json_tool', { text: '{"a":[{"c":5}]}', path: 'a.0.c' }) =
   const d = require('../server/apidocs.js').page(11435); ok('docs page', /v1\/chat\/completions/.test(d) && /Roblox/.test(d) && /localhost:11435/.test(d) && /<\/html>$/.test(d));
   // ---- GitHub sign-in + the 250 "GitHub on both" bonus ----
   {
-    const { parseAuthHash, oauthUrl } = await import('../web/account.js');
+    const { parseAuthHash, oauthUrl } = await import('../docs/account.js');   // docs/ is what the site really serves (web/ is an old copy)
     ok('github: sign-in result keeps the GitHub token', parseAuthHash('#access_token=A&provider_token=gho_X').provider_token === 'gho_X');
     ok('github: discord sign-in has no GitHub token', parseAuthHash('#access_token=A').provider_token === undefined);
     const gu = oauthUrl('https://x.supabase.co', 'https://a.b/p/', 'github');
     ok('github: url asks for the right provider and the repo scope', /provider=github/.test(gu) && /scopes=.*repo/.test(gu));
-    ok('github: discord url is unchanged', !/scopes=/.test(oauthUrl('https://x.supabase.co', 'https://a.b/')) && /provider=discord/.test(oauthUrl('https://x.supabase.co', 'https://a.b/')));
+    ok('discord url asks only to see which servers you are in (guilds), no repo permission', /scopes=identify.*guilds/.test(oauthUrl('https://x.supabase.co', 'https://a.b/')) && !/repo/.test(oauthUrl('https://x.supabase.co', 'https://a.b/')) && /provider=discord/.test(oauthUrl('https://x.supabase.co', 'https://a.b/')));
     ok('github: an unknown provider falls back to discord', /provider=discord/.test(oauthUrl('https://x.supabase.co', 'https://a.b/', 'evil&x=1')));
     const http = require('http'); const UID = '11111111-2222-3333-4444-555555555555'; let both = false, dbCalls = 0;
     const fake = http.createServer((rq, rs) => { rs.setHeader('Content-Type', 'application/json');

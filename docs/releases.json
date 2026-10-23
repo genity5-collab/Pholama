@@ -1,6 +1,18 @@
 {
- "latest": "0.9.42",
+ "latest": "0.9.43",
  "releases": [
+  {
+   "version": "0.9.43",
+   "date": "2026-10-23",
+   "title": "Studio on the site, with connectors",
+   "notes": [
+    "The site now has a Studio with Code and Connectors tabs, in the same dark IDE style as the PC app.",
+    "Connectors shows the tools Studio can work with. The ten that need the PC app say so, and Roblox docs works right here.",
+    "RetroStudio unlocks for people who are in the Pholama Discord server and logged in with Discord.",
+    "Fixed Studio answers that came back empty: tool calls from the self-hosted models are now understood, and Studio replies have room to write whole files.",
+    "Updated the offline cache so browsers pick this up straight away."
+   ]
+  },
   {
    "version": "0.9.42",
    "date": "2026-10-14",
