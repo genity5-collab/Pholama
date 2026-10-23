@@ -1,6 +1,29 @@
 {
- "latest": "0.9.43",
+ "latest": "0.9.45",
  "releases": [
+  {
+   "version": "0.9.45",
+   "date": "2026-10-23",
+   "title": "Better Studio model, exact decimals",
+   "notes": [
+    "Studio now writes scripts with Qwen Coder, Free.ai's self-hosted code model. It is free of the paid tokens and gave the richest models in testing. Chat keeps the fast model. You can still pick another model yourself.",
+    "Decimals are kept exactly: 0.5 stays 0.5 and -5.5 stays -5.5 in every encoder (site, PC app and server). The PC encoder used to cut them to whole numbers, which broke half-stud positions and fade times.",
+    "The three encoders are now checked against each other on real scripts, so they can never drift apart again.",
+    "The manual encoder card is back in Studio and the chat bar no longer covers the viewport."
+   ]
+  },
+  {
+   "version": "0.9.44",
+   "date": "2026-10-23",
+   "title": "RetroStudio builds import correctly",
+   "notes": [
+    "RetroStudio: touch events, if/else, loops and waits written by the AI now become real blocks. Before, they worked in the preview but were dropped when encoding.",
+    "Rotation is kept: a turned part now imports with its Orientation.",
+    "Colours: every way the AI picks a colour (RGB, hex, HSV, BrickColor) now ends as a BrickColor, which is what RetroStudio uses.",
+    "One bad line in a script no longer deletes the whole model. It is named so the AI can fix it.",
+    "The AI is now told to give every part its own size and position, and what blocks can and cannot do."
+   ]
+  },
   {
    "version": "0.9.43",
    "date": "2026-10-23",

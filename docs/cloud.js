@@ -14,7 +14,12 @@ export const MAX_NAME = agentName(), MAX_DAY = 10, MAX_MONTH = 30;   // no fixed
 export const CLOUD_MODELS = [
   { id: 'qwen7b', label: 'Qwen 7B', cost: 5, hint: 'Fast and economical' },
   { id: 'mistral', label: 'Mistral', cost: 15, hint: 'Better answers, higher credit cost' },
+  { id: 'qwen-coder', label: 'Qwen Coder', cost: 5, hint: 'Best for Studio: writes Lua and models' },
 ];
+// Studio writes code, so it uses the coder model unless the person picked another cloud model on purpose.
+export const studioModelId = () => {
+  try { const id = localStorage.getItem('pholama.cloudModel'); return id && CLOUD_MODELS.some(m => m.id === id) ? id : 'qwen-coder'; } catch { return 'qwen-coder'; }
+};
 export const cloudModelId = () => {
   try { const id = localStorage.getItem('pholama.cloudModel'); return CLOUD_MODELS.some(m => m.id === id) ? id : CLOUD_MODELS[0].id; } catch { return CLOUD_MODELS[0].id; }
 };

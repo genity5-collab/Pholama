@@ -3,7 +3,7 @@
 //  "local":   talks to the Pholama server on your PC (llama.cpp / Ollama) using PC RAM/GPU.
 import { Account, cleanName } from './account.js';
 import { llamaLoader, LLAMA_CSS } from './loader.js';
-import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, CLOUD_MODELS, cloudModelId, cloudChat, MAX_NAME, cloudStatus } from './cloud.js';
+import { EFFORT, effortKeys, cleanEffort, effortTokens, mayUse, mayDownload, GATE_MESSAGE, CLOUD_ID, CLOUD_MODELS, cloudModelId, studioModelId, cloudChat, MAX_NAME, cloudStatus } from './cloud.js';
 import { planFallback } from './fallback.js';
 import { splitThinking, thinkLabel, countWords } from './thinking.js';
 import { splitBlocks, LANGS, cleanLang, extFor, safeFileName, diffLines, diffStats, extractScript, editPrompt, runCommand } from './codeblocks.js';
@@ -20,7 +20,7 @@ import { extractLuauBlocks, simulateLuau, drawPreview, DEFAULT_CAMERA } from './
 import { attachViewControls } from './viewcontrols.js';
 import { studioLoop, rulesFor } from './studioloop.js';
 import * as WS from './studioworkspace-model.js';
-import { encodeLua, checkEncoded } from './retroencode.js';
+import { encodeLua, encodeBest, checkEncoded } from './retroencode.js';
 import { lookup as docsLookup, briefFor as docsBrief } from './robloxdocs.js';
 import { mountCloudStudio } from './cloudstudio.js';
 import * as CN from './studioconnectors.js';
@@ -386,10 +386,10 @@ async function runStudioLoop(msg, token, isCloud) {
   const code = $('#retroCode'), log = $('#retroLog'); if (!code) return;
   const say = t => { if (log) log.textContent = t; };
   const base = (window.PHOLAMA && window.PHOLAMA.STUDIO_URL) || '';
-  const encode = async source => {
+  const encode = async (source, raw) => {
     // The encoder runs right here in the page: nothing to download, nothing to wait for, and it works offline.
     try {
-      const r = await encodeLua(source);
+      const r = await (raw && raw !== source ? encodeBest(raw, source) : encodeLua(source));
       if (r.blocks && r.encoded) return { ok: true, encoded: r.encoded, blocks: r.blocks, skipped: r.skipped || [] };
       return { ok: false, error: 'Nothing in that script could be turned into blocks.', skipped: r.skipped || [] };
     } catch { return { ok: false, error: 'The encoder could not process that script.' }; }
@@ -398,7 +398,7 @@ async function runStudioLoop(msg, token, isCloud) {
     const sim = simulateLuau(source);
     paintView(sim.parts);   // the picture of the result
     // The encoder reads one simple statement per line, so it gets the flattened form of the script (loops and functions already worked out).
-    const e = await encode(sim.flat || source);                   // the real encoder says which lines it cannot convert
+    const e = await encode(sim.flat || source, source);           // the real encoder says which lines it cannot convert; the script as written is tried too, for loops with wait
     return { sim, skipped: e.skipped || [], enc: e };
   };
   const ask = async prompt => {
@@ -408,7 +408,7 @@ async function runStudioLoop(msg, token, isCloud) {
     try {
       if (isCloud) {
         if (!token) throw new Error('Sign in to use Pholama Cloud.');
-        reply = (await cloudChat(history, effort, token, undefined, cloudModelId())).reply;
+        reply = (await cloudChat(history, effort, token, undefined, studioModelId())).reply;   // Studio writes code: the coder model unless another was chosen on purpose
       } else if (sel.value.startsWith('cpu:')) {
         await cpuChat(history, t => { reply += t; }, effort);
       } else if (sel.value.startsWith('web:')) {

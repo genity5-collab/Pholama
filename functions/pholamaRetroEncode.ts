@@ -67,7 +67,13 @@ function hexNumber(v) {
 }
 function typedValue(value) {
   const v = value.trim();
-  if (NUM.test(v)) return ESC + '1' + ESC + hexNumber(v) + ESC + 'Number';
+  if (NUM.test(v)) {
+    // Whole, non-negative numbers keep the known hex "typed Number" form. A fraction or a negative would be cut to a whole number (0.5 became 0, -5.5 became 0),
+    // so those are written as plain text, the same plain form RetroStudio uses for positions such as 0,50,0.
+    const plain = v.replace(/_/g, '');
+    if (/^-/.test(plain) || /\./.test(plain)) return ESC + '0' + ESC + String(Number(plain));
+    return ESC + '1' + ESC + hexNumber(v) + ESC + 'Number';
+  }
   if (v.length >= 2 && '"\''.includes(v[0]) && v[v.length - 1] === v[0]) return ESC + '1' + ESC + esc(v.slice(1, -1)) + ESC + 'String';
   if (v === 'true') return ESC + '1' + ESC + '1' + ESC + 'Bool';
   if (v === 'false') return ESC + '1' + ESC + '0' + ESC + 'Bool';
@@ -180,6 +186,7 @@ function compile(source) {
   const setProp = (obj, prop, valueRef) => add('SetObjectProperty', 'Set Object Property',
     ESC + 'Value' + valueRef + ESC + 'Property' + ESC + '0' + ESC + prop + ESC + 'Object' + ESC + '0' + ESC + obj);
   const ref = name => ESC + '2' + ESC + name;
+  let calcN = 0;   // numbers the temporary result variables of arithmetic blocks
 
   for (const rawLine of normalizeModern(source).split('\n')) {
     let line = rawLine.trim(), m;
@@ -298,7 +305,21 @@ function compile(source) {
     }
     if ((m = /^([\w.]+)\.BrickColor\s*=\s*BrickColor\.new\s*\(\s*(['"])(.*?)\2\s*\)$/.exec(line))) { setProp(m[1], 'BrickColor', typedValue('"' + m[3] + '"')); continue; }
     if ((m = /^([\w.]+)\.Material\s*=\s*Enum\.Material\.(\w+)$/.exec(line))) { setProp(m[1], 'Material', typedValue('"' + m[2] + '"')); continue; }
+    if ((m = /^([\w.]+)\.(\w+)\s*=\s*([\w.]+)\s*([+\-*\/])\s*([\w.]+)$/.exec(line)) && isSimpleValue(m[3]) && isSimpleValue(m[5]) && !/^(Parent|Name)$/.test(m[2])) {
+      const tmp = '_calc' + (calcN++), kind = { '+': 'Addition', '-': 'Subtraction', '*': 'Multiplication', '/': 'Division' }[m[4]];
+      add(kind, kind + ' for ' + m[2], ESC + 'Number1' + typedValue(m[3]) + ESC + 'Number2' + typedValue(m[5]), ESC + 'Result' + ESC + tmp);
+      setProp(m[1], m[2], ref(tmp));
+      continue;
+    }
     if ((m = /^([\w.]+)\.(\w+)\s*=\s*(.+)$/.exec(line)) && isSimpleValue(m[3])) { setProp(m[1], m[2], typedValue(m[3])); continue; }
+    if ((m = /^(\w+)\s*=\s*(\w+)\s*([+-])\s*([\w.]+)$/.exec(line)) && m[1] === m[2] && isSimpleValue(m[4])) {
+      add(m[3] === '+' ? 'Addition' : 'Subtraction', (m[3] === '+' ? 'Add to ' : 'Subtract from ') + m[1], ESC + 'Number1' + typedValue(m[2]) + ESC + 'Number2' + typedValue(m[4]), ESC + 'Result' + ESC + m[1]);
+      continue;
+    }
+    if ((m = /^([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(line)) && isSimpleValue(m[2]) && !/^(script|workspace|game)$/.test(m[1])) {
+      add('SetVariable1', 'Set Variable', ESC + 'Value' + typedValue(m[2]), ESC + 'VariableName' + ESC + m[1]);
+      continue;
+    }
     if ((m = /^(\w+)\s*\[\s*(.+)\s*\]\s*=\s*(.+)$/.exec(line)) && isSimpleValue(m[2]) && isSimpleValue(m[3])) {
       add('SetTableValue', 'Set Table Value', ESC + 'Value' + typedValue(m[3]) + ESC + 'Key' + typedValue(m[2]) + ESC + 'Table' + ESC + '0' + ESC + m[1]);
       continue;

@@ -35,7 +35,7 @@ const YAML = `name: WedgePart\ntype: class\nsummary: |\n  A type of \`Class.Base
   ok('the chat looks up the docs before asking the AI, only for Lua requests', /if \(luaRequest\) \{[\s\S]{0,200}docsLookup/.test(app));
   ok('a failed lookup never blocks the chat', /catch \{ \/\* offline or blocked/.test(app));
   ok('the Encode button exists and is wired', /id="retroEncode"/.test(html) && /\$\('#retroEncode'\)[\s\S]{0,60}encodeNow/.test(app));
-  ok('the encoder runs in the page: no server call is needed to encode', /import \{ encodeLua \} from '\.\/retroencode\.js'/.test(app) && !/retro\/encode/.test(app));
+  ok('the encoder runs in the page: no server call is needed to encode', /import \{ encodeLua(?:, encodeBest)?(?:, checkEncoded)? \} from '\.\/retroencode\.js'/.test(app) && !/retro\/encode/.test(app));
   ok('the new files are cached for offline use', ['retroencode.js', 'meshes.js', 'robloxdocs.js'].every(f => sw.includes("'" + f + "'")));
   ok('every file in the offline list really exists', [...sw.matchAll(/'([A-Za-z0-9_.-]+\.(?:js|css|json|html))'/g)].every(m => fs.existsSync(path.join(__dirname, '../docs', m[1]))), 'missing file in sw.js');
   console.log(bad ? bad + ' FAILED' : 'ALL PASSED'); process.exit(bad ? 1 : 0);

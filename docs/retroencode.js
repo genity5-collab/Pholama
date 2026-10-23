@@ -183,6 +183,7 @@ function compile(source) {
   const setProp = (obj, prop, valueRef) => add('SetObjectProperty', 'Set Object Property',
     ESC + 'Value' + valueRef + ESC + 'Property' + ESC + '0' + ESC + prop + ESC + 'Object' + objRef(obj));
   const ref = name => ESC + '2' + ESC + name;
+  let calcN = 0;   // numbers the temporary result variables of arithmetic blocks
 
   for (const rawLine of normalizeModern(source).split('\n')) {
     let line = rawLine.trim(), m;
@@ -311,7 +312,21 @@ function compile(source) {
     }
     if ((m = /^([\w.]+)\.BrickColor\s*=\s*BrickColor\.new\s*\(\s*(['"])(.*?)\2\s*\)$/.exec(line))) { setProp(m[1], 'BrickColor', typedValue('"' + m[3] + '"')); continue; }
     if ((m = /^([\w.]+)\.Material\s*=\s*Enum\.Material\.(\w+)$/.exec(line))) { setProp(m[1], 'Material', typedValue('"' + m[2] + '"')); continue; }
+    if ((m = /^([\w.]+)\.(\w+)\s*=\s*([\w.]+)\s*([+\-*\/])\s*([\w.]+)$/.exec(line)) && isSimpleValue(m[3]) && isSimpleValue(m[5]) && !/^(Parent|Name)$/.test(m[2])) {
+      const tmp = '_calc' + (calcN++), kind = { '+': 'Addition', '-': 'Subtraction', '*': 'Multiplication', '/': 'Division' }[m[4]];
+      add(kind, kind + ' for ' + m[2], ESC + 'Number1' + typedValue(m[3]) + ESC + 'Number2' + typedValue(m[5]), ESC + 'Result' + ESC + tmp);
+      setProp(m[1], m[2], ref(tmp));
+      continue;
+    }
     if ((m = /^([\w.]+)\.(\w+)\s*=\s*(.+)$/.exec(line)) && isSimpleValue(m[3])) { setProp(m[1], m[2], typedValue(m[3])); continue; }
+    if ((m = /^(\w+)\s*=\s*(\w+)\s*([+-])\s*([\w.]+)$/.exec(line)) && m[1] === m[2] && isSimpleValue(m[4])) {
+      add(m[3] === '+' ? 'Addition' : 'Subtraction', (m[3] === '+' ? 'Add to ' : 'Subtract from ') + m[1], ESC + 'Number1' + typedValue(m[2]) + ESC + 'Number2' + typedValue(m[4]), ESC + 'Result' + ESC + m[1]);
+      continue;
+    }
+    if ((m = /^([A-Za-z_]\w*)\s*=\s*(.+)$/.exec(line)) && isSimpleValue(m[2]) && !/^(script|workspace|game)$/.test(m[1])) {
+      add('SetVariable1', 'Set Variable', ESC + 'Value' + typedValue(m[2]), ESC + 'VariableName' + ESC + m[1]);
+      continue;
+    }
     if ((m = /^(\w+)\s*\[\s*(.+)\s*\]\s*=\s*(.+)$/.exec(line)) && isSimpleValue(m[2]) && isSimpleValue(m[3])) {
       add('SetTableValue', 'Set Table Value', ESC + 'Value' + typedValue(m[3]) + ESC + 'Key' + typedValue(m[2]) + ESC + 'Table' + ESC + '0' + ESC + m[1]);
       continue;
@@ -370,6 +385,17 @@ export async function encodeLua(source) {
   const r = compile(String(source || ''));
   if (!r.blocks) return { encoded: '', blocks: 0, skipped: r.skipped.slice(0, 40) };
   return { encoded: HEADER + encodeBase93(await deflateRaw(r.serialized)), serialized: r.serialized, blocks: r.blocks, skipped: r.skipped.slice(0, 40) };
+}
+/** Encode both the script as written and its flattened form, and keep the better one.
+ *  Flattened wins for scripts that BUILD (it works out loops, tables and helper functions into plain parts).
+ *  As written wins when it has real timing the flattening collapses (a for loop with wait): more blocks and nothing extra skipped. */
+export async function encodeBest(raw, flat) {
+  const f = await encodeLua(flat || raw);
+  if (!flat || flat === raw) return f;
+  let r; try { r = await encodeLua(raw); } catch { return f; }
+  const hasTiming = /\b(?:task\.)?wait\s*\(/.test(raw) && /\bfor\b[^\n]*\bdo\b/.test(raw);
+  if (hasTiming && r.blocks > f.blocks && (r.skipped || []).length <= (f.skipped || []).length + 1) return { ...r, usedRaw: true };
+  return f;
 }
 /** Decode an encoded string and count its blocks (sanity check of what we hand to the user). */
 export async function checkEncoded(encoded) {

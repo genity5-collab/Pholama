@@ -8,7 +8,7 @@ const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
 // When the credits run out the AI stops and starts working again by itself as old spending falls out of the 7-day window.
 const STUDIO_MAX_TOKENS = 3500;
 const WEEK_CREDITS = 1000, WORD_COST = 5, MINUTE_COST = 5, PRO_EXTRA_CREDITS = 0;
-const CLOUD_MODELS: Record<string, { cost: number; maxTokens: number }> = { qwen7b: { cost: 5, maxTokens: 1200 }, mistral: { cost: 15, maxTokens: 1600 } };
+const CLOUD_MODELS: Record<string, { cost: number; maxTokens: number }> = { qwen7b: { cost: 5, maxTokens: 1200 }, mistral: { cost: 15, maxTokens: 1600 }, 'qwen-coder': { cost: 5, maxTokens: 1600 } };   // qwen-coder: Free.ai's self-hosted code model, the one Studio writes Lua with
 const DAY_CAP_NO_LOCAL = 10, DAY_CAP_WITH_LOCAL = 1, FREE_MONTH_CAP = 30;
 const PRO_DAY_CAP_NO_LOCAL = 15, PRO_DAY_CAP_WITH_LOCAL = 2, PRO_MONTH_CAP = 35;   // Pholama Pro (a Roblox subscription): a little more room   // a capable local AI is free and unlimited, so the cloud one is only a backup
 const ROUNDS: Record<string, number> = { normal: 3, long: 4, max: 5 };   // model calls per message; one message always counts as 1

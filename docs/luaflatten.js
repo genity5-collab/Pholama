@@ -190,6 +190,8 @@ const mmul = (a, b) => { const o = []; for (let i = 0; i < 3; i++) for (let j = 
 const rotX = t => [1, 0, 0, 0, Math.cos(t), -Math.sin(t), 0, Math.sin(t), Math.cos(t)];
 const rotY = t => [Math.cos(t), 0, Math.sin(t), 0, 1, 0, -Math.sin(t), 0, Math.cos(t)];
 const rotZ = t => [Math.cos(t), -Math.sin(t), 0, Math.sin(t), Math.cos(t), 0, 0, 0, 1];
+// Recover X, Y, Z angles in degrees from a matrix built as Rx * Ry * Rz (row-major), the order anglesMat uses.
+const eulerDeg = m => { const clampS = v => Math.max(-1, Math.min(1, v)); const ry = Math.asin(clampS(m[2])); let rx, rz; if (Math.abs(m[2]) < 0.99999) { rx = Math.atan2(-m[5], m[8]); rz = Math.atan2(-m[1], m[0]); } else { rx = Math.atan2(m[7], m[4]); rz = 0; } return [rx, ry, rz].map(r => Math.round(r * 180 / Math.PI * 100) / 100); };
 const anglesMat = (rx, ry, rz) => mmul(mmul(rotX(rx), rotY(ry)), rotZ(rz));
 const rotVec = (r, v) => ({ x: r[0] * v.x + r[1] * v.y + r[2] * v.z, y: r[3] * v.x + r[4] * v.y + r[5] * v.z, z: r[6] * v.x + r[7] * v.y + r[8] * v.z });
 class Inst { constructor(cls) { this.cls = cls; this.props = {}; this.kids = []; this.parent = null; } }
@@ -218,6 +220,7 @@ function flattenInner(source, opts = {}) {
   let steps = 0; const tick = line => { if (++steps > limits.steps) fail('The script ran too long (a loop may never end).', line); };
   const all = []; // every Instance created, in order
   const passthrough = []; // lines of the original script that need a running game
+  const events = [];      // part.Touched:Connect(function ...) style handlers, written back out as lines after the parts
   let ast;
   try { ast = parse(tokenize(text)); } catch (e) { if (e instanceof LuaError) { result.diagnostics.push(e.message); return result; } throw e; }
 
@@ -240,10 +243,19 @@ function flattenInner(source, opts = {}) {
   def('Instance', tbl({ new: nat((a, line) => { const cls = String(a[0]); if (!/^[A-Za-z]+$/.test(cls)) fail('Instance.new needs a class name.', line); return newInst(cls, a[1]); }) }));
   def('Vector3', tbl({ new: nat((a, line) => new Vec(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line))), zero: new Vec(0, 0, 0), one: new Vec(1, 1, 1) }));
   def('CFrame', tbl({ new: nat((a, line) => (a[0] instanceof Vec ? new Cf(a[0].x, a[0].y, a[0].z) : new Cf(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line))), 'CFrame'), Angles: nat((a, line) => new Cf(0, 0, 0, anglesMat(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line)))), fromEulerAnglesXYZ: nat((a, line) => new Cf(0, 0, 0, anglesMat(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line)))), fromOrientation: nat((a, line) => new Cf(0, 0, 0, mmul(mmul(rotY(asNum(a[1] ?? 0, line)), rotX(asNum(a[0] ?? 0, line))), rotZ(asNum(a[2] ?? 0, line))))), identity: new Cf(0, 0, 0) }));
-  def('Color3', tbl({ new: nat((a, line) => new Col(Math.round(asNum(a[0] ?? 0, line) * 255), Math.round(asNum(a[1] ?? 0, line) * 255), Math.round(asNum(a[2] ?? 0, line) * 255))), fromRGB: nat((a, line) => new Col(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line))) }));
+  const c255 = v => Math.max(0, Math.min(255, Math.round(v)));
+  const hsv = (h, s2, v) => { h = ((h % 1) + 1) % 1; const i = Math.floor(h * 6), f = h * 6 - i, p = v * (1 - s2), q = v * (1 - f * s2), t = v * (1 - (1 - f) * s2); const m = [[v, t, p], [q, v, p], [p, v, t], [p, q, v], [t, p, v], [v, p, q]][i % 6]; return new Col(c255(m[0] * 255), c255(m[1] * 255), c255(m[2] * 255)); };
+  def('Color3', tbl({
+    new: nat((a, line) => new Col(c255(asNum(a[0] ?? 0, line) * 255), c255(asNum(a[1] ?? 0, line) * 255), c255(asNum(a[2] ?? 0, line) * 255))),
+    fromRGB: nat((a, line) => new Col(c255(asNum(a[0] ?? 0, line)), c255(asNum(a[1] ?? 0, line)), c255(asNum(a[2] ?? 0, line)))),
+    fromHSV: nat((a, line) => hsv(asNum(a[0] ?? 0, line), asNum(a[1] ?? 0, line), asNum(a[2] ?? 0, line))),
+    fromHex: nat((a, line) => { const m = /^#?([0-9a-f]{6})$/i.exec(String(a[0] ?? '').trim()); if (!m) fail('Color3.fromHex needs a text like "#aa3333".', line); const n = parseInt(m[1], 16); return new Col((n >> 16) & 255, (n >> 8) & 255, n & 255); })
+  }));
   const brickTable = new LuaTable();
-  brickTable.set('new', nat((a, line) => { const nm = typeof a[0] === 'string' ? a[0] : null; const rgb = nm && brickRgb(nm); const c = new Col(...(rgb || [163, 162, 165])); c.brick = nm || 'Medium stone grey'; return c; }));
+  brickTable.set('new', nat((a, line) => { if (a[0] instanceof Col) { const c0 = a[0], nb = nearestBrick(c0.r, c0.g, c0.b), c1 = new Col(...(brickRgb(nb) || [c0.r, c0.g, c0.b])); c1.brick = nb; return c1; } if (typeof a[0] === 'number' && typeof a[1] === 'number' && typeof a[2] === 'number') { const nb = nearestBrick(c255(a[0] * 255), c255(a[1] * 255), c255(a[2] * 255)), c1 = new Col(...(brickRgb(nb) || [163, 162, 165])); c1.brick = nb; return c1; } const nm = typeof a[0] === 'string' ? a[0] : null; const rgb = nm && brickRgb(nm); const c = new Col(...(rgb || [163, 162, 165])); c.brick = nm || 'Medium stone grey'; return c; }));
   for (const [k, v] of Object.entries({ Red: 'Bright red', Blue: 'Bright blue', Yellow: 'Bright yellow', Green: 'Bright green', Black: 'Black', White: 'White', Gray: 'Medium stone grey' })) brickTable.set(k, nat(() => { const c = new Col(...BRICK[v.toLowerCase()]); c.brick = v; return c; }));
+  brickTable.set('Random', nat(() => { const names = Object.keys(BRICK); const nm = names[Math.floor((() => { rng = (rng * 1664525 + 1013904223) % 4294967296; return rng / 4294967296; })() * names.length)]; const c = new Col(...BRICK[nm]); c.brick = nm.replace(/\b\w/g, ch => ch.toUpperCase()); return c; }));
+  for (const [k, v] of Object.entries({ Orange: 'Bright orange', Purple: 'Bright violet', Pink: 'Hot pink', Brown: 'Reddish brown', Gray: 'Medium stone grey', Grey: 'Medium stone grey', DarkGray: 'Dark stone grey' })) if (BRICK[v.toLowerCase()]) brickTable.set(k, nat(() => { const c = new Col(...BRICK[v.toLowerCase()]); c.brick = v; return c; }));
   def('BrickColor', brickTable);
   const enumRoot = new Enum('Enum'); def('Enum', enumRoot);
   const mathT = tbl({ floor: nat(a => Math.floor(a[0])), ceil: nat(a => Math.ceil(a[0])), abs: nat(a => Math.abs(a[0])), sqrt: nat(a => Math.sqrt(a[0])), sin: nat(a => Math.sin(a[0])), cos: nat(a => Math.cos(a[0])), tan: nat(a => Math.tan(a[0])), rad: nat(a => a[0] * Math.PI / 180), deg: nat(a => a[0] * 180 / Math.PI), pi: Math.PI, huge: Infinity, max: nat(a => Math.max(...a)), min: nat(a => Math.min(...a)), pow: nat(a => Math.pow(a[0], a[1])), fmod: nat(a => a[0] % a[1]), round: nat(a => Math.round(a[0])), clamp: nat(a => Math.min(Math.max(a[0], a[1]), a[2])),
@@ -309,7 +321,7 @@ function flattenInner(source, opts = {}) {
   const callFn = (f, args, line, depth = 0) => {
     tick(line);
     if (f instanceof Native) { const r = f.f(args, line); return r === undefined ? null : r; }
-    if (!(f instanceof Fn)) fail('You tried to call something that is not a function.', line);
+    if (!(f instanceof Fn)) { if (result.diagnostics.length < 12) result.diagnostics.push(`Line ${line}: skipped a call to something the converter does not know. Build with plain Parts and properties.`); softSkips++; return null; }
     if (depth > 120 || callDepth > 120) fail('A function calls itself too many times.', line);
     const env = mkEnv(f.env); f.node.params.forEach((p, i) => env.vars.set(p, args[i] === undefined ? null : args[i]));
     if (f.node.vararg) env.vars.set('...', args.slice(f.node.params.length));
@@ -317,7 +329,7 @@ function flattenInner(source, opts = {}) {
     try { run(f.node.body, env); } catch (s) { if (s instanceof ReturnSig) return s.v; throw s; } finally { callDepth--; }
     return null;
   };
-  let callDepth = 0;
+  let callDepth = 0, softSkips = 0;
   const first = v => (Array.isArray(v) ? (v.length ? v[0] : null) : v);
   const evalMulti = (nodes, env) => { const out = []; nodes.forEach((n, i) => { const v = ev(n, env, true); if (i === nodes.length - 1 && Array.isArray(v) && (n.t === 'call' || n.t === 'method' || n.t === 'vararg')) out.push(...v); else out.push(first(v)); }); return out; };
   function ev(n, env, multi = false) {
@@ -342,6 +354,10 @@ function flattenInner(source, opts = {}) {
       }
       case 'call': { const f = first(ev(n.fn, env)); const args = evalMulti(n.args, env); return callFn(f, args, n.line); }
       case 'method': {
+        if (n.name === 'Connect' && n.obj.t === 'index' && n.obj.key && n.obj.key.t === 'str' && n.args[0] && n.args[0].t === 'function') {
+          const target = first(ev(n.obj.obj, env));
+          if (target instanceof Inst) { events.push({ inst: target, event: n.obj.key.v, fn: n.args[0], env, line: n.line }); return null; }
+        }
         const obj = first(ev(n.obj, env)); const args = evalMulti(n.args, env);
         if (obj instanceof Inst) {
           if (n.name === 'Clone') return cloneTree(obj, null);
@@ -358,9 +374,16 @@ function flattenInner(source, opts = {}) {
     }
     fail('Unsupported expression.', n.line);
   }
+  const PARTCLS = new Set(['Part', 'WedgePart', 'CornerWedgePart', 'TrussPart', 'SpawnLocation', 'Seat', 'MeshPart']);
   const cloneTree = (inst, parent) => { const c = newInst(inst.cls, parent); Object.assign(c.props, inst.props); for (const k of inst.kids) cloneTree(k, c); return c; };
   const centerOf = m => { const ps = []; const walk = i => { if (i.cls !== 'Model' && i.cls !== 'Folder') ps.push(i); i.kids.forEach(walk); }; walk(m); return ps; };
-  const moveModel = (m, v) => { const ps = centerOf(m).filter(p => p.props.Position instanceof Vec || p.props.CFrame instanceof Cf); if (!ps.length) return; const pos = p => (p.props.CFrame instanceof Cf ? p.props.CFrame : p.props.Position); const c = ps.reduce((a, p) => ({ x: a.x + pos(p).x / ps.length, y: a.y + pos(p).y / ps.length, z: a.z + pos(p).z / ps.length }), { x: 0, y: 0, z: 0 }); for (const p of ps) { const q = pos(p); const nv = new Vec(q.x - c.x + v.x, q.y - c.y + v.y, q.z - c.z + v.z); if (p.props.CFrame instanceof Cf) p.props.CFrame = new Cf(nv.x, nv.y, nv.z); else p.props.Position = nv; } };
+  const moveModel = (m, v) => {
+    const ps = centerOf(m).filter(p => PARTCLS.has(p.cls)); if (!ps.length) return;
+    const pos = p => (p.props.CFrame instanceof Cf ? p.props.CFrame : p.props.Position instanceof Vec ? p.props.Position : new Vec(0, 0, 0));   // a part with no position sits at the origin, like in Roblox
+    const c = ps.reduce((a, p) => ({ x: a.x + pos(p).x / ps.length, y: a.y + pos(p).y / ps.length, z: a.z + pos(p).z / ps.length }), { x: 0, y: 0, z: 0 });
+    const target = v instanceof Cf ? v : new Cf(v.x, v.y, v.z);
+    for (const p of ps) { const q = pos(p); const nv = new Vec(q.x - c.x + target.x, q.y - c.y + target.y, q.z - c.z + target.z); if (p.props.CFrame instanceof Cf) p.props.CFrame = new Cf(nv.x, nv.y, nv.z, p.props.CFrame.r); else p.props.Position = nv; }   // keep each part's own rotation
+  };
 
   function run(body, env) {
     for (const s of body) {
@@ -395,23 +418,29 @@ function flattenInner(source, opts = {}) {
   }
   // Enum.* values become plain strings on property set
   const enumName = v => (v instanceof Enum ? v.path.split('.').pop() : v);
-  try { run(ast, mkEnv(G)); } catch (e) {
-    if (e instanceof LuaError) { result.diagnostics.push(e.message); }
-    else if (e instanceof ReturnSig || e instanceof BreakSig || e instanceof ContinueSig) { /* top-level return ends the script */ }
-    else throw e;
+  { const topEnv = mkEnv(G);
+    for (const st of ast) {
+      try { run([st], topEnv); }
+      catch (e) {
+        if (e instanceof LuaError) { if (/too long|ran too|Too many|too many/.test(e.message)) { result.diagnostics.push(e.message); break; } result.diagnostics.push(e.message + ' (that line was skipped)'); }
+        else if (e instanceof ReturnSig || e instanceof BreakSig || e instanceof ContinueSig) break;   // top-level return ends the script
+        else throw e;
+      }
+    }
   }
   result.steps = steps;
 
   // ---------- walk the tree and write the flat script ----------
   const isUnder = (i, root) => { for (let p = i; p; p = p.parent) if (p === root) return true; return false; };
   const PARTS = new Set(['Part', 'WedgePart', 'CornerWedgePart', 'TrussPart', 'SpawnLocation', 'Seat', 'MeshPart']);
+  const instVar = new Map();
   const lines = []; let nPart = 0, nModel = 0; const used = new Set(); const mname = (nm, fallback) => { let base = String(nm || fallback).replace(/[^A-Za-z0-9_]/g, '') || fallback; if (/^\d/.test(base)) base = '_' + base; let n = base, k = 2; while (used.has(n)) n = base + k++; used.add(n); return n; };
   const fmt = n => String(Math.round(n * 1000) / 1000);
   const emit = (inst, parentVar) => {
     const isPart = PARTS.has(inst.cls), isModel = inst.cls === 'Model' || inst.cls === 'Folder';
     if (!isPart && !isModel) return;
     if (isPart) { if (nPart >= limits.parts) { if (nPart === limits.parts) result.diagnostics.push(`Preview stopped at ${limits.parts} parts.`); nPart++; return; } nPart++; }
-    const v = mname(inst.props.Name, isPart ? 'Part' : 'Model');
+    const v = mname(inst.props.Name, isPart ? 'Part' : 'Model'); instVar.set(inst, v);
     lines.push(`local ${v} = Instance.new("${isPart ? (inst.cls === 'MeshPart' || inst.cls === 'SpawnLocation' || inst.cls === 'Seat' ? 'Part' : inst.cls) : 'Model'}", ${parentVar})`);
     if (isModel) nModel++;
     const pr = inst.props;
@@ -421,6 +450,9 @@ function flattenInner(source, opts = {}) {
       lines.push(`${v}.Size = Vector3.new(${fmt(size.x)}, ${fmt(size.y)}, ${fmt(size.z)})`);
       const pos = pr.CFrame instanceof Cf ? pr.CFrame : pr.Position instanceof Vec ? pr.Position : new Vec(0, 0, 0);
       lines.push(`${v}.Position = Vector3.new(${fmt(pos.x)}, ${fmt(pos.y)}, ${fmt(pos.z)})`);
+      { const rm0 = pr.CFrame instanceof Cf ? pr.CFrame.r : null;
+        if (rm0) { const ang = eulerDeg(rm0); if (ang.some(n => Math.abs(n) > 0.01)) lines.push(`${v}.Orientation = Vector3.new(${fmt(ang[0])}, ${fmt(ang[1])}, ${fmt(ang[2])})`); }
+        else if (pr.Orientation instanceof Vec && (pr.Orientation.x || pr.Orientation.y || pr.Orientation.z)) lines.push(`${v}.Orientation = Vector3.new(${fmt(pr.Orientation.x)}, ${fmt(pr.Orientation.y)}, ${fmt(pr.Orientation.z)})`); }
       const col = pr.Color instanceof Col ? pr.Color : pr.BrickColor instanceof Col ? pr.BrickColor : null;
       if (pr.BrickColor instanceof Col && pr.BrickColor.brick) lines.push(`${v}.BrickColor = BrickColor.new("${pr.BrickColor.brick}")`);
       if (col && !(pr.BrickColor instanceof Col && pr.BrickColor.brick)) lines.push(`${v}.BrickColor = BrickColor.new("${nearestBrick(col.r, col.g, col.b)}")`);   // blocks colour parts by BrickColor name, so an RGB colour becomes the closest one
@@ -439,6 +471,59 @@ function flattenInner(source, opts = {}) {
   // objects the script made but never parented stay hidden, exactly like the game
   const unparented = all.filter(i => PARTS.has(i.cls) && !isUnder(i, ws)).length;
   if (unparented) result.diagnostics.push(`${unparented} part${unparented === 1 ? '' : 's'} ${unparented === 1 ? 'is' : 'are'} not parented to workspace (or a Model inside workspace), so ${unparented === 1 ? 'it is' : 'they are'} not shown.`);
+  // Event handlers: part.Touched:Connect(function(hit) ... end). Written after the parts as the exact lines the encoder turns into blocks.
+  // Only what blocks can do is kept: print, wait, and setting a property of a part that exists. Anything else is named in the notes instead of guessed.
+  const EVENTS = { Touched: 'Touched', TouchEnded: 'TouchEnded', MouseClick: 'MouseClick', MouseButton1Click: 'MouseButton1Click' };
+  // --- write an event handler back out as source the encoder reads: if / else, numeric for, print, wait, local numbers, and part properties.
+  const nameOf = new Map(); for (const [inst, v] of instVar) nameOf.set(inst, v);
+  const isVarName = nm => /^[A-Za-z_]\w*$/.test(nm);
+  // An expression is printed only if blocks can take it: a literal, a variable, <part>.<Prop>, Vector3/BrickColor constructors, or ONE arithmetic / comparison step.
+  const exprText = (n, scope, depth = 0) => {
+    if (!n || depth > 3) return null;
+    switch (n.t) {
+      case 'num': return fmt(n.v);
+      case 'str': return `"${String(n.v).replace(/[\\"\n]/g, '').slice(0, 80)}"`;
+      case 'bool': return n.v ? 'true' : 'false';
+      case 'paren': { const t = exprText(n.e, scope, depth + 1); return t === null ? null : t; }
+      case 'name': { if (scope.has(n.name)) return n.name; const e = lookup(evEnv, n.name); const v = e ? e.vars.get(n.name) : null; if (v instanceof Inst && nameOf.has(v)) return nameOf.get(v); if (typeof v === 'number' || typeof v === 'boolean') { if (isVarName(n.name)) { if (!declared.has(n.name)) { declared.add(n.name); declLines.push(`local ${n.name} = ${typeof v === 'number' ? fmt(v) : v}`); } return n.name; } return String(typeof v === 'number' ? fmt(v) : v); } return null; }
+      case 'index': { if (n.key.t !== 'str') return null; const o = exprText(n.obj, scope, depth + 1); return o !== null && /^[A-Za-z_]\w*$/.test(o) && /^[A-Za-z]+$/.test(n.key.v) ? `${o}.${n.key.v}` : null; }
+      case 'un': if (n.op === '-' ) { const t = exprText(n.a, scope, depth + 1); return t === null ? null : '-' + t; } return null;
+      case 'bin': { if (!['+', '-', '*', '/', '%', '==', '~=', '<', '>', '<=', '>='].includes(n.op)) return null; const x = exprText(n.a, scope, depth + 1), y = exprText(n.b, scope, depth + 1); return x === null || y === null ? null : `${x} ${n.op} ${y}`; }
+      case 'call': { const f = n.fn; if (f.t === 'index' && f.obj.t === 'name' && f.key.t === 'str') { const v = (() => { try { return first(ev(n, evEnv)); } catch { return undefined; } })(); const t = v === undefined ? null : valueText(v); return t; } return null; }
+    }
+    return null;
+  };
+  const valueText = v => (v instanceof Vec ? `Vector3.new(${fmt(v.x)}, ${fmt(v.y)}, ${fmt(v.z)})` : v instanceof Col ? `BrickColor.new("${v.brick || nearestBrick(v.r, v.g, v.b)}")` : typeof v === 'boolean' ? String(v) : typeof v === 'number' ? fmt(v) : v instanceof Enum ? `Enum.${v.path.replace(/^Enum\./, '')}` : typeof v === 'string' ? `"${v.replace(/[\\"\n]/g, '').slice(0, 60)}"` : null);
+  let evEnv = null; const declared = new Set(), declLines = [];
+  const stmts = (body, scope, ind, out, why) => {
+    for (const st of body) {
+      const pad = '  '.repeat(ind);
+      if (st.t === 'expr' && st.e.t === 'call' && st.e.fn.t === 'name' && (st.e.fn.name === 'print' || st.e.fn.name === 'warn')) { const t = st.e.args[0] ? exprText(st.e.args[0], scope) : '""'; if (t !== null) { out.push(`${pad}print(${t})`); continue; } }
+      else if (st.t === 'expr' && st.e.t === 'call' && ((st.e.fn.t === 'name' && st.e.fn.name === 'wait') || (st.e.fn.t === 'index' && st.e.fn.obj.t === 'name' && st.e.fn.obj.name === 'task' && st.e.fn.key.v === 'wait'))) { const t = st.e.args[0] ? exprText(st.e.args[0], scope) : '0.03'; if (t !== null) { out.push(`${pad}wait(${t})`); continue; } }
+      else if (st.t === 'local' && st.names.length === 1 && st.vals.length === 1 && isVarName(st.names[0])) { const t = exprText(st.vals[0], scope); if (t !== null) { scope.add(st.names[0]); out.push(`${pad}local ${st.names[0]} = ${t}`); continue; } }
+      else if (st.t === 'assign' && st.targets.length === 1 && st.vals.length === 1) {
+        const tg = st.targets[0]; let lhs = null;
+        if (tg.t === 'name' && (scope.has(tg.name) || lookup(evEnv, tg.name))) { lhs = tg.name; if (!scope.has(tg.name) && isVarName(tg.name) && !declared.has(tg.name)) { const e0 = lookup(evEnv, tg.name), v0 = e0 ? e0.vars.get(tg.name) : null; if (typeof v0 === 'number' || typeof v0 === 'boolean') { declared.add(tg.name); declLines.push(`local ${tg.name} = ${typeof v0 === 'number' ? fmt(v0) : v0}`); } else lhs = null; } }
+        else if (tg.t === 'index' && tg.key.t === 'str' && /^[A-Za-z]+$/.test(tg.key.v) && !/^(Parent|Name)$/.test(tg.key.v)) { const o = exprText(tg.obj, scope); if (o && /^[A-Za-z_]\w*$/.test(o)) lhs = `${o}.${tg.key.v === 'Color' ? 'BrickColor' : tg.key.v}`; }
+        if (lhs) { let t; if (tg.t === 'index' && tg.key.v === 'Color') { const v = (() => { try { return first(ev(st.vals[0], evEnv)); } catch { return undefined; } })(); t = v instanceof Col ? valueText(Object.assign(new Col(v.r, v.g, v.b), { brick: nearestBrick(v.r, v.g, v.b) })) : exprText(st.vals[0], scope); } else t = exprText(st.vals[0], scope); if (t !== null) { out.push(`${pad}${lhs} = ${t}`); continue; } }
+      }
+      else if (st.t === 'if') {
+        let okAll = true; const sub = [];
+        st.clauses.forEach((c, i) => { const cond = exprText(c.cond, scope); if (cond === null || /\b(and|or)\b/.test(cond)) { okAll = false; return; } if (i > 0) { /* elseif: blocks only have if/else, so nest it */ sub.push(`${pad}else`); sub.push(`${pad}  if ${cond} then`); stmts(c.body, new Set(scope), ind + 2, sub, why); sub.push(`${pad}  end`); return; } sub.push(`${pad}if ${cond} then`); stmts(c.body, new Set(scope), ind + 1, sub, why); });
+        if (okAll) { if (st.orelse) { sub.push(`${pad}else`); stmts(st.orelse, new Set(scope), ind + 1, sub, why); } sub.push(`${pad}end`); for (let k = 1; k < st.clauses.length; k++) sub.push(`${pad}end`.replace(pad, pad)); out.push(...sub); continue; }
+      }
+      else if (st.t === 'fornum' && isVarName(st.v)) { const A = exprText(st.a, scope), B = exprText(st.b, scope), C = st.c ? exprText(st.c, scope) : '1'; if (A !== null && B !== null && C !== null && /^-?[\d.]+$/.test(A) && /^-?[\d.]+$/.test(B)) { const inner = new Set(scope); inner.add(st.v); out.push(`${pad}for ${st.v} = ${A}, ${B}${C !== '1' ? ', ' + C : ''} do`); stmts(st.body, inner, ind + 1, out, why); out.push(`${pad}end`); continue; } }
+      result.diagnostics.push(`Line ${st.line}: ${why} only print, wait, if/else, numeric for loops and setting a part's property can become blocks, so this line was left out.`);
+    }
+  };
+  for (const evn of events) {
+    const name = EVENTS[evn.event]; const tv = instVar.get(evn.inst);
+    if (!name || !tv) { if (!name) result.diagnostics.push(`Line ${evn.line}: the event ${evn.event} is not supported by blocks, so it was left out.`); continue; }
+    evEnv = evn.env; const argName = (evn.fn.params[0] && isVarName(evn.fn.params[0])) ? evn.fn.params[0] : 'hit', body = [];
+    stmts(evn.fn.body, new Set([argName]), 1, body, `inside ${evn.event}`);
+    if (declLines.length) { lines.push(...declLines.splice(0)); }
+    lines.push(`${tv}.${name}:Connect(function(${argName})`, ...body, 'end)');
+  }
   for (const p of result.prints) lines.push(`print("${String(p).replace(/[\\"\n]/g, '').slice(0, 80)}")`);
   result.lua = lines.join('\n'); result.flattened = true; result.ok = result.parts.length > 0 && !result.diagnostics.some(d => !/not parented|stopped at/.test(d));
   void passthrough;
