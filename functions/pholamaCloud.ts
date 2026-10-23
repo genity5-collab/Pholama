@@ -8,7 +8,7 @@ const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
 // When the credits run out the AI stops and starts working again by itself as old spending falls out of the 7-day window.
 const STUDIO_MAX_TOKENS = 3500;
 const WEEK_CREDITS = 1000, WORD_COST = 5, MINUTE_COST = 5, PRO_EXTRA_CREDITS = 0;
-const CLOUD_MODELS: Record<string, { cost: number; maxTokens: number }> = { qwen7b: { cost: 5, maxTokens: 1200 }, mistral: { cost: 15, maxTokens: 1600 }, 'qwen-coder': { cost: 5, maxTokens: 1600 } };   // qwen-coder: Free.ai's self-hosted code model, the one Studio writes Lua with
+const CLOUD_MODELS: Record<string, { cost: number; maxTokens: number }> = { qwen7b: { cost: 5, maxTokens: 1200 }, 'qwen-coder': { cost: 5, maxTokens: 1600 } };   // qwen-coder: Free.ai's self-hosted code model, the one Studio writes Lua with
 const DAY_CAP_NO_LOCAL = 10, DAY_CAP_WITH_LOCAL = 1, FREE_MONTH_CAP = 30;
 const PRO_DAY_CAP_NO_LOCAL = 15, PRO_DAY_CAP_WITH_LOCAL = 2, PRO_MONTH_CAP = 35;   // Pholama Pro (a Roblox subscription): a little more room   // a capable local AI is free and unlimited, so the cloud one is only a backup
 const ROUNDS: Record<string, number> = { normal: 3, long: 4, max: 5 };   // model calls per message; one message always counts as 1
@@ -116,7 +116,7 @@ async function freeChat(messages: { role: string; content: string }[], maxTokens
   const r = await fetch('https://api.free.ai/v1/chat/', {
     method: 'POST', signal: AbortSignal.timeout(55000),
     headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: messages.map(x => ({ role: x.role, content: noTc(x.content) })), temperature: 0.3, max_tokens: maxTokens })
+    body: JSON.stringify({ model, messages: messages.map(x => ({ role: x.role, content: noTc(x.content) })), temperature: model === 'qwen-coder' ? 0.15 : 0.3, max_tokens: maxTokens })   // code needs steady numbers: positions and sizes must not drift between tries
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('cloud provider HTTP ' + r.status);
@@ -162,7 +162,9 @@ async function aiJson(prompt: string, model: string): Promise<any> {
 // Studio mode: the PC sends its own instructions (tools, project map, rules). Same models and keys as aiJson, but plain text and more room,
 // because the answer is code and <tool> calls that the PC runs itself. No JSON shape is forced here.
 async function aiText(messages: { role: string; content: string }[], model: string, maxTokens = 0): Promise<string> {
-  const j = await freeChat(messages, maxTokens || CLOUD_MODELS[model]?.maxTokens || 1600, model);
+  let j: any;
+  try { j = await freeChat(messages, maxTokens || CLOUD_MODELS[model]?.maxTokens || 1600, model); }
+  catch (e) { console.log('AgentMax retry after:', String(e).slice(0, 80)); j = await freeChat(messages, maxTokens || CLOUD_MODELS[model]?.maxTokens || 1600, model); }   // one provider hiccup should not cost the person their answer
   return withTc(String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '').trim());
 }
 Deno.serve(async (req) => {
@@ -220,7 +222,7 @@ Deno.serve(async (req) => {
       } catch { return out({ error: 'Could not read your credits. Try again.', code: 'limit-check' }, 502); }
     }
     const effort = EFFORT[String(body.effort)] ? String(body.effort) : 'normal';
-    const model = String(body.model || 'qwen7b');
+    const model = (m => m === 'mistral' ? 'qwen7b' : m)(String(body.model || 'qwen7b'));   // mistral was retired (same model, triple price): old clients are quietly moved to the cheap chat model
     const modelSpec = CLOUD_MODELS[model];
     if (!modelSpec) return out({ error: 'That cloud model is not available.', code: 'model' }, 400);
     const studioMode = body.studio === true;   // Studio: the PC sends its own rules + tools; this function only thinks and writes, the PC does the file work

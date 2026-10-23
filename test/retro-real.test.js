@@ -93,6 +93,15 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   ok('the picker offers the code model', /id: 'qwen-coder'/.test(cloudJs), '');
   ok('Studio uses the code model unless another was picked on purpose', /export const studioModelId/.test(cloudJs) && /studioModelId\(\)\)\)\.reply/.test(appJs), '');
   ok('chat keeps its own default (the fast model)', /CLOUD_MODELS\.some\(m => m\.id === id\) \? id : CLOUD_MODELS\[0\]\.id/.test(cloudJs) && /CLOUD_MODELS = \[\s*\{ id: 'qwen7b'/.test(cloudJs), '');
+  ok('the AI is taught round shapes: Ball and Cylinder, with the cylinder axis rule', /Enum\.PartType\.Ball/.test(LUA_RULES) && /Enum\.PartType\.Cylinder/.test(LUA_RULES) && /LONG ALONG ITS X AXIS/.test(LUA_RULES), '');
+  ok('the AI is taught how to build a car with four cylinder wheels sitting on the ground', /CARS:/.test(LUA_RULES) && /FOUR wheels/.test(LUA_RULES) && /Wheel Y equals its radius/.test(LUA_RULES), '');
+  ok('the AI is told to write one statement per line', /ONE STATEMENT PER LINE/.test(LUA_RULES), '');
+  ok('the Studio rules still fit the 9000 character window the server keeps', LUA_RULES.length < 9000, String(LUA_RULES.length));
+  ok('a retry guards the cloud model call', /AgentMax retry after/.test(cloudTs), '');
+  ok('mistral is retired: not in the picker and not in the server table', !/mistral/i.test(cloudJs.slice(cloudJs.indexOf('CLOUD_MODELS = ['), cloudJs.indexOf('];', cloudJs.indexOf('CLOUD_MODELS = [')))) && !/mistral: \{ cost/.test(cloudTs), '');
+  ok('an old client that still sends mistral is moved to the cheap chat model', /m === 'mistral' \? 'qwen7b'/.test(cloudTs), '');
+  ok('both cloud models cost the same cheap rate', /qwen7b: \{ cost: 5/.test(cloudTs) && /'qwen-coder': \{ cost: 5/.test(cloudTs), '');
+  ok('code is written at a low temperature', /model === 'qwen-coder' \? 0\.15/.test(cloudTs), '');
   ok('no paid or OpenRouter model id is anywhere in the cloud model list', !/openrouter|\/|:free/.test(cloudJs.slice(cloudJs.indexOf('CLOUD_MODELS = ['), cloudJs.indexOf('];', cloudJs.indexOf('CLOUD_MODELS = [')))), '');
 
   console.log(bad ? bad + ' FAILED' : 'ALL PASSED'); process.exit(bad ? 1 : 0);

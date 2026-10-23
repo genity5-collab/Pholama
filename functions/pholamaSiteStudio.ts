@@ -37,7 +37,7 @@ Deno.serve(async req => {
   const rest = makeRest(SB, service);
 
   const callModel = async (msgs: { role: string; content: string }[], o?: { signal?: AbortSignal }) => {
-    const r = await fetch(FREE_AI, { method: 'POST', headers: { Authorization: 'Bearer ' + aiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: MODEL, messages: msgs, max_tokens: 1800, temperature: 0.2 }), signal: o?.signal ?? AbortSignal.timeout(38000) });
+    const r = await fetch(FREE_AI, { method: 'POST', headers: { Authorization: 'Bearer ' + aiKey, 'Content-Type': 'application/json' }, body: JSON.stringify({ model: MODEL, messages: msgs, max_tokens: 3000, temperature: 0.15 }), signal: o?.signal ?? AbortSignal.timeout(38000) });
     const j: any = await r.json().catch(() => ({}));
     if (!r.ok) throw new Error('model ' + r.status);      // the provider's own message is never passed on
     if (j?.free_ai_usage?.source && j.free_ai_usage.source !== 'self_hosted') throw new Error('model not free');   // never silently spend premium tokens

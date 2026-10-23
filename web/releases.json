@@ -1,6 +1,20 @@
 {
- "latest": "0.9.45",
+ "latest": "0.9.46",
  "releases": [
+  {
+   "version": "0.9.46",
+   "date": "2026-10-23",
+   "title": "Cheaper, code-first models and rounder builds",
+   "notes": [
+    "Only two cloud models now, both at the cheap rate of 5 credits per word: Qwen Chat for everyday questions and Qwen Coder for Studio and RetroStudio scripts.",
+    "Mistral is retired. It was the same model at three times the price. Anyone who had it selected is moved to Qwen Chat automatically.",
+    "Code answers are steadier: the coder model now uses a lower temperature, so sizes and positions do not drift between tries.",
+    "Studio replies have more room, so a whole house or character script is no longer cut off.",
+    "The AI now builds with round shapes: balls, cylinders and wedges. Cars get four cylinder wheels with hubcaps that sit on the ground, plus headlights, windows and bumpers.",
+    "Scripts are written one statement per line, so none are skipped when they are turned into blocks.",
+    "If the model provider hiccups once, Studio quietly tries again before showing an error."
+   ]
+  },
   {
    "version": "0.9.45",
    "date": "2026-10-23",

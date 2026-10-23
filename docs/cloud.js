@@ -12,9 +12,8 @@ import { agentName } from './agentname.js';
 export const MAX_NAME = agentName(), MAX_DAY = 10, MAX_MONTH = 30;   // no fixed product name: the member's chosen name, or a random one
 // Free.ai self-hosted choices. The server validates this list again; the browser never sends a provider key.
 export const CLOUD_MODELS = [
-  { id: 'qwen7b', label: 'Qwen 7B', cost: 5, hint: 'Fast and economical' },
-  { id: 'mistral', label: 'Mistral', cost: 15, hint: 'Better answers, higher credit cost' },
-  { id: 'qwen-coder', label: 'Qwen Coder', cost: 5, hint: 'Best for Studio: writes Lua and models' },
+  { id: 'qwen7b', label: 'Qwen Chat', cost: 5, hint: 'Fast answers for chat' },
+  { id: 'qwen-coder', label: 'Qwen Coder', cost: 5, hint: 'Best for code: Studio and RetroStudio scripts' },
 ];
 // Studio writes code, so it uses the coder model unless the person picked another cloud model on purpose.
 export const studioModelId = () => {
