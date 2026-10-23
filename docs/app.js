@@ -20,7 +20,7 @@ import { extractLuauBlocks, simulateLuau, drawPreview, DEFAULT_CAMERA } from './
 import { attachViewControls } from './viewcontrols.js';
 import { studioLoop, rulesFor } from './studioloop.js';
 import * as WS from './studioworkspace-model.js';
-import { encodeLua } from './retroencode.js';
+import { encodeLua, checkEncoded } from './retroencode.js';
 import { lookup as docsLookup, briefFor as docsBrief } from './robloxdocs.js';
 import { mountCloudStudio } from './cloudstudio.js';
 import * as CN from './studioconnectors.js';
@@ -450,7 +450,43 @@ async function encodeNow() {
     say(`Encoded ${r.blocks} blocks.` + (r.skipped && r.skipped.length ? ` ${r.skipped.length} line${r.skipped.length === 1 ? '' : 's'} could not be converted: ${r.skipped.slice(0, 3).join('; ')}` : ' Press Copy, then paste it into RetroStudio.'));
   } catch (e) { say('The encoder could not process that script.'); }
 }
+
+// Manual encoder: paste Luau, press Encode, copy the RetroStudio string. Same in-browser encoder as the editor's Encode button, but it works on its own box,
+// so it can be tested without touching the script that is open. The result is decoded again so "valid, N blocks" is what was actually checked.
+async function manualEncode() {
+  const inp = $('#mEncIn'), log = $('#mEncLog'), out = $('#mEncOut'), txt = $('#mEncText'), info = $('#mEncInfo'), state = $('#mEncState'); if (!inp) return;
+  const say = x => { if (log) log.textContent = x; };
+  if (!inp.value.trim()) { if (out) out.hidden = true; say('Nothing to encode yet. Paste a script first.'); return; }
+  say('Encoding...'); if (state) state.textContent = 'Encoding...';
+  try {
+    // A manual encoder encodes EXACTLY what was pasted, so the blocks match what RetroStudio's own reference gives. (The preview's flattening adds default
+    // sizes and positions and drops unused lines, which changes the block count.) Only if the pasted text gives no blocks at all, such as a script that depends
+    // on loops, the worked-out flat form is tried, and the message says so.
+    let r = await encodeLua(inp.value), usedFlat = false;
+    if (!r.blocks || !r.encoded) { try { const sim = simulateLuau(inp.value); if (sim && sim.flat && sim.flat !== inp.value) { const f = await encodeLua(sim.flat); if (f.blocks && f.encoded) { r = f; usedFlat = true; } } } catch {} }
+    if (!r.blocks || !r.encoded) { if (out) out.hidden = true; if (state) state.textContent = 'Nothing to encode'; say('Nothing in that script could be turned into blocks.' + (r.skipped && r.skipped.length ? ' Not supported: ' + r.skipped.slice(0, 4).join('; ') : '')); return; }
+    const chk = await checkEncoded(r.encoded);
+    if (txt) txt.value = r.encoded; if (out) out.hidden = false;
+    if (info) info.textContent = r.blocks + ' blocks' + (chk.valid ? ', checked OK' : ', could not re-check');
+    if (state) state.textContent = chk.valid ? 'Encoded and checked' : 'Encoded';
+    say(`Encoded ${r.blocks} blocks` + (usedFlat ? ' (your loops and functions were worked out first).' : '.') + (r.skipped && r.skipped.length ? ` ${r.skipped.length} line${r.skipped.length === 1 ? '' : 's'} could not be converted: ${r.skipped.slice(0, 3).join('; ')}` : ' Press Copy, then paste it into RetroStudio.'));
+  } catch (e) { if (out) out.hidden = true; if (state) state.textContent = 'Failed'; say('The encoder could not process that script.'); }
+}
+function initManualEncoder() {
+  const go = $('#mEncGo'); if (!go) return;
+  go.onclick = manualEncode;
+  const from = $('#mEncFromEditor'); if (from) from.onclick = () => { const c = $('#retroCode'), i = $('#mEncIn'); if (c && i) { i.value = c.value; i.focus(); } };
+  const clr = $('#mEncClear'); if (clr) clr.onclick = () => { const i = $('#mEncIn'), o = $('#mEncOut'), l = $('#mEncLog'), s = $('#mEncState'); if (i) i.value = ''; if (o) o.hidden = true; if (l) l.textContent = ''; if (s) s.textContent = 'Paste Luau, press Encode'; };
+  const cp = $('#mEncCopy'); if (cp) cp.onclick = async () => {
+    const t = $('#mEncText'); if (!t || !t.value) return;
+    try { await navigator.clipboard.writeText(t.value); cp.textContent = 'Copied'; }
+    catch { t.select(); try { document.execCommand('copy'); cp.textContent = 'Copied'; } catch { cp.textContent = 'Select and copy'; } }
+    setTimeout(() => { cp.textContent = 'Copy'; }, 1500);
+  };
+  const inp = $('#mEncIn'); if (inp) inp.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') { e.preventDefault(); manualEncode(); } });
+}
 function initSiteAgentUi() {
+  initManualEncoder();
   const tc = $('#stTabCode'), tn = $('#stTabConn'), tr = $('#stTabRetro'); if (tc) tc.onclick = () => studioTab('code'); if (tn) tn.onclick = () => studioTab('conn'); if (tr) tr.onclick = () => studioTab('retro'); paintStudioTabs();
   const code = $('#retroCode'); if (code) code.addEventListener('input', () => {
     const sc = activeScriptItem(); if (sc) WS.editScript(studioWs, sc.id, code.value);

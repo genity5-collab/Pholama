@@ -37,6 +37,20 @@
     <div id="stPaneRetro" hidden>
   <div id="retroWorkspace" class="retro-workspace in-studio">
     <div class="retro-head"><div><b>RetroStudio</b><span>Write or paste Luau, preview it, then Encode it into a RetroStudio import string. Ask the chat for a script and it lands here.</span></div><span class="retro-sim-badge" id="retroBadge">PREVIEW</span></div>
+    <section class="retro-manual" id="retroManual" aria-label="Manual encoder">
+      <div class="retro-card-head"><b>Manual encoder</b><span id="mEncState">Paste Luau, press Encode</span></div>
+      <textarea id="mEncIn" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Luau to encode" placeholder="Paste Luau here (parts, scripts, --@block lines), then press Encode. This runs in your browser; nothing is sent anywhere."></textarea>
+      <div class="retro-actions">
+        <button type="button" id="mEncGo" class="p">Encode</button>
+        <button type="button" id="mEncFromEditor" title="Copy the script open in the editor below into this box">Use editor script</button>
+        <button type="button" id="mEncClear">Clear</button>
+      </div>
+      <div id="mEncOut" class="retro-enc" hidden>
+        <div class="retro-enc-head"><b>Encoded string</b><span id="mEncInfo"></span><button type="button" id="mEncCopy" class="p">Copy</button></div>
+        <textarea id="mEncText" readonly spellcheck="false" aria-label="Encoded string for RetroStudio"></textarea>
+      </div>
+      <div id="mEncLog" class="retro-log" role="status" aria-live="polite"></div>
+    </section>
     <div class="retro-grid">
       <aside class="retro-explorer" aria-label="Explorer">
         <div class="retro-card-head"><b>Explorer</b><span><button type="button" id="wsNewScript" title="New script">+ Script</button></span></div>

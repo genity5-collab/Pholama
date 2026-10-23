@@ -10,7 +10,11 @@ export function makeApi({ Account, cfg, fetchImpl }) {
     if (!token) return new Response(JSON.stringify({ error: 'Log in to use Pholama Studio.' }), { status: 401, headers: { 'Content-Type': 'application/json' } });
     const route = String(fullPath).replace(/^api\/studio\/ws\//, '').replace(/^api\/studio\//, '').replace(/^\/+/, '');
     const headers = Object.assign({ Authorization: 'Bearer ' + token }, opts.body ? { 'Content-Type': 'application/json' } : {}, opts.headers || {});
-    try { return await (fetchImpl || fetch)(base + '/' + route, Object.assign({}, opts, { headers })); }
+    // The Base44 host only routes the bare function name, so the route travels in ?path= (a query the host passes through). Any query the screen
+    // already had (like ?project=shop) is kept after it.
+    const qi = route.indexOf('?'), routePath = qi >= 0 ? route.slice(0, qi) : route, routeQuery = qi >= 0 ? route.slice(qi + 1) : '';
+    const url = base + '?path=' + encodeURIComponent(routePath).replace(/%2F/gi, '/') + (routeQuery ? '&' + routeQuery : '');
+    try { return await (fetchImpl || fetch)(url, Object.assign({}, opts, { headers })); }
     catch { return new Response(JSON.stringify({ error: 'Could not reach Pholama Studio. Check your connection.' }), { status: 503, headers: { 'Content-Type': 'application/json' } }); }
   };
 }

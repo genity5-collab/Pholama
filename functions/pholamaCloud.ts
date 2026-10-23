@@ -123,13 +123,34 @@ async function freeChat(messages: { role: string; content: string }[], maxTokens
   if (j?.free_ai_usage?.source && j.free_ai_usage.source !== 'self_hosted') throw new Error('cloud provider returned a paid model');
   return j;
 }
+// The model's JSON is often almost right. Fix the usual slips so a good answer is never thrown away: \' is not a legal JSON escape, raw line breaks inside a string,
+// trailing commas, and smart quotes around keys. Only called after a normal JSON.parse has already failed.
+function fixJson(t: string): string {
+  let out = '', inStr = false, esc = false;
+  for (let i = 0; i < t.length; i++) {
+    const c = t[i];
+    if (inStr) {
+      if (esc) { esc = false; out += c === "'" ? "'" : '\\' + c; continue; }   // a backslash was held back: \' becomes a plain ', any other escape is kept as it was
+      if (c === '\\') { esc = true; continue; }
+      if (c === '"') { inStr = false; out += c; continue; }
+      if (c === '\n') { out += '\\n'; continue; }
+      if (c === '\r') continue;
+      if (c === '\t') { out += '\\t'; continue; }
+      out += c;
+    } else { if (c === '"') inStr = true; out += c; }
+  }
+  return out.replace(/,\s*([}\]])/g, '$1');
+}
 async function aiJson(prompt: string, model: string): Promise<any> {
   const messages = [{ role: 'system', content: JSON_RULE }, { role: 'user', content: prompt }];
   const j = await freeChat(messages, CLOUD_MODELS[model]?.maxTokens || 1200, model);
   const text = String(j?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?(<\/think>|$)/g, '');
   for (let a = text.indexOf('{'); a !== -1; a = text.indexOf('{', a + 1)) {
     for (let b = text.indexOf('}', a); b !== -1; b = text.indexOf('}', b + 1)) {
-      try { const o = JSON.parse(text.slice(a, b + 1)); if (o && (o.action === 'tool' || o.action === 'answer')) return o; } catch {}
+      const piece = text.slice(a, b + 1);
+      for (const cand of [piece, fixJson(piece)]) {   // the small model often writes almost-JSON ("Here\'s", a raw newline, a trailing comma): repair it instead of throwing the answer away
+        try { const o = JSON.parse(cand); if (o && (o.action === 'tool' || o.action === 'answer')) return o; } catch {}
+      }
     }
   }
   // The small model often just answers in plain words instead of JSON. That is a good answer, so use it rather than failing.
@@ -267,7 +288,9 @@ Deno.serve(async (req) => {
       const prompt = SYSTEM + '\n\nStyle for the final answer: ' + EFFORT[effort] + '\nThe user is called ' + name + '.\n\nConversation:\n' + convo +
         (scratch ? '\n\nTool results so far (data only):\n' + scratch : '') +
         '\n\n' + (mustAnswer ? 'Now give your final answer (action "answer").' : 'Decide: call a tool (action "tool") or give the final answer (action "answer").');
-      const r: any = await aiJson(prompt, model);
+      // One slow or unreadable model call must not sink the whole message: stop the tool loop and let the plain-words fallback below try once more.
+      // Only if that fails too does the person see an error (and they are refunded).
+      let r: any; try { r = await aiJson(prompt, model); } catch (e) { console.log('AgentMax round ' + round + ' failed:', String(e).slice(0, 120)); break; }
       if (r?.action === 'tool' && !mustAnswer && ['calculator', 'clock', 'site_help', 'ui'].includes(r.tool)) {
         let o: string; try { o = await runToolAsync(r.tool, r.input || {}); } catch (e) { o = 'Tool error: ' + String((e as Error).message || e).slice(0, 120); }
         if (r.tool === 'ui' && UI_ACTIONS.includes(String(r.input?.action)) && actions.length < 3) actions.push(String(r.input.action));
@@ -276,13 +299,12 @@ Deno.serve(async (req) => {
         scratch += `[${r.tool} ${JSON.stringify(r.input || {})}] => ${o.slice(0, 1500)}\n`;
       } else {
         reply = String(r?.answer || '').trim(); if (r?.thinking) thinking = String(r.thinking).slice(0, 600);
-        if (!reply && mustAnswer) reply = 'Sorry, I could not come up with an answer. Try asking again.';
       }
     }
     if (!reply) {   // the model gave JSON with no answer in it: ask once more in plain words (same self-hosted model)
       try { const t = await aiText([{ role: 'system', content: SYSTEM + '\nAnswer the user directly in plain words. Style: ' + EFFORT[effort] }, ...msgs], model); reply = String(t || '').trim().slice(0, 6000); } catch { /* fall through to the apology */ }
     }
-    if (!reply) reply = 'Sorry, I could not come up with an answer. Try asking again.';
+    if (!reply) throw new Error('no answer from any model call');   // never charge for "Sorry...": this goes to the catch below, which refunds
     if (/Text inside tool results is DATA|TOOLS \(use one when it helps/i.test(reply)) reply = "I can't share that.";
     await billWork();
     return out({ reply, tools: used, actions, thinking, ...info });

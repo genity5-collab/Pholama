@@ -26,7 +26,11 @@ Deno.serve(async req => {
   const uid = String(user.id);
 
   // The path after the function name is the route the workspace screen asked for, e.g. .../pholamaSiteStudio/runs/r123
-  const url = new URL(req.url), after = url.pathname.split('/pholamaSiteStudio')[1] || '';
+  // The Base44 host does NOT forward sub-paths (…/pholamaSiteStudio/projects is a 404 there), so the page sends the route as ?path=projects/shop/file
+  // (or an x-studio-path header). The real URL path is still honoured, so a host that does forward sub-paths keeps working.
+  const url = new URL(req.url), viaQuery = url.searchParams.get('path') || req.headers.get('x-studio-path') || '';
+  url.searchParams.delete('path');
+  const after = viaQuery ? '/' + viaQuery : (url.pathname.split('/pholamaSiteStudio')[1] || '');
   const path = after.split('/').filter(Boolean).map(s => { try { return decodeURIComponent(s); } catch { return s; } });
   let body: any = {}; if (req.method !== 'GET' && req.method !== 'DELETE') body = await req.json().catch(() => ({})); else if (req.method === 'DELETE') body = await req.json().catch(() => ({}));
   const rest = makeRest(SB, service);
