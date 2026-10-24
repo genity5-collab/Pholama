@@ -33,6 +33,11 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   r = await call(cb('qwen3-coder', 'a'));
   ok('a one-word debugging task costs at least 10', r.j.cost === 10, r.j.cost);
 
+  r = await call(cb('qwen-coder', 'quick fix please', { quick: true }));
+  ok('Quick mode uses the same self-hosted coder at the same price', r.status === 200 && seen.model[seen.model.length - 1].model === 'qwen-coder' && r.j.cost === 15, JSON.stringify(r).slice(0, 200));
+  ok('Quick mode asks for a short reply (1,500 tokens, not 6,000)', seen.model[seen.model.length - 1].max_tokens === 1500, seen.model[seen.model.length - 1].max_tokens);
+  r = await call(cb('qwen-coder', 'normal fix please'));
+  ok('without quick the Codebase reply room is unchanged (6,000)', seen.model[seen.model.length - 1].max_tokens === 6000, seen.model[seen.model.length - 1].max_tokens);
   ok('both coders run steady (temperature 0.15), not chatty', seen.model[0].temperature === 0.15 && seen.model[1].temperature === 0.15, seen.model[0].temperature + '/' + seen.model[1].temperature);
   // only what the person typed is billed: everything after the [Studio] marker (tool results, notes, screenshots) is free
   const typed = 'make the checkout page work', hidden = '\n\n[Studio]\nRESULT: ' + 'word '.repeat(900);

@@ -7,6 +7,7 @@ const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
 // Credits: everyone gets 1,500 per rolling week. Each word you send costs the selected model's rate; each started minute of AI work costs 5.
 // When the credits run out the AI stops and starts working again by itself as old spending falls out of the 7-day window.
 const STUDIO_MAX_TOKENS = 3500;
+const CODEBASE_QUICK_TOKENS = 1500;   // Codebase 'Quick' mode: same self-hosted coder, but only one short step per answer, so it is back much sooner
 const CODEBASE_MAX_TOKENS = 6000;   // Pholama Codebase (PC app): one reply can carry a whole part of a file; it writes big files in several parts
 const CODEBASE_MONTH_CREDITS = 15000;   // Codebase has its own monthly pool (supabase/codebase_pool.sql); it never touches the 1,500 weekly credits
 const WEEK_CREDITS = 1500, WORD_COST = 5, MINUTE_COST = 5, PRO_EXTRA_CREDITS = 0;
@@ -289,7 +290,7 @@ Deno.serve(async (req) => {
     let scratch = '', reply = '';
     if (studioMode) {
       const prompt: { role: string; content: string }[] = [{ role: 'system', content: studioSystem || 'You are Agent Max, helping build a website in Pholama Studio.' }, ...msgs];
-      const text = await aiText(prompt, model, body.codebase === true ? CODEBASE_MAX_TOKENS : STUDIO_MAX_TOKENS);   // a Studio answer can be a whole file, so it gets far more room than a chat reply (Codebase gets even more)
+      const text = await aiText(prompt, model, body.codebase === true ? (body.quick === true ? CODEBASE_QUICK_TOKENS : CODEBASE_MAX_TOKENS) : STUDIO_MAX_TOKENS);   // quick: a short reply comes back several times faster   // a Studio answer can be a whole file, so it gets far more room than a chat reply (Codebase gets even more)
       if (!text) throw new Error('empty');
       await billWork();
       return out({ reply: text.slice(0, body.codebase === true ? 30000 : 16000), tools: [], actions: [], thinking: '', ...info });
