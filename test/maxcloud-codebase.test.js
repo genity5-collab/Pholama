@@ -33,6 +33,7 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   r = await call(cb('qwen3-coder', 'a'));
   ok('a one-word debugging task costs at least 10', r.j.cost === 10, r.j.cost);
 
+  ok('both coders run steady (temperature 0.15), not chatty', seen.model[0].temperature === 0.15 && seen.model[1].temperature === 0.15, seen.model[0].temperature + '/' + seen.model[1].temperature);
   // only what the person typed is billed: everything after the [Studio] marker (tool results, notes, screenshots) is free
   const typed = 'make the checkout page work', hidden = '\n\n[Studio]\nRESULT: ' + 'word '.repeat(900);
   r = await call(cb('qwen-coder', typed + hidden));

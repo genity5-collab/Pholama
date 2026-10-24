@@ -117,7 +117,7 @@ async function freeChat(messages: { role: string; content: string }[], maxTokens
   const r = await fetch('https://api.free.ai/v1/chat/', {
     method: 'POST', signal: AbortSignal.timeout(55000),
     headers: { Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' },
-    body: JSON.stringify({ model, messages: messages.map(x => ({ role: x.role, content: noTc(x.content) })), temperature: model === 'qwen-coder' ? 0.15 : 0.3, max_tokens: maxTokens })   // code needs steady numbers: positions and sizes must not drift between tries
+    body: JSON.stringify({ model, messages: messages.map(x => ({ role: x.role, content: noTc(x.content) })), temperature: (model === 'qwen-coder' || model === 'qwen3-coder') ? 0.15 : 0.3, max_tokens: maxTokens })   // code needs steady numbers: positions and sizes must not drift between tries
   });
   const j = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error('cloud provider HTTP ' + r.status);
