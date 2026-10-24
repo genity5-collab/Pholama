@@ -57,6 +57,11 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   r = await call(task('fix the menu bug please'));
   ok('Codebase shows the owner 15,000 + 8,500', r.status === 200 && r.j.week_cap === 23500, JSON.stringify(r));
 
+  r = await call({ status: true, studio: true, codebase: true });
+  ok('the Codebase balance (status) shows its own pool plus the allowance', r.j.week_cap === 23500 && r.j.credits_left === 23500 - W.cb.used, JSON.stringify(r));
+  W.extra = 0; r = await call({ status: true, studio: true, codebase: true });
+  ok('a normal account sees 15,000 for Codebase', r.j.week_cap === 15000, JSON.stringify(r));
+
   // the SQL file itself
   const sql = fs.readFileSync(path.join(__dirname, '..', 'supabase', 'owner_credits.sql'), 'utf8');
   ok('the SQL gives the owner account 8,500 extra', /d0c8bb82-1501-4eae-b7be-bae1cd1acba1', 8500/.test(sql));

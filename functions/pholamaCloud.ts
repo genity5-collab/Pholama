@@ -222,8 +222,9 @@ Deno.serve(async (req) => {
     // Balance only: lets the page show the credits before the first message. Free, never charges, never calls a model.
     if (body.status === true) {
       try {
+        isCodebase = body.studio === true && body.codebase === true;   // the Codebase balance comes from its own monthly pool
         const used0 = await weeklyUsage();
-        const cap0 = WEEK_CREDITS + PRO_EXTRA_CREDITS + await extraFor();
+        const cap0 = (isCodebase ? CODEBASE_MONTH_CREDITS : WEEK_CREDITS + PRO_EXTRA_CREDITS) + await extraFor();
         return out({ status: true, day_used: used0, day_cap: cap0, month_used: used0, month_cap: cap0, credits_left: Math.max(0, cap0 - used0), week_cap: cap0 });
       } catch { return out({ error: 'Could not read your credits. Try again.', code: 'limit-check' }, 502); }
     }
