@@ -36,7 +36,7 @@
     <div id="stPaneConn" hidden><div id="connHost"></div><p class="cn-foot" id="connFoot"></p></div>
     <div id="stPaneRetro" hidden>
   <div id="retroWorkspace" class="retro-workspace in-studio">
-    <div class="retro-head"><div><b>RetroStudio</b><span>Write or paste Luau, preview it, then Encode it into a RetroStudio import string. Ask the chat for a script and it lands here.</span></div><span class="retro-sim-badge" id="retroBadge">PREVIEW</span></div>
+    <div class="retro-head"><div><b>RetroStudio</b> <span class="cn-ends">Disabled on 1 January</span><span>Write or paste Luau, preview it, then Encode it into a RetroStudio import string. Ask the chat for a script and it lands here.</span></div><span class="retro-sim-badge" id="retroBadge">PREVIEW</span></div>
     <section class="retro-manual" id="retroManual" aria-label="Manual encoder">
       <div class="retro-card-head"><b>Manual encoder</b><span id="mEncState">Paste Luau, press Encode</span></div>
       <textarea id="mEncIn" spellcheck="false" autocapitalize="off" autocomplete="off" aria-label="Luau to encode" placeholder="Paste Luau here (parts, scripts, --@block lines), then press Encode. This runs in your browser; nothing is sent anywhere."></textarea>
@@ -53,7 +53,8 @@
     </section>
     <div class="retro-grid">
       <aside class="retro-explorer" aria-label="Explorer">
-        <div class="retro-card-head"><b>Explorer</b><span><button type="button" id="wsNewScript" title="New script">+ Script</button></span></div>
+        <div class="retro-card-head"><b>Explorer</b><span><button type="button" id="wsNewScript" title="New script">+ Script</button> <button type="button" id="wsTemplates" title="Start from a ready-made script" aria-haspopup="true">Templates</button> <button type="button" id="wsImport" title="Open .lua, .luau or .txt files">Import</button> <button type="button" id="wsExportAll" title="Download every script in one file">Export all</button><input type="file" id="wsFile" accept=".lua,.luau,.txt" multiple hidden></span></div>
+        <div id="wsTplMenu" class="ws-tplmenu" role="menu" hidden></div>
         <div id="wsTree" class="ws-tree" role="tree"></div>
         <div class="ws-hint" id="wsHint">Ask the AI to build something. Its scripts and models appear here.</div>
       </aside>

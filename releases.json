@@ -1,6 +1,18 @@
 {
- "latest": "0.9.46",
+ "latest": "0.9.47",
  "releases": [
+  {
+   "version": "0.9.47",
+   "date": "2026-10-24",
+   "title": "RetroStudio tools and 1,500 weekly credits",
+   "notes": [
+    "New Templates menu in the RetroStudio explorer: Car, Snowman, Tree, Spinning part and Kill brick, each ready to preview and encode.",
+    "Import .lua, .luau or .txt files with the Import button or by dragging them onto RetroStudio. A file made by Export all comes back as separate scripts.",
+    "Export all downloads every script in one file.",
+    "Everyone now gets 1,500 credits a week (up from 1,000).",
+    "The RetroStudio connector is labelled: it is disabled on 1 January."
+   ]
+  },
   {
    "version": "0.9.46",
    "date": "2026-10-23",

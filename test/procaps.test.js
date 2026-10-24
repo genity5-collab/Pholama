@@ -10,7 +10,7 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
     s.setHeader('Content-Type', 'application/json');
     if (q.url.startsWith('/auth/v1/user')) return s.end(JSON.stringify({ id: 'u1', user_metadata: { name: 'Sam' } }));
     if (q.url.includes('pholama_is_pro')) { proAsked = JSON.parse(b); if (proMode === 'drop') return q.socket.destroy(); if (proMode === 'error') { s.statusCode = 500; return s.end('{}'); } if (proMode === 'garbage') return s.end('"yes please"'); return s.end(JSON.stringify(proMode === 'pro')); }
-    W.used = global.__deny ? 1000 : 9;
+    W.used = global.__deny ? 1500 : 9;
     if (W.handle(decodeURIComponent(q.url), b, s)) { if (q.url.includes('weekly_spend')) spendArgs = JSON.parse(b); return; }
     if (q.url.includes('chat/completions') || q.url.includes('/v1/chat')) return s.end(JSON.stringify({ choices: [{ message: { content: '{"action":"answer","text":"hi"}' } }], free_ai_usage: { source: 'self_hosted' } }));
     s.statusCode = 404; s.end('{}'); }); }).listen(0, '127.0.0.1');
@@ -22,14 +22,14 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   const M = { messages: [{ role: 'user', content: 'hi' }] };
 
   proMode = 'free'; let r = await call(M);
-  ok('a free member gets the 1,000-credit weekly pool', r.j.week_cap === 1000 && r.j.month_cap === 1000, JSON.stringify(r.j));
+  ok('a free member gets the 1,500-credit weekly pool', r.j.week_cap === 1500 && r.j.month_cap === 1500, JSON.stringify(r.j));
   ok('a message is charged at 5 credits a word (one word = 5)', spendArgs && spendArgs.p_cost === 5, JSON.stringify(spendArgs));
   ok('the Pro check was asked about THIS member', proAsked && proAsked.p_user === 'u1', JSON.stringify(proAsked));
 
   proMode = 'pro'; r = await call(M);
-  ok('a Pro member also uses the same 1,000-credit weekly pool (Pro perks are elsewhere)', r.j.week_cap === 1000, JSON.stringify(r.j));
+  ok('a Pro member also uses the same 1,500-credit weekly pool (Pro perks are elsewhere)', r.j.week_cap === 1500, JSON.stringify(r.j));
   r = await call({ ...M, localTools: true });
-  ok('having a strong local AI does not shrink the weekly pool', r.status === 200 && r.j.week_cap === 1000, JSON.stringify(r));
+  ok('having a strong local AI does not shrink the weekly pool', r.status === 200 && r.j.week_cap === 1500, JSON.stringify(r));
 
   proMode = 'error'; spendArgs = null; r = await call(M);
   ok('if the Pro check BREAKS the member still gets through', r.status === 200 && !!r.j.reply && !!spendArgs, JSON.stringify(r));
@@ -41,7 +41,7 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   ok('a free call really does reach the credit meter (test sanity)', !!spendArgs, JSON.stringify(spendArgs));
 
   global.__deny = true; spendArgs = null; r = await call(M);
-  ok('someone who used all 1000 credits is told so and is not charged', r.status === 429 && r.j.code === 'limit-month' && /1000/.test(r.j.error) && spendArgs === null, JSON.stringify(r));
+  ok('someone who used all 1500 credits is told so and is not charged', r.status === 429 && r.j.code === 'limit-month' && /1500/.test(r.j.error) && spendArgs === null, JSON.stringify(r));
   global.__deny = undefined;
   console.log(bad ? bad + ' FAILED' : 'ALL PASSED'); net.close(); process.exit(bad ? 1 : 0);
 })();

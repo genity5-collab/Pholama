@@ -1,13 +1,13 @@
-// Agent Max: Pholama's cloud assistant. Needs a Pholama login. Each account has a rolling 1,000-credit weekly allowance.
+// Agent Max: Pholama's cloud assistant. Needs a Pholama login. Each account has a rolling 1,500-credit weekly allowance.
 // Can use tools: calculator, clock, site_help (how Pholama works). GENERATED from tools/agentMax.template.ts by tools/build_agent_max.py
 // POST { messages:[{role,content}], effort:'normal'|'long'|'max' }  Authorization: Bearer <Pholama login token>
 // -> { reply, tools:[{name,input,output}], day_used, day_cap, month_used, month_cap }  or { error, code }
 
 const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
-// Credits: everyone gets 1,000 per rolling week. Each word you send costs the selected model's rate; each started minute of AI work costs 5.
+// Credits: everyone gets 1,500 per rolling week. Each word you send costs the selected model's rate; each started minute of AI work costs 5.
 // When the credits run out the AI stops and starts working again by itself as old spending falls out of the 7-day window.
 const STUDIO_MAX_TOKENS = 3500;
-const WEEK_CREDITS = 1000, WORD_COST = 5, MINUTE_COST = 5, PRO_EXTRA_CREDITS = 0;
+const WEEK_CREDITS = 1500, WORD_COST = 5, MINUTE_COST = 5, PRO_EXTRA_CREDITS = 0;
 const CLOUD_MODELS: Record<string, { cost: number; maxTokens: number }> = { qwen7b: { cost: 5, maxTokens: 1200 }, 'qwen-coder': { cost: 5, maxTokens: 1600 } };   // qwen-coder: Free.ai's self-hosted code model, the one Studio writes Lua with
 const DAY_CAP_NO_LOCAL = 10, DAY_CAP_WITH_LOCAL = 1, FREE_MONTH_CAP = 30;
 const PRO_DAY_CAP_NO_LOCAL = 15, PRO_DAY_CAP_WITH_LOCAL = 2, PRO_MONTH_CAP = 35;   // Pholama Pro (a Roblox subscription): a little more room   // a capable local AI is free and unlimited, so the cloud one is only a backup

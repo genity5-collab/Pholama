@@ -29,7 +29,7 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   ok('the model has room to write real code (max_tokens 3500)', seen.model[0] && seen.model[0].max_tokens >= 3000, seen.model[0] && seen.model[0].max_tokens);
   ok('the tool call comes back in the form the PC runs (<tool_call>, with "arguments")', /<tool_call>\{"name":"studio_write","arguments"/.test(r.j.reply) && !/<think>/.test(r.j.reply), r.j.reply);
   ok('ONE model call and ONE message charged', seen.model.length === 1 && seen.spend === 1, seen.model.length + '/' + seen.spend);
-  ok('the credits used and the 1,000 weekly pool come back for the counter (3 words x 5 = 15)', r.j.month_used === 35 && r.j.month_cap === 1000 && r.j.credits_left === 965 && r.j.day_cap === 1000 && r.j.cost === 15, JSON.stringify(r.j));
+  ok('the credits used and the 1,500 weekly pool come back for the counter (3 words x 5 = 15)', r.j.month_used === 35 && r.j.month_cap === 1500 && r.j.credits_left === 1465 && r.j.day_cap === 1500 && r.j.cost === 15, JSON.stringify(r.j));
   // normal (non Studio) chat is unchanged: still the JSON site helper
   seen.model.length = 0; modelMode = 'ok';
   r = await call({ messages: [{ role: 'user', content: 'what is pholama' }] });

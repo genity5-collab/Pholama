@@ -10,7 +10,7 @@ export const PHOLAMA_GUILD_ID = '1556650031375982803';
 //   'discord' = being in the Pholama Discord server; 'pc' = a connected Pholama PC; '' = nothing (works in the browser).
 export const GROUPS = [
   { id: 'roblox', label: 'Roblox', items: [
-    { id: 'retrostudio', name: 'RetroStudio', mark: 'RS', blurb: 'Preview Luau, build models, encode to RetroStudio blocks', needs: 'discord', opens: 'retro' },
+    { id: 'retrostudio', name: 'RetroStudio', mark: 'RS', blurb: 'Preview Luau, build models, encode to RetroStudio blocks', needs: 'discord', opens: 'retro', endsOn: '2027-01-01', endsLabel: 'Disabled on 1 January' },
     { id: 'robloxdocs', name: 'Roblox docs', mark: 'Rb', blurb: 'Look up the Roblox API while you build', needs: '' },
   ] },
   { id: 'code', label: 'Code', items: [
@@ -31,6 +31,8 @@ export const GROUPS = [
   ] },
 ];
 
+// A connector with `endsOn` shows a notice until that date. This is a label only: nothing is switched off here.
+export const endNotice = (c, now = new Date()) => c && c.endsOn ? { label: c.endsLabel || 'Ends soon', over: now >= new Date(c.endsOn + 'T00:00:00') } : null;
 export const allConnectors = () => GROUPS.flatMap(g => g.items.map(i => ({ ...i, group: g.id })));
 export const findConnector = id => allConnectors().find(c => c.id === id) || null;
 
@@ -87,6 +89,7 @@ export function renderConnectors(host, ctx, on) {
       const card = el('div', 'cn-card ' + st.kind); card.dataset.id = c.id; card.dataset.state = st.kind;
       card.appendChild(el('span', 'cn-mark', c.mark));
       const txt = el('span', 'cn-txt'); txt.append(el('b', '', c.name), el('small', '', st.note || c.blurb)); card.appendChild(txt);
+      const en = endNotice(c); if (en) { const tag = el('span', 'cn-ends', en.label); tag.title = 'This connector is going away on 1 January.'; txt.insertBefore(tag, txt.querySelector('small')); }
       const b = el('button', 'cn-btn' + (st.kind === 'ready' ? ' p' : ''), st.label); b.type = 'button'; b.dataset.action = st.action;
       b.onclick = () => on && on(c, st.action);
       card.appendChild(b); col.appendChild(card);
