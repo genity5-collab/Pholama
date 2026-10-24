@@ -101,7 +101,7 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   ok('mistral is retired: not in the picker and not in the server table', !/mistral/i.test(cloudJs.slice(cloudJs.indexOf('CLOUD_MODELS = ['), cloudJs.indexOf('];', cloudJs.indexOf('CLOUD_MODELS = [')))) && !/mistral: \{ cost/.test(cloudTs), '');
   ok('an old client that still sends mistral is moved to the cheap chat model', /m === 'mistral' \? 'qwen7b'/.test(cloudTs), '');
   ok('both cloud models cost the same cheap rate', /qwen7b: \{ cost: 5/.test(cloudTs) && /'qwen-coder': \{ cost: 5/.test(cloudTs), '');
-  ok('code is written at a low temperature', /model === 'qwen-coder' \? 0\.15/.test(cloudTs), '');
+  ok('code is written at a low temperature', /\(model === 'qwen-coder' \|\| model === 'qwen3-coder'\) \? 0\.15/.test(cloudTs), '');
   ok('no paid or OpenRouter model id is anywhere in the cloud model list', !/openrouter|\/|:free/.test(cloudJs.slice(cloudJs.indexOf('CLOUD_MODELS = ['), cloudJs.indexOf('];', cloudJs.indexOf('CLOUD_MODELS = [')))), '');
 
   console.log(bad ? bad + ' FAILED' : 'ALL PASSED'); process.exit(bad ? 1 : 0);

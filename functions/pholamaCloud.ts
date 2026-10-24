@@ -185,6 +185,8 @@ Deno.serve(async (req) => {
     const weekStart = (() => { const d = new Date(); const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() - day + 1); return d.toISOString().slice(0, 10); })();
     const monthStart = new Date().toISOString().slice(0, 8) + '01';
     let isCodebase = false;   // set once the request is read: Codebase calls use their own monthly pool
+    // A per-account allowance on top of the normal credits (supabase/owner_credits.sql). If the lookup fails for ANY reason it is 0: it can only add room, never take it away.
+    const extraFor = async (): Promise<number> => { try { const r = await rpc('pholama_credit_extra', { p_user: user.id }); if (!r.ok) return 0; const n = Number(await r.json()); return Number.isFinite(n) && n > 0 ? Math.min(1000000, Math.floor(n)) : 0; } catch { return 0; } };
     const weeklyUsage = async () => {
       const ur = await fetch(SB + (isCodebase ? '/rest/v1/pholama_codebase_monthly_usage?user_id=eq.' + encodeURIComponent(user.id) + '&month_start=eq.' + monthStart + '&select=used' : '/rest/v1/pholama_cloud_weekly_usage?user_id=eq.' + encodeURIComponent(user.id) + '&week_start=eq.' + weekStart + '&select=used'), { headers: { apikey: key, Authorization: 'Bearer ' + key } });
       if (!ur.ok) throw new Error('usage'); const rows = await ur.json() as any[]; return Number(rows[0]?.used || 0);
@@ -221,7 +223,7 @@ Deno.serve(async (req) => {
     if (body.status === true) {
       try {
         const used0 = await weeklyUsage();
-        const cap0 = WEEK_CREDITS + PRO_EXTRA_CREDITS;
+        const cap0 = WEEK_CREDITS + PRO_EXTRA_CREDITS + await extraFor();
         return out({ status: true, day_used: used0, day_cap: cap0, month_used: used0, month_cap: cap0, credits_left: Math.max(0, cap0 - used0), week_cap: cap0 });
       } catch { return out({ error: 'Could not read your credits. Try again.', code: 'limit-check' }, 502); }
     }
@@ -253,7 +255,7 @@ Deno.serve(async (req) => {
     // The page adds its own Studio rules and docs after a "[Studio]" line. That is not what the person wrote, so only the typed part is billed.
     const typedPart = (t: string) => { const i = String(t).indexOf('\n\n[Studio]\n'); return i >= 0 ? String(t).slice(0, i) : String(t); };
     const sendCost = Math.max(modelSpec.cost, wordCount(typedPart(last.content)) * modelSpec.cost);
-    const weekCap = isCodebase ? CODEBASE_MONTH_CREDITS : (isPro ? WEEK_CREDITS + PRO_EXTRA_CREDITS : WEEK_CREDITS);
+    const weekCap = (isCodebase ? CODEBASE_MONTH_CREDITS : (isPro ? WEEK_CREDITS + PRO_EXTRA_CREDITS : WEEK_CREDITS)) + await extraFor();
     const SPEND_FN = isCodebase ? 'pholama_codebase_spend' : 'pholama_cloud_weekly_spend', REFUND_FN = isCodebase ? 'pholama_codebase_refund' : 'pholama_cloud_weekly_refund';
     const poolWord = isCodebase ? 'month' : 'week';
     let weekUsed = 0;
