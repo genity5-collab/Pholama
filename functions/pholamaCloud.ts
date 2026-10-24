@@ -8,6 +8,7 @@ const SB = 'https://nyswblzzvqzheaxvrqtq.supabase.co';
 // When the credits run out the AI stops and starts working again by itself as old spending falls out of the 7-day window.
 const STUDIO_MAX_TOKENS = 3500;
 const CODEBASE_MAX_TOKENS = 6000;   // Pholama Codebase (PC app): one reply can carry a whole part of a file; it writes big files in several parts
+const CODEBASE_MONTH_CREDITS = 15000;   // Codebase has its own monthly pool (supabase/codebase_pool.sql); it never touches the 1,500 weekly credits
 const WEEK_CREDITS = 1500, WORD_COST = 5, MINUTE_COST = 5, PRO_EXTRA_CREDITS = 0;
 const CLOUD_MODELS: Record<string, { cost: number; maxTokens: number }> = { qwen7b: { cost: 5, maxTokens: 1200 }, 'qwen-coder': { cost: 5, maxTokens: 1600 }, 'qwen3-coder': { cost: 10, maxTokens: 1600 } };   // qwen-coder: Free.ai's self-hosted code model, the one Studio writes Lua with
 const DAY_CAP_NO_LOCAL = 10, DAY_CAP_WITH_LOCAL = 1, FREE_MONTH_CAP = 30;
@@ -172,7 +173,7 @@ Deno.serve(async (req) => {
   if (req.method === 'OPTIONS') return new Response(null, { headers: cors });
   const key = Deno.env.get('PHOLAMA_SUPABASE_SERVICE_KEY') || '';
   const rpc = (fn: string, body: unknown) => fetch(SB + '/rest/v1/rpc/' + fn, { method: 'POST', headers: { apikey: key, Authorization: 'Bearer ' + key, 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
-  let charged: string | null = null; let chargedCostRef: number | null = null;   // user id, set once a message has been counted, so a failure can give it back
+  let charged: string | null = null; let chargedCostRef: number | null = null; let chargedRefundFn = 'pholama_cloud_weekly_refund';   // user id, set once a message has been counted, so a failure can give it back
   try {
     if (!key) return out({ error: 'Agent Max is not set up yet.', code: 'setup' }, 503);
     // 1) who is asking
@@ -182,8 +183,10 @@ Deno.serve(async (req) => {
     if (!who.ok) return out({ error: 'Your login expired. Log in again.', code: 'login' }, 401);
     const user = await who.json(); if (!user?.id) return out({ error: 'Log in to use Agent Max.', code: 'login' }, 401);
     const weekStart = (() => { const d = new Date(); const day = d.getUTCDay() || 7; d.setUTCDate(d.getUTCDate() - day + 1); return d.toISOString().slice(0, 10); })();
+    const monthStart = new Date().toISOString().slice(0, 8) + '01';
+    let isCodebase = false;   // set once the request is read: Codebase calls use their own monthly pool
     const weeklyUsage = async () => {
-      const ur = await fetch(SB + '/rest/v1/pholama_cloud_weekly_usage?user_id=eq.' + encodeURIComponent(user.id) + '&week_start=eq.' + weekStart + '&select=used', { headers: { apikey: key, Authorization: 'Bearer ' + key } });
+      const ur = await fetch(SB + (isCodebase ? '/rest/v1/pholama_codebase_monthly_usage?user_id=eq.' + encodeURIComponent(user.id) + '&month_start=eq.' + monthStart + '&select=used' : '/rest/v1/pholama_cloud_weekly_usage?user_id=eq.' + encodeURIComponent(user.id) + '&week_start=eq.' + weekStart + '&select=used'), { headers: { apikey: key, Authorization: 'Bearer ' + key } });
       if (!ur.ok) throw new Error('usage'); const rows = await ur.json() as any[]; return Number(rows[0]?.used || 0);
     };
 
@@ -226,7 +229,8 @@ Deno.serve(async (req) => {
     const model = (m => m === 'mistral' ? 'qwen7b' : m)(String(body.model || 'qwen7b'));   // mistral was retired (same model, triple price): old clients are quietly moved to the cheap chat model
     const modelSpec = Object.prototype.hasOwnProperty.call(CLOUD_MODELS, model) ? CLOUD_MODELS[model] : undefined;   // own models only: 'constructor' or '__proto__' must not count as a model
     if (!modelSpec) return out({ error: 'That cloud model is not available.', code: 'model' }, 400);
-    const studioMode = body.studio === true;   // Studio: the PC sends its own rules + tools; this function only thinks and writes, the PC does the file work
+    const studioMode = body.studio === true;
+    isCodebase = studioMode && body.codebase === true;   // only the Studio path can be Codebase: a plain chat message cannot claim it to dodge the weekly cap   // Studio: the PC sends its own rules + tools; this function only thinks and writes, the PC does the file work
     const rawMsgs = Array.isArray(body.messages) ? body.messages : [];
     const studioSystem = studioMode ? String((rawMsgs.find((m: any) => m && m.role === 'system' && typeof m.content === 'string') || {}).content || '').slice(0, 14000) : '';
     // The page puts its Studio rules and docs after a "[Studio]" line. Keep up to 9000 characters of that part (so the model really sees the rules), but only 2000 of what was typed.
@@ -249,26 +253,28 @@ Deno.serve(async (req) => {
     // The page adds its own Studio rules and docs after a "[Studio]" line. That is not what the person wrote, so only the typed part is billed.
     const typedPart = (t: string) => { const i = String(t).indexOf('\n\n[Studio]\n'); return i >= 0 ? String(t).slice(0, i) : String(t); };
     const sendCost = Math.max(modelSpec.cost, wordCount(typedPart(last.content)) * modelSpec.cost);
-    const weekCap = isPro ? WEEK_CREDITS + PRO_EXTRA_CREDITS : WEEK_CREDITS;
+    const weekCap = isCodebase ? CODEBASE_MONTH_CREDITS : (isPro ? WEEK_CREDITS + PRO_EXTRA_CREDITS : WEEK_CREDITS);
+    const SPEND_FN = isCodebase ? 'pholama_codebase_spend' : 'pholama_cloud_weekly_spend', REFUND_FN = isCodebase ? 'pholama_codebase_refund' : 'pholama_cloud_weekly_refund';
+    const poolWord = isCodebase ? 'month' : 'week';
     let weekUsed = 0;
     try { weekUsed = await weeklyUsage(); } catch { return out({ error: 'Could not check your credits. Try again.', code: 'limit-check' }, 502); }
     const left = weekCap - weekUsed;
     const info = { day_used: weekUsed, day_cap: weekCap, month_used: weekUsed, month_cap: weekCap, credits_left: Math.max(0, left), week_cap: weekCap, cost: sendCost };
     if (left < sendCost) {
-      return out({ error: `Not enough credits (${Math.max(0, left)} left, this message needs ${sendCost}). You get ${weekCap} credits a week, and they come back by themselves as the week moves on. Local models stay free.`, code: 'limit-month', ...info }, 429);
+      return out({ error: `Not enough credits (${Math.max(0, left)} left, this message needs ${sendCost}). You get ${weekCap} credits a ${poolWord}, and they come back by themselves as the ${poolWord} moves on. Local models stay free.`, code: 'limit-month', ...info }, 429);
     }
-    const sp = await rpc('pholama_cloud_weekly_spend', { p_user: user.id, p_cost: sendCost });
+    const sp = await rpc(SPEND_FN, { p_user: user.id, p_cost: sendCost });
     if (!sp.ok) return out({ error: 'Could not check your credits. Try again.', code: 'limit-check' }, 502);
     const rawRow = await sp.json(); const row = Array.isArray(rawRow) ? (rawRow[0] || {}) : (rawRow || {});
-    if (!row.ok) return out({ error: `Not enough credits for this message (${sendCost} needed). They come back by themselves as the week moves on. Local models stay free.`, code: 'limit-month', ...info }, 429);
+    if (!row.ok) return out({ error: `Not enough credits for this message (${sendCost} needed). They come back by themselves as the ${poolWord} moves on. Local models stay free.`, code: 'limit-month', ...info }, 429);
     info.day_used = info.month_used = weekUsed + sendCost; info.credits_left = Math.max(0, left - sendCost);
-    charged = user.id; chargedCostRef = sendCost; const startedAt = Date.now();
+    charged = user.id; chargedCostRef = sendCost; chargedRefundFn = REFUND_FN; const startedAt = Date.now();
     // Work time: 3 credits per started minute, billed once the answer exists. Never more than what is left, and a failure here never costs the user their answer.
     const billWork = async () => {
       try {
         const mins = Math.floor((Date.now() - startedAt) / 60000);   // quick answers (under a minute) are free; a full minute of AI work costs 3
         const cost = Math.min(mins * MINUTE_COST, Math.max(0, info.credits_left));
-        if (cost > 0) { const w = await rpc('pholama_cloud_weekly_spend', { p_user: user.id, p_cost: cost }); if (w.ok) { info.day_used += cost; info.month_used += cost; info.credits_left -= cost; chargedCostRef = (chargedCostRef || 0) + cost; } }
+        if (cost > 0) { const w = await rpc(SPEND_FN, { p_user: user.id, p_cost: cost }); if (w.ok) { info.day_used += cost; info.month_used += cost; info.credits_left -= cost; chargedCostRef = (chargedCostRef || 0) + cost; } }
       } catch { /* the answer is still delivered */ }
     };
 
@@ -312,7 +318,7 @@ Deno.serve(async (req) => {
     await billWork();
     return out({ reply, tools: used, actions, thinking, ...info });
   } catch (e) {
-    if (charged) await rpc('pholama_cloud_weekly_refund', { p_user: charged, p_cost: typeof chargedCostRef === 'number' ? chargedCostRef : 0 }).catch(() => {});   // nobody pays for an answer they did not get
+    if (charged) await rpc(chargedRefundFn, { p_user: charged, p_cost: typeof chargedCostRef === 'number' ? chargedCostRef : 0 }).catch(() => {});   // nobody pays for an answer they did not get
     console.log('AgentMax error:', String(e).slice(0, 200));   // server log only
     return out({ error: 'Agent Max did not answer. You were not charged. Try again.', code: 'server' }, 500);
   }

@@ -23,11 +23,11 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   let r = await call(cb('qwen-coder', 'fix the menu bug please')); // 5 words
   ok('qwen-coder is accepted', r.status === 200 && r.j.reply, JSON.stringify(r));
   ok('the model sent to Free.ai is exactly qwen-coder', seen.model[0].model === 'qwen-coder', seen.model[0].model);
-  ok('qwen-coder costs 5 credits a word (5 words = 25)', r.j.cost === 25 && W.spends[0].p_cost === 25, JSON.stringify(W.spends[0]));
+  ok('qwen-coder costs 5 credits a word (5 words = 25)', r.j.cost === 25 && W.cb.spends[0].p_cost === 25, JSON.stringify(W.cb.spends[0]));
   r = await call(cb('qwen3-coder', 'fix the menu bug please')); // 5 words
   ok('qwen3-coder is accepted', r.status === 200 && r.j.reply, JSON.stringify(r));
   ok('the model sent to Free.ai is exactly qwen3-coder', seen.model[1].model === 'qwen3-coder', seen.model[1].model);
-  ok('qwen3-coder costs 10 credits a word (5 words = 50)', r.j.cost === 50 && W.spends[1].p_cost === 50, JSON.stringify(W.spends[1]));
+  ok('qwen3-coder costs 10 credits a word (5 words = 50)', r.j.cost === 50 && W.cb.spends[1].p_cost === 50, JSON.stringify(W.cb.spends[1]));
   r = await call(cb('qwen-coder', 'a'));
   ok('a one-word task still costs at least the model rate', r.j.cost === 5, r.j.cost);
   r = await call(cb('qwen3-coder', 'a'));
@@ -65,26 +65,48 @@ let bad = 0; const ok = (n, c, x) => { console.log((c ? 'PASS ' : 'FAIL ') + n +
   ok('even Codebase has an upper bound (30,000)', r.j.reply && r.j.reply.length === 30000, r.j.reply && r.j.reply.length);
   replyText = '<tool>{"name":"done","summary":"ok"}</tool>';
 
+  // ---- Codebase has its OWN monthly pool; the 1,500 weekly credits are never touched ----
+  { const wk0 = W.spends.length, wkUsed = W.used, cb0 = W.cb.spends.length, cbUsed = W.cb.used;
+    r = await call(cb('qwen-coder', 'fix the menu bug please'));   // 25
+    ok('a Codebase call charges the Codebase pool', W.cb.spends.length === cb0 + 1 && W.cb.used === cbUsed + 25, JSON.stringify(W.cb));
+    ok('and never touches the weekly credits', W.spends.length === wk0 && W.used === wkUsed);
+    ok('the answer reports the monthly cap (15,000) and what is left', r.j.week_cap === 15000 && r.j.credits_left === 15000 - W.cb.used, JSON.stringify({ c: r.j.week_cap, l: r.j.credits_left }));
+    W.used = 1500;   // the whole WEEK is spent...
+    r = await call(cb('qwen-coder', 'fix the menu bug please'));
+    ok('a spent week does NOT block Codebase while its monthly pool has room', r.status === 200 && r.j.reply, r.status + ' ' + JSON.stringify(r.j).slice(0, 120));
+    r = await call({ model: 'qwen7b', messages: [{ role: 'user', content: 'what is pholama' }] });
+    ok('but normal chat IS still blocked by the spent week', r.status === 429 && r.j.code === 'limit-month', r.status);
+    W.used = 0;
+    const wkS = W.spends.length;
+    r = await call({ model: 'qwen-coder', codebase: true, messages: [{ role: 'user', content: 'what is pholama' }] });   // claims Codebase without studio:true
+    ok('claiming codebase:true without studio:true cannot use the Codebase pool', W.cb.spends.length === cb0 + 2 && W.spends.length === wkS + 1, W.cb.spends.length + '/' + (W.spends.length - wkS));
+    W.cb.used = 14990;   // Codebase pool nearly spent
+    const sp = W.cb.spends.length; r = await call(cb('qwen-coder', 'fix the menu bug please'));   // 25 > 10 left
+    ok('Codebase pool spent: refused with a MONTH message, not "week"', r.status === 429 && r.j.code === 'limit-month' && /month/.test(r.j.error) && !/week/.test(r.j.error), r.j.error);
+    ok('and the refusal is for 10 left of 15,000', r.j.credits_left === 10 && r.j.week_cap === 15000, JSON.stringify(r.j).slice(0, 160));
+    ok('and nothing was charged (the pool stays at 14,990)', W.cb.used === 14990);
+    W.cb.used = 0; }
+
   // models that must not work
   for (const m of ['mistral-large', 'gpt-4o', 'qwen3-coder ', 'QWEN-CODER', '', 'constructor', '__proto__', 'toString']) {
-    const before = W.spends.length; r = await call(cb(m, 'hello there'));
-    ok('model ' + JSON.stringify(m) + ' is refused or moved to the cheap chat model, never billed as a coder', (r.status === 400 && r.j.code === 'model' && W.spends.length === before) || (r.status === 200 && seen.model[seen.model.length - 1].model === 'qwen7b'), r.status + ' ' + JSON.stringify(r.j).slice(0, 100));
+    const before = W.cb.spends.length; r = await call(cb(m, 'hello there'));
+    ok('model ' + JSON.stringify(m) + ' is refused or moved to the cheap chat model, never billed as a coder', (r.status === 400 && r.j.code === 'model' && W.cb.spends.length === before) || (r.status === 200 && seen.model[seen.model.length - 1].model === 'qwen7b'), r.status + ' ' + JSON.stringify(r.j).slice(0, 100));
   }
   // not enough credits
-  const W2 = W; W2.used = 1480;
+  const W2 = W.cb; W2.used = 14980;
   const spendsBefore = W2.spends.length; r = await call(cb('qwen3-coder', 'one two three four five'));   // 50 credits, only 20 left
   ok('not enough credits: refused with the limit code, 429', r.status === 429 && r.j.code === 'limit-month', r.status + ' ' + JSON.stringify(r.j).slice(0, 120));
   ok('and no model call was made for it', seen.model.length === seen.model.length && !(r.j.reply));
   W2.used = 0;
   // failure refunds exactly what was charged
-  mode = 'fail'; const refBefore = W.refunds.length, usedBefore = W.used;
+  mode = 'fail'; const refBefore = W.cb.refunds.length, usedBefore = W.cb.used;
   r = await call(cb('qwen3-coder', 'one two three'));   // 30 credits
-  ok('when the model fails, the message is refunded', r.status === 500 && W.refunds.length === refBefore + 1, r.status);
-  ok('the refund is exactly the charge (30)', W.refunds[W.refunds.length - 1].p_cost === 30 && W.used === usedBefore, JSON.stringify(W.refunds[W.refunds.length - 1]) + ' used=' + W.used);
+  ok('when the model fails, the message is refunded', r.status === 500 && W.cb.refunds.length === refBefore + 1, r.status);
+  ok('the refund is exactly the charge (30)', W.cb.refunds[W.cb.refunds.length - 1].p_cost === 30 && W.cb.used === usedBefore, JSON.stringify(W.cb.refunds[W.cb.refunds.length - 1]) + ' used=' + W.cb.used);
   // zero-spend guard: a paid model answer is refused and refunded, and the reply never reaches the user
-  mode = 'paid'; const refPaid = W.refunds.length;
+  mode = 'paid'; const refPaid = W.cb.refunds.length;
   r = await call(cb('qwen-coder', 'one two three'));
-  ok('a non-self-hosted answer is refused and refunded', r.status === 500 && W.refunds.length === refPaid + 1 && !r.j.reply, r.status);
+  ok('a non-self-hosted answer is refused and refunded', r.status === 500 && W.cb.refunds.length === refPaid + 1 && !r.j.reply, r.status);
   r = await call(cb('qwen3-coder', 'one two three'));
   ok('the same guard protects qwen3-coder', r.status === 500 && !r.j.reply, r.status);
   mode = 'ok';
